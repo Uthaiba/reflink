@@ -3,6 +3,21 @@ import { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase.js";
 import "./App.css";
 
+function formatPatientAge(ageInMonths) {
+  const months = Number(ageInMonths);
+
+  if (!Number.isFinite(months) || months < 0) {
+    return "Age not recorded";
+  }
+
+  if (months < 12) {
+    return `${months} ${months === 1 ? "month" : "months"}`;
+  }
+
+  const years = Math.floor(months / 12);
+  return `${years} ${years === 1 ? "year" : "years"}`;
+}
+
 /* =========================================================
    MAIN APP
    ========================================================= */
@@ -1067,9 +1082,7 @@ function NewReferralForm({ onBack }) {
 
         patient_age_months:
           form.patient_age_months
-            ? Number(
-                form.patient_age_months
-              )
+            ? Number(form.patient_age_months) * 12
             : null,
 
         patient_sex:
@@ -1257,7 +1270,7 @@ function NewReferralForm({ onBack }) {
           <div>
 
             <label>
-              Age (months)
+              Age (years)
             </label>
 
             <input
@@ -1266,6 +1279,7 @@ function NewReferralForm({ onBack }) {
               value={form.patient_age_months}
               onChange={handleChange}
               min="0"
+              step="1"
               placeholder="e.g. 22"
             />
 
@@ -6575,10 +6589,9 @@ function AdminDashboard() {
 
                           <small>
                             {
-                              referral.patient_age_months !==
-                              null
-                                ? `${referral.patient_age_months} months`
-                                : "Age not recorded"
+                              formatPatientAge(
+                                referral.patient_age_months
+                              )
                             }
 
                             {" · "}
@@ -6882,10 +6895,7 @@ function AdminDashboard() {
         <br />
 
         <small>
-          {referral.patient_age_months !== null &&
-          referral.patient_age_months !== undefined
-            ? `${referral.patient_age_months} months`
-            : "Age not recorded"}
+          {formatPatientAge(referral.patient_age_months)}
 
           {" · "}
 
