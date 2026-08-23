@@ -131,6 +131,658 @@ function getInvestigationRecords(referral) {
     .map((investigation) => ({ category: "", investigation }));
 }
 
+
+function formatClinicalLabel(value) {
+  if (!value) return "Not recorded";
+
+  return String(value)
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+
+function getInvestigationResultLabel(status) {
+  const labels = {
+    positive: "Positive",
+    negative: "Negative",
+    pending: "Pending / Not Yet Available",
+  };
+
+  return labels[status] || "Pending / Not Yet Available";
+}
+
+function getInvestigationResultClass(status) {
+  if (status === "positive") return "investigation-result-positive";
+  if (status === "negative") return "investigation-result-negative";
+  return "investigation-result-pending";
+}
+
+function normalizeInvestigationRecord(item) {
+  if (typeof item === "string") {
+    return {
+      category: "",
+      investigation: item,
+      result_status: "pending",
+      result_value: "",
+    };
+  }
+
+  return {
+    ...item,
+    category: item?.category || "",
+    investigation:
+      item?.investigation || item?.name || "Investigation",
+    result_status: item?.result_status || "pending",
+    result_value: item?.result_value || "",
+  };
+}
+
+function InvestigationResultCards({
+  investigations,
+  editable = false,
+  onResultChange,
+}) {
+  if (!investigations.length) {
+    return (
+      <div className="empty-selection-state">
+        No investigation was recorded.
+      </div>
+    );
+  }
+
+  const normalized = investigations.map(normalizeInvestigationRecord);
+
+  return (
+    <div className="investigation-result-list">
+      {normalized.map((item, index) => {
+        const status = item.result_status || "pending";
+
+        return (
+          <div
+            className="investigation-result-card"
+            key={`${item.category}-${item.investigation}-${index}`}
+          >
+            <div className="investigation-result-main">
+              <span className="investigation-checkmark">✓</span>
+
+              <div className="investigation-result-name">
+                <strong>{item.investigation}</strong>
+                {item.category && (
+                  <small>{item.category}</small>
+                )}
+              </div>
+            </div>
+
+            <div className="investigation-result-control">
+              <span>Result</span>
+
+              {editable ? (
+                <select
+                  value={status}
+                  onChange={(event) =>
+                    onResultChange?.(
+                      index,
+                      event.target.value
+                    )
+                  }
+                  aria-label={`Result for ${item.investigation}`}
+                >
+                  <option value="pending">
+                    Pending / Not Yet Available
+                  </option>
+                  <option value="positive">Positive</option>
+                  <option value="negative">Negative</option>
+                </select>
+              ) : (
+                <span
+                  className={`investigation-result-badge ${getInvestigationResultClass(status)}`}
+                >
+                  {getInvestigationResultLabel(status)}
+                </span>
+              )}
+            </div>
+
+            {item.result_value && (
+              <div className="investigation-result-value">
+                <span>Result detail</span>
+                <strong>{item.result_value}</strong>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PrintReferralSheet({
+  referral,
+  copyLabel = "REFERRAL COPY",
+}) {
+  const diagnoses = getDiagnosisRecords(referral);
+  const investigations = getInvestigationRecords(referral).map(
+    normalizeInvestigationRecord
+  );
+
+  const hasReceivingUpdate = Boolean(
+    referral?.assessment_findings ||
+    referral?.final_diagnosis ||
+    referral?.treatment_provided ||
+    referral?.procedures_performed ||
+    referral?.clinical_feedback ||
+    referral?.disposition
+  );
+
+  return (
+    <div className="printable-referral-sheet">
+      <header className="print-document-header">
+        <div>
+          <div className="print-brand">REFLINK</div>
+          <h1>Patient Referral Form</h1>
+          <p>Digital referral • {copyLabel}</p>
+        </div>
+
+        <div className="print-referral-meta">
+          <span>REFLINK ID</span>
+          <strong>{referral?.referral_number || "DRAFT REFERRAL"}</strong>
+          <small>{formatReferralDateTime(referral?.created_at)}</small>
+        </div>
+      </header>
+
+      <section className="print-section print-identity-section">
+        <div className="print-identity-grid">
+          <div>
+            <span>Patient / Identifier</span>
+            <strong>{referral?.patient_identifier || "Not recorded"}</strong>
+          </div>
+          <div>
+            <span>Age</span>
+            <strong>{formatPatientAge(referral?.patient_age_months)}</strong>
+          </div>
+          <div>
+            <span>Sex</span>
+            <strong>{formatClinicalLabel(referral?.patient_sex)}</strong>
+          </div>
+          <div>
+            <span>Urgency</span>
+            <strong>{formatClinicalLabel(referral?.urgency)}</strong>
+          </div>
+        </div>
+      </section>
+
+      <section className="print-section">
+        <h2>Referral Information</h2>
+        <div className="print-grid">
+          <div>
+            <span>Referring Facility</span>
+            <strong>
+              {referral?.referring_facility?.name ||
+                referral?.referring_facility_name ||
+                "Not recorded"}
+            </strong>
+          </div>
+          <div>
+            <span>Receiving Facility</span>
+            <strong>
+              {referral?.receiving_facility?.name ||
+                referral?.receiving_facility_name ||
+                "Not recorded"}
+            </strong>
+          </div>
+          <div>
+            <span>Status</span>
+            <strong>{getStatusLabel(referral?.status)}</strong>
+          </div>
+          <div>
+            <span>Referral Date</span>
+            <strong>{formatReferralDateTime(referral?.created_at)}</strong>
+          </div>
+        </div>
+      </section>
+
+      <section className="print-section">
+        <h2>Clinical Summary</h2>
+        <div className="print-narrative-grid">
+          <div>
+            <span>Chief Complaint</span>
+            <p>{referral?.chief_complaint || "Not recorded"}</p>
+          </div>
+          <div>
+            <span>Clinical Summary</span>
+            <p>{referral?.clinical_summary || "Not recorded"}</p>
+          </div>
+          <div>
+            <span>Physical Findings</span>
+            <p>{referral?.physical_findings || "Not recorded"}</p>
+          </div>
+          <div>
+            <span>Treatment Given at Referring Facility</span>
+            <p>{referral?.treatment_given || "Not recorded"}</p>
+          </div>
+          <div>
+            <span>Reason for Referral</span>
+            <p>{referral?.referral_reason || "Not recorded"}</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="print-section">
+        <h2>Diagnosis</h2>
+        {diagnoses.length ? (
+          <table className="print-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Status</th>
+                <th>Category</th>
+                <th>Diagnosis</th>
+              </tr>
+            </thead>
+            <tbody>
+              {diagnoses.map((item, index) => (
+                <tr key={`${item?.diagnosis || index}-${index}`}>
+                  <td>{index + 1}</td>
+                  <td>{formatClinicalLabel(item?.status)}</td>
+                  <td>{item?.category || "Not recorded"}</td>
+                  <td>{item?.diagnosis || item?.name || "Not recorded"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p>None recorded.</p>
+        )}
+      </section>
+
+      <section className="print-section">
+        <h2>Investigations & Results</h2>
+        {investigations.length ? (
+          <table className="print-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Category</th>
+                <th>Investigation</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {investigations.map((item, index) => (
+                <tr key={`${item.category}-${item.investigation}-${index}`}>
+                  <td>{index + 1}</td>
+                  <td>{item.category || "Not recorded"}</td>
+                  <td>{item.investigation}</td>
+                  <td>{getInvestigationResultLabel(item.result_status)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p>None recorded.</p>
+        )}
+      </section>
+
+      {hasReceivingUpdate && (
+        <section className="print-section">
+          <h2>Receiving Facility Update</h2>
+          <div className="print-narrative-grid">
+            {referral?.assessment_findings && (
+              <div>
+                <span>Assessment Findings</span>
+                <p>{referral.assessment_findings}</p>
+              </div>
+            )}
+            {referral?.final_diagnosis && (
+              <div>
+                <span>Final Diagnosis</span>
+                <p>{referral.final_diagnosis}</p>
+              </div>
+            )}
+            {referral?.treatment_provided && (
+              <div>
+                <span>Treatment Provided</span>
+                <p>{referral.treatment_provided}</p>
+              </div>
+            )}
+            {referral?.procedures_performed && (
+              <div>
+                <span>Procedures Performed</span>
+                <p>{referral.procedures_performed}</p>
+              </div>
+            )}
+            {referral?.clinical_feedback && (
+              <div>
+                <span>Clinical Feedback</span>
+                <p>{referral.clinical_feedback}</p>
+              </div>
+            )}
+            {referral?.disposition && (
+              <div>
+                <span>Disposition</span>
+                <p>{formatClinicalLabel(referral.disposition)}</p>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      <section className="print-signature-section">
+        <div>
+          <span>Referring Health Worker</span>
+          <div className="signature-line" />
+          <small>Signature / Date</small>
+        </div>
+        <div>
+          <span>Receiving Health Worker</span>
+          <div className="signature-line" />
+          <small>Signature / Date</small>
+        </div>
+        <div>
+          <span>Facility Stamp</span>
+          <div className="stamp-box" />
+          <small>Official facility stamp</small>
+        </div>
+      </section>
+
+      <footer className="print-document-footer">
+        REFLINK • Keep this paper copy with the patient referral record.
+      </footer>
+    </div>
+  );
+}
+
+function printReferralForm() {
+  window.print();
+}
+
+function ReferralSourceDetails({ referral, editableInvestigationResults = false, onInvestigationResultChange }) {
+  const diagnoses = getDiagnosisRecords(referral);
+  const investigations = getInvestigationRecords(referral);
+
+  const rawCategories = parseJsonArray(
+    referral?.investigation_categories
+  );
+
+  const investigationCategories = rawCategories.length
+    ? rawCategories
+        .map((item) =>
+          typeof item === "string"
+            ? item
+            : item?.category || item?.name || ""
+        )
+        .filter(Boolean)
+    : [...new Set(
+        investigations
+          .map((item) => item?.category || "")
+          .filter(Boolean)
+      )];
+
+  const groupedInvestigations = investigations.reduce(
+    (groups, item) => {
+      const category = item?.category || "Other Investigations";
+
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+
+      const investigation =
+        item?.investigation ||
+        item?.name ||
+        (typeof item === "string" ? item : "");
+
+      if (investigation) {
+        groups[category].push(investigation);
+      }
+
+      return groups;
+    },
+    {}
+  );
+
+  return (
+    <section className="referral-source-details">
+      <div className="source-details-heading">
+        <div>
+          <span className="eyebrow">REFERRAL INFORMATION</span>
+          <h3>Information Provided by Referring PHC</h3>
+          <p>
+            All patient, clinical, diagnosis, investigation and treatment
+            information recorded by the referring healthcare worker is
+            available to the receiving facility.
+          </p>
+        </div>
+      </div>
+
+      <div className="clinical-detail-section">
+        <h4>Patient Information</h4>
+
+        <div className="clinical-detail-grid">
+          <div className="clinical-detail-card">
+            <span>Patient Identifier</span>
+            <strong>{referral?.patient_identifier || "Not recorded"}</strong>
+          </div>
+
+          <div className="clinical-detail-card">
+            <span>Age</span>
+            <strong>{formatPatientAge(referral?.patient_age_months)}</strong>
+          </div>
+
+          <div className="clinical-detail-card">
+            <span>Sex</span>
+            <strong>{formatClinicalLabel(referral?.patient_sex)}</strong>
+          </div>
+
+          <div className="clinical-detail-card">
+            <span>Patient Phone</span>
+            <strong>{referral?.patient_phone || "Not recorded"}</strong>
+          </div>
+
+          <div className="clinical-detail-card clinical-detail-card-wide">
+            <span>Patient Address</span>
+            <strong>{referral?.patient_address || "Not recorded"}</strong>
+          </div>
+
+          <div className="clinical-detail-card">
+            <span>Relative / Caregiver</span>
+            <strong>{referral?.relative_name || "Not recorded"}</strong>
+          </div>
+
+          <div className="clinical-detail-card">
+            <span>Relationship</span>
+            <strong>
+              {formatClinicalLabel(referral?.relative_relationship)}
+            </strong>
+          </div>
+
+          <div className="clinical-detail-card">
+            <span>Relative Phone</span>
+            <strong>{referral?.relative_phone || "Not recorded"}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="clinical-detail-section">
+        <h4>Clinical Information from PHC</h4>
+
+        <div className="clinical-narrative-grid">
+          <div className="clinical-narrative-card">
+            <span>Chief Complaint</span>
+            <p>{referral?.chief_complaint || "Not recorded"}</p>
+          </div>
+
+          <div className="clinical-narrative-card">
+            <span>Clinical Summary</span>
+            <p>{referral?.clinical_summary || "Not recorded"}</p>
+          </div>
+
+          <div className="clinical-narrative-card">
+            <span>Physical Findings</span>
+            <p>{referral?.physical_findings || "Not recorded"}</p>
+          </div>
+
+          <div className="clinical-narrative-card">
+            <span>Treatment Given at PHC</span>
+            <p>{referral?.treatment_given || "Not recorded"}</p>
+          </div>
+
+          <div className="clinical-narrative-card">
+            <span>Reason for Referral</span>
+            <p>{referral?.referral_reason || "Not recorded"}</p>
+          </div>
+
+          <div className="clinical-narrative-card">
+            <span>Urgency</span>
+            <p>{formatClinicalLabel(referral?.urgency)}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="clinical-detail-section">
+        <div className="selection-display-header">
+          <div>
+            <h4>Selected Diagnoses</h4>
+            <p>
+              Each diagnosis is displayed with its status and clinical
+              category.
+            </p>
+          </div>
+
+          <span className="selection-count-badge">
+            {diagnoses.length} selected
+          </span>
+        </div>
+
+        {diagnoses.length > 0 ? (
+          <div className="clinical-detail-card-grid diagnosis-detail-grid">
+            {diagnoses.map((item, index) => (
+              <div
+                className="clinical-detail-card diagnosis-detail-card"
+                key={`${item?.status || "diagnosis"}-${item?.diagnosis || index}-${index}`}
+              >
+                <div className="detail-card-topline">
+                  <span
+                    className={`clinical-status-pill status-${String(
+                      item?.status || "unknown"
+                    ).toLowerCase()}`}
+                  >
+                    {formatClinicalLabel(item?.status || "Unknown")}
+                  </span>
+
+                  {item?.category && (
+                    <span className="detail-category-label">
+                      {item.category}
+                    </span>
+                  )}
+                </div>
+
+                <strong>
+                  {item?.diagnosis ||
+                    item?.name ||
+                    "Diagnosis not recorded"}
+                </strong>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-selection-state">
+            No diagnosis was recorded.
+          </div>
+        )}
+      </div>
+
+      <div className="clinical-detail-section">
+        <div className="selection-display-header">
+          <div>
+            <h4>Selected Investigation Categories</h4>
+            <p>
+              All investigation categories selected by the referring PHC.
+            </p>
+          </div>
+
+          <span className="selection-count-badge">
+            {investigationCategories.length} selected
+          </span>
+        </div>
+
+        {investigationCategories.length > 0 ? (
+          <div className="selected-category-boxes">
+            {investigationCategories.map((category) => (
+              <div
+                className="selected-category-box"
+                key={category}
+              >
+                <span className="category-checkmark">✓</span>
+                <strong>{category}</strong>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-selection-state">
+            No investigation category was recorded.
+          </div>
+        )}
+      </div>
+
+      <div className="clinical-detail-section">
+        <div className="selection-display-header">
+          <div>
+            <h4>Selected Investigations</h4>
+            <p>
+              Individual investigations selected by the referring PHC,
+              grouped by category.
+            </p>
+          </div>
+
+          <span className="selection-count-badge">
+            {investigations.length} selected
+          </span>
+        </div>
+
+        {investigations.length > 0 ? (
+          <div className="selected-investigation-groups">
+            {Object.entries(groupedInvestigations).map(
+              ([category, items]) => (
+                <div
+                  className="selected-investigation-group"
+                  key={category}
+                >
+                  <div className="selected-investigation-group-header">
+                    <strong>{category}</strong>
+                    <span>{items.length}</span>
+                  </div>
+
+                  <InvestigationResultCards
+                    investigations={items}
+                    editable={editableInvestigationResults}
+                    onResultChange={(localIndex, value) => {
+                      const categoryItems = investigations.filter(
+                        (entry) =>
+                          (entry?.category || "Other Investigations") === category
+                      );
+                      const selectedItem = categoryItems[localIndex];
+                      const globalIndex = investigations.findIndex(
+                        (entry) => entry === selectedItem
+                      );
+
+                      if (globalIndex >= 0) {
+                        onInvestigationResultChange?.(globalIndex, value);
+                      }
+                    }}
+                  />
+                </div>
+              )
+            )}
+          </div>
+        ) : (
+          <div className="empty-selection-state">
+            No investigation was recorded.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function ReferralTimeline({ referral }) {
   const steps = [
     {
@@ -469,7 +1121,7 @@ const handleSignIn = async () => {
     }
 
     const passwordPolicy =
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
     if (!passwordPolicy.test(newPassword)) {
       setPasswordError(
@@ -1647,6 +2299,8 @@ provisional_diagnosis: "",
   const [selectedInvestigationCategories, setSelectedInvestigationCategories] =
     useState([]);
   const [selectedInvestigations, setSelectedInvestigations] = useState([]);
+  const [printDraft, setPrintDraft] = useState(null);
+  const [savedReferralInfo, setSavedReferralInfo] = useState(null);
 
   useEffect(() => {
     loadFacilities();
@@ -1783,9 +2437,54 @@ provisional_diagnosis: "",
         {
           category,
           investigation,
+          result_status: "pending",
+          result_value: "",
         },
       ];
     });
+  };
+
+  const updateInvestigationResult = (index, resultStatus) => {
+    setSelectedInvestigations((previous) =>
+      previous.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              result_status: resultStatus,
+            }
+          : item
+      )
+    );
+  };
+
+  const printDraftReferral = () => {
+    const draftReferral = {
+      referral_number: "DRAFT REFERRAL",
+      patient_identifier: form.patient_identifier,
+      patient_age_months: form.patient_age_months
+        ? Number(form.patient_age_months) * 12
+        : null,
+      patient_sex: form.patient_sex,
+      patient_phone: form.patient_phone,
+      patient_address: form.patient_address,
+      relative_name: form.relative_name,
+      relative_relationship: form.relative_relationship,
+      relative_phone: form.relative_phone,
+      chief_complaint: form.chief_complaint,
+      clinical_summary: form.clinical_summary,
+      physical_findings: form.physical_findings,
+      diagnosis_records: diagnosisEntries,
+      investigation_categories: selectedInvestigationCategories,
+      investigation_records: selectedInvestigations,
+      treatment_given: form.treatment_given,
+      referral_reason: form.referral_reason,
+      urgency: form.urgency,
+      status: "sent",
+      created_at: new Date().toISOString(),
+    };
+
+    setPrintDraft(draftReferral);
+    window.setTimeout(() => window.print(), 80);
   };
 
   const generateReferralNumber = () => {
@@ -1807,6 +2506,7 @@ provisional_diagnosis: "",
     e.preventDefault();
 
     setError("");
+    setSavedReferralInfo(null);
     setMessage("");
     setLoading(true);
 
@@ -1999,8 +2699,29 @@ provisional_diagnosis: "",
         throw referralError;
       }
 
+      const referringFacility = facilities.find(
+        (facility) => facility.id === profile.facility_id
+      );
+      const receivingFacility = facilities.find(
+        (facility) => facility.id === form.receiving_facility_id
+      );
+
+      const savedReferral = {
+        ...referralPayload,
+        referral_number: referralNumber,
+        created_at: new Date().toISOString(),
+        referring_facility_name: referringFacility?.name || "Not recorded",
+        receiving_facility_name: receivingFacility?.name || "Not recorded",
+      };
+
+      setSavedReferralInfo({
+        referralNumber,
+        patientIdentifier: form.patient_identifier,
+      });
+      setPrintDraft(savedReferral);
+
       setMessage(
-        `Referral ${referralNumber} created successfully.`
+        `Referral saved successfully. Patient: ${form.patient_identifier || "Not recorded"} • REFLINK ID: ${referralNumber}`
       );
 
       setForm({
@@ -2081,19 +2802,50 @@ provisional_diagnosis: "",
 
         </div>
 
-        <button
-          type="button"
-          className="back-button"
-          onClick={onBack}
-        >
-          ← Back
-        </button>
+        <div className="form-header-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={printDraftReferral}
+          >
+            🖨 Print Draft
+          </button>
+
+          <button
+            type="button"
+            className="back-button"
+            onClick={onBack}
+          >
+            ← Back
+          </button>
+        </div>
 
       </div>
 
       {message && (
-        <div className="success-message">
-          {message}
+        <div className="success-message referral-save-success">
+          <div>
+            <strong>{message}</strong>
+            {savedReferralInfo && (
+              <span className="saved-referral-id-line">
+                Patient: {savedReferralInfo.patientIdentifier || "Not recorded"}
+                <br />
+                REFLINK ID: <strong>{savedReferralInfo.referralNumber}</strong>
+              </span>
+            )}
+          </div>
+
+          {savedReferralInfo && (
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                window.setTimeout(() => window.print(), 80);
+              }}
+            >
+              🖨 Print Saved Form
+            </button>
+          )}
         </div>
       )}
 
@@ -2540,11 +3292,30 @@ provisional_diagnosis: "",
               {selectedInvestigations.length} investigation(s) selected
             </strong>
 
-            <span>
-              {selectedInvestigations
-                .map((item) => item.investigation)
-                .join(" • ")}
-            </span>
+            <div className="referral-investigation-edit-list">
+              {selectedInvestigations.map((item, index) => (
+                <div
+                  className="referral-investigation-edit-row"
+                  key={`${item.category}-${item.investigation}-${index}`}
+                >
+                  <div>
+                    <strong>{item.investigation}</strong>
+                    <small>{item.category}</small>
+                  </div>
+                  <select
+                    value={item.result_status || "pending"}
+                    onChange={(event) =>
+                      updateInvestigationResult(index, event.target.value)
+                    }
+                    aria-label={`Result for ${item.investigation}`}
+                  >
+                    <option value="pending">Pending / Not Yet Available</option>
+                    <option value="positive">Positive</option>
+                    <option value="negative">Negative</option>
+                  </select>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -2639,6 +3410,13 @@ provisional_diagnosis: "",
         </button>
 
       </form>
+
+      {printDraft && (
+        <PrintReferralSheet
+          referral={printDraft}
+          copyLabel="DRAFT REFERRAL"
+        />
+      )}
 
     </div>
   );
@@ -3426,15 +4204,22 @@ function PHCStaffDashboard({ onNewReferral }) {
             }}
           >
 
-            <span className="eyebrow">
-              REFERRAL DETAILS
-            </span>
+            <div className="referral-modal-heading-row">
+              <div>
+                <span className="eyebrow">REFERRAL DETAILS</span>
+                <h2>
+                  {selectedReferral.referral_number}
+                </h2>
+              </div>
 
-            <h2>
-              {
-                selectedReferral.referral_number
-              }
-            </h2>
+              <button
+                type="button"
+                className="secondary-button print-referral-button"
+                onClick={printReferralForm}
+              >
+                🖨 Print Patient Referral Form
+              </button>
+            </div>
 
             <p>
               <strong>
@@ -3503,85 +4288,15 @@ function PHCStaffDashboard({ onNewReferral }) {
 
             <hr />
 
-            {/* CLINICAL INFORMATION */}
+            <ReferralSourceDetails referral={selectedReferral} />
 
-            <h3>
-              Clinical Information
-            </h3>
-
-            <p>
-              <strong>
-                Chief Complaint:
-              </strong>{" "}
-              {
-                selectedReferral.chief_complaint ||
-                "Not recorded"
-              }
-            </p>
-
-            <p>
-              <strong>
-                Clinical Summary:
-              </strong>{" "}
-              {
-                selectedReferral.clinical_summary ||
-                "Not recorded"
-              }
-            </p>
-
-            <p>
-              <strong>
-                Physical Findings:
-              </strong>{" "}
-              {
-                selectedReferral.physical_findings ||
-                "Not recorded"
-              }
-            </p>
-
-            <p>
-              <strong>
-                Provisional Diagnosis:
-              </strong>{" "}
-              {formatDiagnosisRecords(
-                selectedReferral.diagnosis_records,
-                selectedReferral.provisional_diagnosis
-              )}
-            </p>
-
-            <p>
-              <strong>
-                Investigations:
-              </strong>{" "}
-              {formatInvestigationRecords(
-                selectedReferral.investigation_records,
-                selectedReferral.investigations
-              )}
-            </p>
-
-            <p>
-              <strong>
-                Treatment Given:
-              </strong>{" "}
-              {
-                selectedReferral.treatment_given ||
-                "Not recorded"
-              }
-            </p>
-
-            <p>
-              <strong>
-                Referral Reason:
-              </strong>{" "}
-              {
-                selectedReferral.referral_reason ||
-                "Not recorded"
-              }
-            </p>
+            <ReferralTimeline referral={selectedReferral} />
 
             <hr />
 
             {/* RECEIVING FACILITY */}
+
+
 
             <h3 className="receiving-updates-heading">
               Receiving Facility Updates
@@ -3785,6 +4500,11 @@ function PHCStaffDashboard({ onNewReferral }) {
               ← Back to Referrals
             </button>
 
+            <PrintReferralSheet
+              referral={selectedReferral}
+              copyLabel="REFERRING FACILITY COPY"
+            />
+
           </div>
 
         </div>
@@ -3856,6 +4576,71 @@ function ReceivingDashboard() {
       discharge_medications: "",
       follow_up_plan: "",
     });
+
+  const handleInvestigationResultChange = async (
+    index,
+    resultStatus
+  ) => {
+    if (!selectedReferral) return;
+
+    const currentInvestigations = getInvestigationRecords(
+      selectedReferral
+    ).map(normalizeInvestigationRecord);
+
+    const updatedInvestigations = currentInvestigations.map(
+      (item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              result_status: resultStatus,
+            }
+          : item
+    );
+
+    const updatedReferral = {
+      ...selectedReferral,
+      investigation_records: updatedInvestigations,
+    };
+
+    setSelectedReferral(updatedReferral);
+    setReferrals((previous) =>
+      previous.map((item) =>
+        item.id === selectedReferral.id
+          ? updatedReferral
+          : item
+      )
+    );
+
+    setActionLoading(
+      `${selectedReferral.id}-investigation-${index}`
+    );
+
+    try {
+      const { error } = await supabase
+        .from("referrals")
+        .update({
+          investigation_records: updatedInvestigations,
+        })
+        .eq("id", selectedReferral.id);
+
+      if (error) throw error;
+
+      setMessage(
+        `${updatedInvestigations[index].investigation} result updated to ${getInvestigationResultLabel(resultStatus)}.`
+      );
+    } catch (err) {
+      console.error(
+        "INVESTIGATION RESULT UPDATE ERROR:",
+        err
+      );
+      setError(
+        err.message ||
+          "Unable to update investigation result."
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   /* =======================================================
      LOAD INCOMING REFERRALS
@@ -3949,6 +4734,16 @@ function ReceivingDashboard() {
             patient_identifier,
             patient_age_months,
             patient_sex,
+            patient_phone,
+            patient_address,
+            relative_name,
+            relative_relationship,
+            relative_phone,
+            diagnosis_status,
+            diagnosis_category,
+            diagnosis_records,
+            investigation_categories,
+            investigation_records,
             chief_complaint,
             clinical_summary,
             physical_findings,
@@ -3984,7 +4779,16 @@ function ReceivingDashboard() {
             discharged_at,
 
             referring_facility_id,
-            receiving_facility_id
+            receiving_facility_id,
+
+            referring_facility:facilities!referrals_referring_facility_id_fkey (
+              id,
+              name,
+              facility_type,
+              state,
+              lga,
+              is_active
+            )
           `)
           .eq(
             "receiving_facility_id",
@@ -4068,6 +4872,34 @@ function ReceivingDashboard() {
         })
       );
     };
+
+  /* =======================================================
+     VIEW REFERRAL DETAILS
+     ======================================================= */
+
+  const openReferralDetails = (referral) => {
+    setSelectedReferral(referral);
+
+    setAssessmentForm({
+      assessment_findings:
+        referral.assessment_findings || "",
+
+      final_diagnosis:
+        referral.final_diagnosis || "",
+
+      treatment_provided:
+        referral.treatment_provided || "",
+
+      procedures_performed:
+        referral.procedures_performed || "",
+
+      clinical_feedback:
+        referral.clinical_feedback || "",
+
+      disposition:
+        referral.disposition || "",
+    });
+  };
 
   /* =======================================================
      OPEN INPATIENT MANAGEMENT
@@ -5056,6 +5888,16 @@ function ReceivingDashboard() {
 
                     <div className="referral-actions">
 
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() =>
+                          openReferralDetails(referral)
+                        }
+                      >
+                        View Full Referral
+                      </button>
+
                       {/* SENT */}
 
                       {referral.status ===
@@ -5492,186 +6334,280 @@ function ReceivingDashboard() {
           CLINICAL ASSESSMENT
           ===================================================== */}
 
+      {/* =====================================================
+          CLINICAL ASSESSMENT
+          ===================================================== */}
+
       {selectedReferral && (
 
         <div className="login-page">
 
           <div
-            className="login-card"
+            className="login-card referral-review-card"
             style={{
-              maxWidth: "720px",
+              maxWidth: "980px",
             }}
           >
 
-            <span className="eyebrow">
-              CLINICAL DOCUMENTATION
-            </span>
-
-            <h2>
-              Clinical Assessment
-            </h2>
-
-            <p>
-              Referral{" "}
-              <strong>
-                {
-                  selectedReferral.referral_number
-                }
-              </strong>
-            </p>
-
-            <form
-              onSubmit={
-                handleSaveAssessment
-              }
-            >
-
-              <label>
-                Assessment Findings *
-              </label>
-
-              <textarea
-                name="assessment_findings"
-                value={
-                  assessmentForm.assessment_findings
-                }
-                onChange={
-                  handleAssessmentChange
-                }
-                rows="4"
-                placeholder="Document relevant clinical assessment findings..."
-                required
-              />
-
-              <label>
-                Final Diagnosis / Clinical Impression *
-              </label>
-
-              <textarea
-                name="final_diagnosis"
-                value={
-                  assessmentForm.final_diagnosis
-                }
-                onChange={
-                  handleAssessmentChange
-                }
-                rows="3"
-                placeholder="Enter final diagnosis or clinical impression..."
-                required
-              />
-
-              <label>
-                Treatment / Interventions Administered
-              </label>
-
-              <textarea
-                name="treatment_provided"
-                value={
-                  assessmentForm.treatment_provided
-                }
-                onChange={
-                  handleAssessmentChange
-                }
-                rows="4"
-                placeholder="Document medications, fluid therapy, procedures, or other interventions..."
-              />
-
-              <label>
-                Procedures Performed
-              </label>
-
-              <textarea
-                name="procedures_performed"
-                value={
-                  assessmentForm.procedures_performed
-                }
-                onChange={
-                  handleAssessmentChange
-                }
-                rows="3"
-                placeholder="Document procedures performed, if any..."
-              />
-
-              <label>
-                Clinical Feedback to Referring Facility
-              </label>
-
-              <textarea
-                name="clinical_feedback"
-                value={
-                  assessmentForm.clinical_feedback
-                }
-                onChange={
-                  handleAssessmentChange
-                }
-                rows="4"
-                placeholder="Provide relevant clinical feedback and follow-up recommendations..."
-              />
-
-              <label>
-                Clinical Disposition *
-              </label>
-
-              <select
-                name="disposition"
-                value={
-                  assessmentForm.disposition
-                }
-                onChange={
-                  handleAssessmentChange
-                }
-                required
-              >
-
-                <option value="">
-                  Select disposition
-                </option>
-
-                <option value="admitted">
-                  Admitted
-                </option>
-
-                <option value="discharged">
-                  Discharged
-                </option>
-
-                <option value="referred_again">
-                  Re-referred
-                </option>
-
-                <option value="observation">
-                  Observation
-                </option>
-
-              </select>
-
-              <button
-                type="submit"
-                className="primary-button full-width"
-                disabled={
-                  actionLoading ===
-                  selectedReferral.id
-                }
-              >
-                {actionLoading ===
-                selectedReferral.id
-                  ? "Saving Assessment..."
-                  : "Save Clinical Assessment"}
-              </button>
+            <div className="referral-modal-heading-row">
+              <div>
+                <span className="eyebrow">RECEIVING FACILITY • REFERRAL REVIEW</span>
+                <h2>Referral Review</h2>
+              </div>
 
               <button
                 type="button"
-                className="back-button"
-                onClick={() =>
-                  setSelectedReferral(
-                    null
-                  )
-                }
+                className="secondary-button print-referral-button"
+                onClick={printReferralForm}
               >
-                ← Back to Referrals
+                🖨 Print Patient Referral Form
               </button>
+            </div>
 
-            </form>
+            <div className="referral-review-header">
+              <div>
+                <strong>
+                  {selectedReferral.referral_number}
+                </strong>
+
+                <span>
+                  Patient:{" "}
+                  {selectedReferral.patient_identifier ||
+                    "Not recorded"}
+                </span>
+              </div>
+
+              <div className="referral-review-statuses">
+                <span
+                  className={`status-badge status-${String(
+                    selectedReferral.status || "unknown"
+                  ).toLowerCase()}`}
+                >
+                  {getStatusLabel(selectedReferral.status)}
+                </span>
+
+                <span
+                  className={`referral-urgency urgency-${String(
+                    selectedReferral.urgency || "unknown"
+                  ).toLowerCase()}`}
+                >
+                  {formatClinicalLabel(selectedReferral.urgency)}
+                </span>
+              </div>
+            </div>
+
+            {selectedReferral.referring_facility?.name && (
+              <div className="referring-facility-banner">
+                <span>Referring Facility</span>
+                <strong>
+                  {selectedReferral.referring_facility.name}
+                </strong>
+              </div>
+            )}
+
+            <ReferralSourceDetails
+              referral={selectedReferral}
+              editableInvestigationResults
+              onInvestigationResultChange={
+                handleInvestigationResultChange
+              }
+            />
+
+            <ReferralTimeline referral={selectedReferral} />
+
+            <hr />
+
+            {selectedReferral.status === "under_assessment" ? (
+              <>
+                <div className="clinical-assessment-intro">
+                  <span className="eyebrow">
+                    CLINICAL DOCUMENTATION
+                  </span>
+
+                  <h3>
+                    Receiving Facility Clinical Assessment
+                  </h3>
+
+                  <p>
+                    Review the complete PHC referral information above before
+                    documenting your receiving-facility assessment and outcome.
+                  </p>
+                </div>
+
+                <form
+                  onSubmit={
+                    handleSaveAssessment
+                  }
+                >
+
+                  <label>
+                    Assessment Findings *
+                  </label>
+
+                  <textarea
+                    name="assessment_findings"
+                    value={
+                      assessmentForm.assessment_findings
+                    }
+                    onChange={
+                      handleAssessmentChange
+                    }
+                    rows="4"
+                    placeholder="Document relevant clinical assessment findings..."
+                    required
+                  />
+
+                  <label>
+                    Final Diagnosis / Clinical Impression *
+                  </label>
+
+                  <textarea
+                    name="final_diagnosis"
+                    value={
+                      assessmentForm.final_diagnosis
+                    }
+                    onChange={
+                      handleAssessmentChange
+                    }
+                    rows="3"
+                    placeholder="Enter final diagnosis or clinical impression..."
+                    required
+                  />
+
+                  <label>
+                    Treatment / Interventions Administered
+                  </label>
+
+                  <textarea
+                    name="treatment_provided"
+                    value={
+                      assessmentForm.treatment_provided
+                    }
+                    onChange={
+                      handleAssessmentChange
+                    }
+                    rows="4"
+                    placeholder="Document medications, fluid therapy, procedures, or other interventions..."
+                  />
+
+                  <label>
+                    Procedures Performed
+                  </label>
+
+                  <textarea
+                    name="procedures_performed"
+                    value={
+                      assessmentForm.procedures_performed
+                    }
+                    onChange={
+                      handleAssessmentChange
+                    }
+                    rows="3"
+                    placeholder="Document procedures performed, if any..."
+                  />
+
+                  <label>
+                    Clinical Feedback to Referring Facility
+                  </label>
+
+                  <textarea
+                    name="clinical_feedback"
+                    value={
+                      assessmentForm.clinical_feedback
+                    }
+                    onChange={
+                      handleAssessmentChange
+                    }
+                    rows="4"
+                    placeholder="Provide relevant clinical feedback and follow-up recommendations..."
+                  />
+
+                  <label>
+                    Clinical Disposition *
+                  </label>
+
+                  <select
+                    name="disposition"
+                    value={
+                      assessmentForm.disposition
+                    }
+                    onChange={
+                      handleAssessmentChange
+                    }
+                    required
+                  >
+                    <option value="">
+                      Select disposition
+                    </option>
+
+                    <option value="admitted">
+                      Admitted
+                    </option>
+
+                    <option value="discharged">
+                      Discharged
+                    </option>
+
+                    <option value="referred_again">
+                      Re-referred
+                    </option>
+
+                    <option value="observation">
+                      Observation
+                    </option>
+                  </select>
+
+                  <button
+                    type="submit"
+                    className="primary-button full-width"
+                    disabled={
+                      actionLoading ===
+                      selectedReferral.id
+                    }
+                  >
+                    {actionLoading ===
+                    selectedReferral.id
+                      ? "Saving Assessment..."
+                      : "Save Clinical Assessment"}
+                  </button>
+
+                </form>
+              </>
+            ) : (
+              <div className="referral-review-next-step">
+                <span className="eyebrow">
+                  CURRENT STATUS
+                </span>
+
+                <h3>
+                  {getStatusLabel(selectedReferral.status)}
+                </h3>
+
+                <p>
+                  The complete information from the referring PHC is shown
+                  above. The receiving-facility clinical assessment form will
+                  become available when the referral reaches
+                  <strong> Under Assessment</strong>.
+                </p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="back-button"
+              onClick={() =>
+                setSelectedReferral(
+                  null
+                )
+              }
+            >
+              ← Back to Referrals
+            </button>
+
+            <PrintReferralSheet
+              referral={selectedReferral}
+              copyLabel="RECEIVING FACILITY COPY"
+            />
 
           </div>
 

@@ -3172,3 +3172,772 @@ button.referral-item:focus-visible {
   .clinical-selection-item .remove-selection-button { align-self:flex-end; }
   .dashboard-header-actions { width:100%; justify-content:flex-start; }
 }
+
+
+/* =========================================================
+   REFLINK CLINICAL DETAIL BOXES
+   ========================================================= */
+
+.referral-source-details {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin-top: 22px;
+}
+
+.source-details-heading {
+  padding: 18px 20px;
+  border: 1px solid var(--ref-border);
+  border-radius: 16px;
+  background: var(--ref-surface-soft);
+}
+
+.source-details-heading h3 {
+  margin: 4px 0 6px;
+}
+
+.source-details-heading p {
+  margin: 0;
+  color: var(--ref-text-muted);
+  line-height: 1.55;
+}
+
+.clinical-detail-section {
+  padding: 20px;
+  border: 1px solid var(--ref-border);
+  border-radius: 18px;
+  background: var(--ref-surface);
+  box-shadow: 0 6px 18px rgba(16, 78, 68, 0.04);
+}
+
+.clinical-detail-section h4 {
+  margin: 0 0 14px;
+  color: var(--ref-primary-dark);
+  font-size: 16px;
+}
+
+.clinical-detail-grid,
+.clinical-detail-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.clinical-detail-card {
+  min-width: 0;
+  padding: 14px 15px;
+  border: 1px solid var(--ref-border);
+  border-radius: 13px;
+  background: #fbfdfc;
+}
+
+.clinical-detail-card-wide {
+  grid-column: 1 / -1;
+}
+
+.clinical-detail-card > span,
+.clinical-narrative-card > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--ref-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.clinical-detail-card > strong {
+  display: block;
+  color: var(--ref-text);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.clinical-narrative-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.clinical-narrative-card {
+  padding: 15px;
+  border: 1px solid var(--ref-border);
+  border-radius: 13px;
+  background: #fbfdfc;
+}
+
+.clinical-narrative-card p {
+  margin: 0;
+  color: var(--ref-text);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.selection-display-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.selection-display-header h4 {
+  margin-bottom: 5px;
+}
+
+.selection-display-header p {
+  margin: 0;
+  color: var(--ref-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.selection-count-badge {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--ref-primary-soft);
+  color: var(--ref-primary-dark);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.diagnosis-detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.diagnosis-detail-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-card-topline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.detail-category-label {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f0f5f4;
+  color: var(--ref-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.selected-category-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.selected-category-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 13px;
+  border: 1px solid rgba(15, 139, 119, 0.22);
+  border-radius: 12px;
+  background: rgba(15, 139, 119, 0.06);
+  color: var(--ref-primary-dark);
+}
+
+.category-checkmark,
+.investigation-checkmark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ref-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.selected-investigation-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.selected-investigation-group {
+  overflow: hidden;
+  border: 1px solid var(--ref-border);
+  border-radius: 14px;
+  background: #fbfdfc;
+}
+
+.selected-investigation-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--ref-border);
+  background: var(--ref-surface-soft);
+  color: var(--ref-primary-dark);
+}
+
+.selected-investigation-group-header span {
+  min-width: 24px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--ref-primary-soft);
+  text-align: center;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.selected-investigation-boxes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  padding: 12px;
+}
+
+.selected-investigation-box {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--ref-border);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--ref-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.selected-investigation-box span:last-child {
+  word-break: break-word;
+}
+
+.referral-review-card {
+  text-align: left;
+}
+
+.referral-review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--ref-border);
+  border-radius: 14px;
+  background: var(--ref-surface-soft);
+}
+
+.referral-review-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.referral-review-header > div:first-child strong {
+  color: var(--ref-primary-dark);
+  font-size: 18px;
+}
+
+.referral-review-header > div:first-child span {
+  color: var(--ref-text-muted);
+  font-size: 12px;
+}
+
+.referral-review-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.referring-facility-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px 15px;
+  border-left: 3px solid var(--ref-primary);
+  border-radius: 10px;
+  background: rgba(15, 139, 119, 0.055);
+}
+
+.referring-facility-banner span {
+  color: var(--ref-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.referring-facility-banner strong {
+  color: var(--ref-primary-dark);
+}
+
+.clinical-assessment-intro {
+  margin-bottom: 18px;
+  padding: 17px 18px;
+  border: 1px solid var(--ref-border);
+  border-radius: 14px;
+  background: var(--ref-surface-soft);
+}
+
+.clinical-assessment-intro h3 {
+  margin: 4px 0 6px;
+}
+
+.clinical-assessment-intro p,
+.referral-review-next-step p {
+  margin: 0;
+  color: var(--ref-text-muted);
+  line-height: 1.6;
+}
+
+.referral-review-next-step {
+  padding: 20px;
+  border: 1px dashed var(--ref-border);
+  border-radius: 14px;
+  background: var(--ref-surface-soft);
+}
+
+.referral-review-next-step h3 {
+  margin: 5px 0 8px;
+}
+
+.referral-review-card .referral-source-details {
+  margin-top: 18px;
+}
+
+@media (max-width: 760px) {
+  .clinical-detail-grid,
+  .clinical-detail-card-grid,
+  .clinical-narrative-grid,
+  .selected-investigation-boxes,
+  .diagnosis-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .clinical-detail-card-wide {
+    grid-column: auto;
+  }
+
+  .selection-display-header,
+  .referral-review-header,
+  .referring-facility-banner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .referral-review-statuses {
+    justify-content: flex-start;
+  }
+}
+
+
+/* =========================================================
+   G10 — INVESTIGATION RESULTS + PAPER TRAIL PRINTING
+   ========================================================= */
+
+.investigation-result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: 100%;
+}
+
+.investigation-result-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--ref-border);
+  border-radius: 11px;
+  background: #fff;
+}
+
+.investigation-result-main {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.investigation-result-name {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.investigation-result-name strong {
+  color: var(--ref-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.investigation-result-name small {
+  color: var(--ref-text-muted);
+  font-size: 10px;
+}
+
+.investigation-result-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.investigation-result-control > span:first-child {
+  color: var(--ref-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.investigation-result-control select {
+  min-width: 170px;
+  padding: 8px 10px;
+  border: 1px solid var(--ref-border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ref-text);
+  font-size: 11px;
+}
+
+.investigation-result-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 92px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.investigation-result-positive {
+  background: #fff0f0;
+  color: #b42318;
+  border: 1px solid #f2c4c0;
+}
+
+.investigation-result-negative {
+  background: #eef9f2;
+  color: #16713c;
+  border: 1px solid #bfe3cb;
+}
+
+.investigation-result-pending {
+  background: #fff8e8;
+  color: #8a5a00;
+  border: 1px solid #ead6a1;
+}
+
+.referral-investigation-edit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.referral-investigation-edit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ref-border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.referral-investigation-edit-row > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.referral-investigation-edit-row strong {
+  font-size: 12px;
+}
+
+.referral-investigation-edit-row small {
+  color: var(--ref-text-muted);
+  font-size: 10px;
+}
+
+.referral-investigation-edit-row select {
+  min-width: 185px;
+  padding: 8px 10px;
+  border: 1px solid var(--ref-border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 11px;
+}
+
+.form-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.referral-modal-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.referral-modal-heading-row h2 {
+  margin: 4px 0 0;
+}
+
+.print-referral-button {
+  flex: 0 0 auto;
+}
+
+.printable-referral-sheet {
+  display: none;
+}
+
+/* =========================================================
+   PRINT LAYOUT — CLINICAL PAPER TRAIL
+   ========================================================= */
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .printable-referral-sheet,
+  .printable-referral-sheet * {
+    visibility: visible !important;
+  }
+
+  .printable-referral-sheet {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    color: #111 !important;
+    background: #fff !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-size: 10pt !important;
+  }
+
+  .print-document-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #111;
+  }
+
+  .print-brand {
+    font-size: 20pt;
+    font-weight: 900;
+    letter-spacing: .08em;
+  }
+
+  .print-document-header h1 {
+    margin: 2px 0;
+    font-size: 16pt;
+  }
+
+  .print-document-header p,
+  .print-referral-meta span {
+    margin: 0;
+    color: #444 !important;
+    font-size: 8pt;
+  }
+
+  .print-referral-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+
+  .print-referral-meta strong {
+    font-size: 12pt;
+  }
+
+  .print-section {
+    margin-top: 12px;
+    break-inside: avoid;
+  }
+
+  .print-section h2 {
+    margin: 0 0 6px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #999;
+    font-size: 11pt;
+  }
+
+  .print-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+
+  .print-grid > div,
+  .print-narrative-grid > div {
+    min-width: 0;
+    padding: 6px;
+    border: 1px solid #bbb;
+    border-radius: 3px;
+  }
+
+  .print-grid-wide {
+    grid-column: 1 / -1;
+  }
+
+  .print-grid span,
+  .print-narrative-grid span {
+    display: block;
+    margin-bottom: 2px;
+    color: #444 !important;
+    font-size: 7pt;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .print-grid strong {
+    display: block;
+    font-size: 9pt;
+    word-break: break-word;
+  }
+
+  .print-narrative-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .print-narrative-grid p {
+    margin: 0;
+    line-height: 1.35;
+    white-space: pre-wrap;
+  }
+
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5pt;
+  }
+
+  .print-table th,
+  .print-table td {
+    padding: 5px;
+    border: 1px solid #999;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .print-table th {
+    background: #eee !important;
+    font-weight: 800;
+  }
+
+  .print-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .print-chip-list span {
+    padding: 5px 7px;
+    border: 1px solid #888;
+    border-radius: 3px;
+  }
+
+  .print-signature-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-top: 24px;
+    break-inside: avoid;
+  }
+
+  .print-signature-section > div {
+    min-height: 75px;
+  }
+
+  .print-signature-section span {
+    display: block;
+    font-weight: 800;
+    font-size: 8pt;
+  }
+
+  .signature-line {
+    height: 34px;
+    border-bottom: 1px solid #222;
+  }
+
+  .stamp-box {
+    height: 48px;
+    border: 1px dashed #777;
+  }
+
+  .print-signature-section small {
+    color: #555 !important;
+    font-size: 7pt;
+  }
+
+  .print-document-footer {
+    margin-top: 16px;
+    padding-top: 6px;
+    border-top: 1px solid #999;
+    color: #444 !important;
+    font-size: 7pt;
+    text-align: center;
+  }
+
+  .print-section,
+  .print-table tr,
+  .print-signature-section {
+    break-inside: avoid;
+  }
+}
+
+@media (max-width: 760px) {
+  .investigation-result-card,
+  .referral-investigation-edit-row,
+  .referral-modal-heading-row,
+  .form-header-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .investigation-result-control,
+  .investigation-result-control select,
+  .referral-investigation-edit-row select {
+    width: 100%;
+  }
+
+  .investigation-result-card {
+    display: flex;
+  }
+}
