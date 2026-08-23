@@ -18,6 +18,196 @@ function formatPatientAge(ageInMonths) {
   return `${years} ${years === 1 ? "year" : "years"}`;
 }
 
+function getStatusLabel(status) {
+  if (!status) return "Unknown";
+
+  const labels = {
+    sent: "New Referral",
+    acknowledged: "Acknowledged",
+    patient_arrived: "Patient Arrived",
+    under_assessment: "Under Assessment",
+    admitted: "Admitted",
+    discharged: "Discharged",
+    referred_again: "Re-referred",
+    completed: "Completed",
+  };
+
+  return labels[status] || String(status)
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatReferralDateTime(value) {
+  if (!value) return "Awaiting update";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Invalid date"
+    : date.toLocaleString();
+}
+
+
+function parseJsonArray(value) {
+  if (Array.isArray(value)) return value;
+
+  if (typeof value !== "string" || !value.trim()) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatDiagnosisRecords(records, fallback = "") {
+  const parsed = Array.isArray(records) ? records : parseJsonArray(records);
+
+  if (parsed.length > 0) {
+    return parsed
+      .map((item) => {
+        if (typeof item === "string") return item;
+        const status = item?.status ? `${item.status}: ` : "";
+        const diagnosis = item?.diagnosis || item?.name || "";
+        const category = item?.category ? ` (${item.category})` : "";
+        return `${status}${diagnosis}${category}`;
+      })
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  return fallback || "Not recorded";
+}
+
+function formatInvestigationRecords(records, fallback = "") {
+  const parsed = Array.isArray(records) ? records : parseJsonArray(records);
+
+  if (parsed.length > 0) {
+    return parsed
+      .map((item) => {
+        if (typeof item === "string") return item;
+        const investigation = item?.investigation || item?.name || "";
+        const category = item?.category ? ` (${item.category})` : "";
+        return `${investigation}${category}`;
+      })
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  return fallback || "Not recorded";
+}
+
+function getDiagnosisRecords(referral) {
+  const records = Array.isArray(referral?.diagnosis_records)
+    ? referral.diagnosis_records
+    : parseJsonArray(referral?.diagnosis_records);
+
+  if (records.length) return records;
+
+  const diagnoses = String(referral?.provisional_diagnosis || "")
+    .split(" • ")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return diagnoses.map((diagnosis) => ({
+    status: referral?.diagnosis_status || "",
+    category: referral?.diagnosis_category || "",
+    diagnosis,
+  }));
+}
+
+function getInvestigationRecords(referral) {
+  const records = Array.isArray(referral?.investigation_records)
+    ? referral.investigation_records
+    : parseJsonArray(referral?.investigation_records);
+
+  if (records.length) return records;
+
+  return String(referral?.investigations || "")
+    .split(" • ")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((investigation) => ({ category: "", investigation }));
+}
+
+function ReferralTimeline({ referral }) {
+  const steps = [
+    {
+      key: "created",
+      label: "Referral Created",
+      timestamp: referral.created_at,
+    },
+    {
+      key: "acknowledged",
+      label: "Referral Acknowledged",
+      timestamp: referral.acknowledged_at,
+    },
+    {
+      key: "patient-arrived",
+      label: "Patient Arrived",
+      timestamp: referral.patient_arrived_at,
+    },
+    {
+      key: "assessment",
+      label: "Assessment Completed",
+      timestamp: referral.assessment_completed_at,
+    },
+    {
+      key: "completed",
+      label: "Referral Completed",
+      timestamp: referral.completed_at || referral.discharged_at,
+    },
+  ];
+
+  let activeFound = false;
+
+  return (
+    <section className="referral-timeline" aria-label="Referral journey">
+      <div className="referral-timeline-header">
+        <div>
+          <span className="eyebrow">REFERRAL JOURNEY</span>
+          <h3>Referral Timeline</h3>
+        </div>
+        <span className={`timeline-current status-${String(referral.status || "unknown").toLowerCase().replace(/\s+/g, "-")}`}>
+          {({
+            sent: "New Referral",
+            acknowledged: "Acknowledged",
+            patient_arrived: "Patient Arrived",
+            under_assessment: "Under Assessment",
+            admitted: "Admitted",
+            completed: "Completed",
+            discharged: "Discharged",
+          }[referral.status] || "Status Unknown")}
+        </span>
+      </div>
+
+      <div className="timeline-track">
+        {steps.map((step) => {
+          const completed = Boolean(step.timestamp);
+          const current = !completed && !activeFound;
+          if (current) activeFound = true;
+
+          return (
+            <div
+              className={`timeline-step ${completed ? "is-complete" : ""} ${current ? "is-current" : "is-pending"}`}
+              key={step.key}
+            >
+              <span className="timeline-dot" aria-hidden="true">
+                {completed ? "✓" : ""}
+              </span>
+              <div className="timeline-content">
+                <strong>{step.label}</strong>
+                <span>{completed ? formatReferralDateTime(step.timestamp) : "Awaiting update"}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 /* =========================================================
    MAIN APP
    ========================================================= */
@@ -37,6 +227,15 @@ function App() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   /* =========================================================
    LOGIN / AUTHENTICATION
@@ -75,7 +274,7 @@ const handleSignIn = async () => {
     } = await supabase
       .from("profiles")
       .select(
-        "id, full_name, role, facility_id"
+        "id, full_name, role, facility_id, must_change_password"
       )
       .eq("id", user.id)
       .single();
@@ -137,6 +336,20 @@ const handleSignIn = async () => {
 
     setRole(applicationRole);
 
+    if (userProfile.must_change_password) {
+      setPasswordError("");
+      setPasswordMessage(
+        "Your account was created with a temporary password. Please set your own password before continuing."
+      );
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      setScreen("change-password");
+      return;
+    }
+
     // 6. Reset dashboard state
     setDashboardView("overview");
     setDashboardFilter("all");
@@ -176,6 +389,141 @@ const handleSignIn = async () => {
 
     testSupabase();
   }, []);
+
+
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setPasswordError("");
+        setPasswordMessage("");
+        setPasswordForm({
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        });
+        setScreen("change-password");
+      }
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, []);
+
+  const handlePasswordResetRequest = async () => {
+    setLoginError("");
+
+    const resetEmail = email.trim();
+
+    if (!resetEmail) {
+      setLoginError("Enter your email address first.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error } =
+        await supabase.auth.resetPasswordForEmail(
+          resetEmail,
+          {
+            redirectTo: window.location.origin,
+          }
+        );
+
+      if (error) throw error;
+
+      setLoginError(
+        "If an account exists for this email, a password reset link has been sent."
+      );
+    } catch (error) {
+      console.error("PASSWORD RESET REQUEST ERROR:", error);
+      setLoginError(
+        error?.message || "Unable to send the password reset email."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordMessage("");
+
+    const newPassword = passwordForm.newPassword;
+    const confirmPassword = passwordForm.confirmPassword;
+
+    if (!newPassword || !confirmPassword) {
+      setPasswordError("Enter and confirm your new password.");
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setPasswordError(
+        "Your new password must be at least 8 characters long."
+      );
+      return;
+    }
+
+    const passwordPolicy =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+
+    if (!passwordPolicy.test(newPassword)) {
+      setPasswordError(
+        "Password must contain at least one lowercase letter, one uppercase letter, one number, and one special character."
+      );
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("The new passwords do not match.");
+      return;
+    }
+
+    setPasswordSaving(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) throw error;
+
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+
+      try {
+        await supabase
+          .from("profiles")
+          .update({
+            must_change_password: false,
+          })
+          .eq("id", profile?.id || "");
+      } catch (profileUpdateError) {
+        console.warn(
+          "PASSWORD FLAG UPDATE SKIPPED:",
+          profileUpdateError
+        );
+      }
+
+      setPasswordMessage(
+        "Password changed successfully. Your new password is now active."
+      );
+    } catch (error) {
+      console.error("PASSWORD CHANGE ERROR:", error);
+      setPasswordError(
+        error?.message || "Unable to change your password."
+      );
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
 
   const openLogin = () => {
     setScreen("login");
@@ -788,6 +1136,15 @@ const handleSignIn = async () => {
 
             <button
               type="button"
+              className="text-button"
+              onClick={handlePasswordResetRequest}
+              disabled={loading}
+            >
+              Forgot password?
+            </button>
+
+            <button
+              type="button"
               className="back-button"
               onClick={() => setScreen("home")}
             >
@@ -803,6 +1160,105 @@ const handleSignIn = async () => {
         </div>
       )}
 
+
+      {/* =====================================================
+          CHANGE PASSWORD
+          ===================================================== */}
+
+      {screen === "change-password" && (
+        <div className="login-page password-page">
+          <div className="login-card password-card">
+            <div className="login-logo">R</div>
+
+            <span className="eyebrow">
+              ACCOUNT SECURITY
+            </span>
+
+            <h2>Change Password</h2>
+
+            <p>
+              Replace your temporary or current password with a
+              secure password that only you know.
+            </p>
+
+            <form onSubmit={handlePasswordChange}>
+              <label>New Password</label>
+
+              <input
+                type="password"
+                value={passwordForm.newPassword}
+                onChange={(e) =>
+                  setPasswordForm((previous) => ({
+                    ...previous,
+                    newPassword: e.target.value,
+                  }))
+                }
+                placeholder="Enter a new password"
+                autoComplete="new-password"
+                minLength={8}
+                required
+              />
+
+              <label>Confirm New Password</label>
+
+              <input
+                type="password"
+                value={passwordForm.confirmPassword}
+                onChange={(e) =>
+                  setPasswordForm((previous) => ({
+                    ...previous,
+                    confirmPassword: e.target.value,
+                  }))
+                }
+                placeholder="Re-enter your new password"
+                autoComplete="new-password"
+                minLength={8}
+                required
+              />
+
+              {passwordError && (
+                <div className="login-error">
+                  {passwordError}
+                </div>
+              )}
+
+              {passwordMessage && (
+                <div className="success-message">
+                  {passwordMessage}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="primary-button full-width"
+                disabled={passwordSaving}
+              >
+                {passwordSaving
+                  ? "Updating Password..."
+                  : "Update Password"}
+              </button>
+            </form>
+
+            <button
+              type="button"
+              className="back-button"
+              onClick={() => {
+                setPasswordError("");
+                setPasswordMessage("");
+                setScreen(
+                  role ? "dashboard" : "login"
+                );
+              }}
+            >
+              ← Back
+            </button>
+
+            <p className="demo-note">
+              Use a unique password of at least 8 characters.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* =====================================================
           DASHBOARD
@@ -831,13 +1287,32 @@ const handleSignIn = async () => {
 
             </div>
 
-            <button
-              type="button"
-              className="logout-button"
-              onClick={logout}
-            >
-              Sign Out
-            </button>
+            <div className="dashboard-header-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  setPasswordError("");
+                  setPasswordMessage("");
+                  setPasswordForm({
+                    currentPassword: "",
+                    newPassword: "",
+                    confirmPassword: "",
+                  });
+                  setScreen("change-password");
+                }}
+              >
+                Change Password
+              </button>
+
+              <button
+                type="button"
+                className="logout-button"
+                onClick={logout}
+              >
+                Sign Out
+              </button>
+            </div>
 
           </header>
 
@@ -934,28 +1409,244 @@ const handleSignIn = async () => {
 /* =========================================================
    NEW REFERRAL FORM
    ========================================================= */
+/* =========================================================
+   REFLINK DIAGNOSIS CATALOGUE
+   ========================================================= */
 
+const DIAGNOSIS_CATEGORIES = {
+  "Maternal & Obstetric": [
+    "Complicated labour",
+    "Prolonged labour",
+    "Obstructed labour",
+    "Breech presentation",
+    "Malpresentation",
+    "Transverse lie",
+    "Eclampsia",
+    "Pre-eclampsia",
+    "Pregnancy-induced hypertension",
+    "Antepartum haemorrhage",
+    "Postpartum haemorrhage",
+    "Retained placenta",
+    "Placenta previa",
+    "Placental abruption",
+    "Ruptured uterus",
+    "Maternal sepsis",
+    "Severe anaemia in pregnancy",
+    "Multiple pregnancy",
+    "Preterm labour",
+    "Premature rupture of membranes",
+    "Miscarriage",
+    "Ectopic pregnancy",
+    "Other obstetric condition",
+  ],
+
+  "Neonatal": [
+    "Birth asphyxia",
+    "Neonatal sepsis",
+    "Neonatal jaundice",
+    "Prematurity",
+    "Low birth weight",
+    "Respiratory distress",
+    "Neonatal convulsion",
+    "Other neonatal condition",
+  ],
+
+  "Paediatric": [
+    "Severe acute malnutrition",
+    "Moderate acute malnutrition",
+    "Pneumonia",
+    "Severe pneumonia",
+    "Malaria",
+    "Severe malaria",
+    "Diarrhoeal disease",
+    "Dehydration",
+    "Febrile illness",
+    "Convulsion",
+    "Meningitis",
+    "Anaemia",
+    "Other paediatric condition",
+  ],
+
+  "Infectious Diseases": [
+    "Malaria",
+    "Severe malaria",
+    "Tuberculosis",
+    "Pneumonia",
+    "Sepsis",
+    "Meningitis",
+    "Typhoid fever",
+    "Cholera",
+    "Measles",
+    "Other infectious disease",
+  ],
+
+  "Medical": [
+    "Hypertension",
+    "Hypertensive emergency",
+    "Diabetes mellitus",
+    "Severe anaemia",
+    "Heart failure",
+    "Stroke",
+    "Asthma",
+    "Chronic obstructive pulmonary disease",
+    "Acute kidney injury",
+    "Chronic kidney disease",
+    "Sepsis",
+    "Other medical condition",
+  ],
+
+  "Surgical": [
+    "Acute abdomen",
+    "Appendicitis",
+    "Intestinal obstruction",
+    "Perforation",
+    "Complicated hernia",
+    "Abscess",
+    "Wound complication",
+    "Other surgical condition",
+  ],
+
+  "Emergency & Trauma": [
+    "Road traffic injury",
+    "Head injury",
+    "Fracture",
+    "Burns",
+    "Severe bleeding",
+    "Poisoning",
+    "Snake bite",
+    "Other emergency condition",
+  ],
+
+  "Other": [
+    "Diagnosis not established",
+    "Other condition",
+  ],
+};
+/* =========================================================
+   REFLINK INVESTIGATION CATALOGUE
+   ========================================================= */
+
+const INVESTIGATION_CATEGORIES = {
+  "Point-of-Care / Bedside": [
+    "Temperature",
+    "Blood pressure",
+    "Pulse rate",
+    "Respiratory rate",
+    "Oxygen saturation (SpO₂)",
+    "Blood glucose",
+    "Malaria RDT",
+    "Pregnancy test",
+    "Urinalysis",
+  ],
+
+  "Haematology": [
+    "Full blood count (FBC)",
+    "Haemoglobin / PCV",
+    "White blood cell count",
+    "Platelet count",
+    "Blood group",
+    "Cross-match",
+    "Sickle cell test",
+  ],
+
+  "Chemistry": [
+    "Urea",
+    "Electrolytes",
+    "Creatinine",
+    "Liver function test",
+    "Serum glucose",
+  ],
+
+  "Microbiology / Infectious Disease": [
+    "Malaria microscopy",
+    "Blood culture",
+    "Urine microscopy/culture",
+    "Stool microscopy",
+    "Sputum examination",
+    "TB investigation",
+    "HIV test",
+    "Hepatitis B test",
+    "Hepatitis C test",
+  ],
+
+  "Obstetric / Maternal": [
+    "Obstetric ultrasound",
+    "Pregnancy test",
+    "Fetal heart rate assessment",
+    "Urinalysis",
+    "Haemoglobin / PCV",
+    "Blood group",
+    "Cross-match",
+  ],
+
+  "Imaging": [
+    "Ultrasound",
+    "X-ray",
+    "CT scan",
+    "MRI",
+  ],
+
+  "Other": [
+    "Other investigation",
+    "No investigation performed",
+  ],
+};
 function NewReferralForm({ onBack }) {
 
   const [form, setForm] = useState({
-    patient_identifier: "",
-    patient_age_months: "",
-    patient_sex: "",
-    chief_complaint: "",
-    clinical_summary: "",
-    physical_findings: "",
-    provisional_diagnosis: "",
-    investigations: "",
-    treatment_given: "",
-    referral_reason: "",
-    urgency: "routine",
-    receiving_facility_id: "",
-  });
+  patient_identifier: "",
+  patient_age_months: "",
+  patient_sex: "",
+
+  // NEW PATIENT CONTACT INFORMATION
+  patient_phone: "",
+  patient_address: "",
+
+  // NEW RELATIVE / CAREGIVER INFORMATION
+  relative_name: "",
+  relative_relationship: "",
+  relative_phone: "",
+
+  // CLINICAL INFORMATION
+  chief_complaint: "",
+  clinical_summary: "",
+  physical_findings: "",
+
+  // DIAGNOSIS
+diagnosis_status: "",
+diagnosis_category: "",
+provisional_diagnosis: "",
+
+  // INVESTIGATIONS
+  investigation_category: "",
+  investigations: "",
+
+  // KEEPING TREATMENT AS CURRENT FREE-TEXT FIELD
+  treatment_given: "",
+
+  // REFERRAL
+  referral_reason: "",
+  urgency: "routine",
+  receiving_facility_id: "",
+});
 
   const [facilities, setFacilities] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  // Multiple diagnosis entries: each diagnosis carries its own status and category.
+  const [diagnosisEntries, setDiagnosisEntries] = useState([]);
+  const [diagnosisDraft, setDiagnosisDraft] = useState({
+    status: "",
+    category: "",
+    diagnosis: "",
+  });
+
+  // Multiple investigation categories and investigations.
+  const [selectedInvestigationCategories, setSelectedInvestigationCategories] =
+    useState([]);
+  const [selectedInvestigations, setSelectedInvestigations] = useState([]);
 
   useEffect(() => {
     loadFacilities();
@@ -1004,6 +1695,97 @@ function NewReferralForm({ onBack }) {
       ...previous,
       [name]: value,
     }));
+  };
+
+
+  const addDiagnosisEntry = () => {
+    const { status, category, diagnosis } = diagnosisDraft;
+
+    if (!status || !category || !diagnosis) {
+      setError(
+        "Select a diagnosis status, diagnosis category and diagnosis before adding it."
+      );
+      return;
+    }
+
+    const duplicate = diagnosisEntries.some(
+      (item) =>
+        item.status === status &&
+        item.category === category &&
+        item.diagnosis === diagnosis
+    );
+
+    if (duplicate) {
+      setError("That diagnosis has already been added.");
+      return;
+    }
+
+    setDiagnosisEntries((previous) => [
+      ...previous,
+      {
+        status,
+        category,
+        diagnosis,
+      },
+    ]);
+
+    setDiagnosisDraft({
+      status: "",
+      category: "",
+      diagnosis: "",
+    });
+
+    setError("");
+  };
+
+  const removeDiagnosisEntry = (index) => {
+    setDiagnosisEntries((previous) =>
+      previous.filter((_, itemIndex) => itemIndex !== index)
+    );
+  };
+
+  const toggleInvestigationCategory = (category) => {
+    setSelectedInvestigationCategories((previous) => {
+      const exists = previous.includes(category);
+
+      if (exists) {
+        setSelectedInvestigations((items) =>
+          items.filter((item) => item.category !== category)
+        );
+
+        return previous.filter((item) => item !== category);
+      }
+
+      return [...previous, category];
+    });
+  };
+
+  const toggleInvestigation = (category, investigation) => {
+    setSelectedInvestigations((previous) => {
+      const exists = previous.some(
+        (item) =>
+          item.category === category &&
+          item.investigation === investigation
+      );
+
+      if (exists) {
+        return previous.filter(
+          (item) =>
+            !(
+              item.category === category &&
+              item.investigation === investigation
+            )
+        );
+      }
+
+      return [
+        ...previous,
+        {
+          category,
+          investigation,
+        },
+      ];
+    });
   };
 
   const generateReferralNumber = () => {
@@ -1073,45 +1855,96 @@ function NewReferralForm({ onBack }) {
         generateReferralNumber();
 
       const referralPayload = {
+  referral_number:
+    referralNumber,
 
-        referral_number:
-          referralNumber,
+  patient_identifier:
+    form.patient_identifier,
 
-        patient_identifier:
-          form.patient_identifier,
+  patient_age_months:
+    form.patient_age_months
+      ? Number(form.patient_age_months) * 12
+      : null,
 
-        patient_age_months:
-          form.patient_age_months
-            ? Number(form.patient_age_months) * 12
-            : null,
+  patient_sex:
+    form.patient_sex ||
+    null,
+    
 
-        patient_sex:
-          form.patient_sex ||
-          null,
+  // NEW PATIENT CONTACT INFORMATION
+  patient_phone:
+    form.patient_phone?.trim() ||
+    null,
 
-        chief_complaint:
-          form.chief_complaint ||
-          null,
+  patient_address:
+    form.patient_address?.trim() ||
+    null,
 
-        clinical_summary:
-          form.clinical_summary ||
-          null,
+  // NEW RELATIVE / CAREGIVER INFORMATION
+  relative_name:
+    form.relative_name?.trim() ||
+    null,
 
-        physical_findings:
-          form.physical_findings ||
-          null,
+  relative_relationship:
+    form.relative_relationship ||
+    null,
 
-        provisional_diagnosis:
-          form.provisional_diagnosis ||
-          null,
+  relative_phone:
+    form.relative_phone?.trim() ||
+    null,
 
-        investigations:
-          form.investigations ||
-          null,
+  chief_complaint:
+    form.chief_complaint ||
+    null,
 
-        treatment_given:
-          form.treatment_given ||
-          null,
+  clinical_summary:
+    form.clinical_summary ||
+    null,
+
+  physical_findings:
+    form.physical_findings ||
+    null,
+
+  // MULTIPLE DIAGNOSES
+  diagnosis_records:
+    diagnosisEntries,
+
+  // Keep legacy fields populated for compatibility with existing records/views.
+  diagnosis_status:
+    [...new Set(diagnosisEntries.map((item) => item.status))]
+      .join(", ") || null,
+
+  diagnosis_category:
+    [...new Set(diagnosisEntries.map((item) => item.category))]
+      .join(", ") || null,
+
+  provisional_diagnosis:
+    diagnosisEntries
+      .map(
+        (item) =>
+          `${item.status}: ${item.diagnosis}`
+      )
+      .join(" • ") || null,
+
+  // MULTIPLE INVESTIGATIONS
+  investigation_categories:
+    selectedInvestigationCategories,
+
+  investigation_records:
+    selectedInvestigations,
+
+  investigations:
+    selectedInvestigations
+      .map(
+        (item) =>
+          `${item.investigation} (${item.category})`
+      )
+      .join(" • ") || null,
+
+  // KEEP THIS AS IT CURRENTLY WORKS
+  treatment_given:
+    form.treatment_given ||
+    null,
 
         referral_reason:
           form.referral_reason ||
@@ -1171,19 +2004,42 @@ function NewReferralForm({ onBack }) {
       );
 
       setForm({
-        patient_identifier: "",
-        patient_age_months: "",
-        patient_sex: "",
-        chief_complaint: "",
-        clinical_summary: "",
-        physical_findings: "",
-        provisional_diagnosis: "",
-        investigations: "",
-        treatment_given: "",
-        referral_reason: "",
-        urgency: "routine",
-        receiving_facility_id: "",
+  patient_identifier: "",
+  patient_age_months: "",
+  patient_sex: "",
+
+  patient_phone: "",
+  patient_address: "",
+
+  relative_name: "",
+  relative_relationship: "",
+  relative_phone: "",
+
+  chief_complaint: "",
+  clinical_summary: "",
+  physical_findings: "",
+
+  diagnosis_status: "",
+  diagnosis_category: "",
+  provisional_diagnosis: "",
+
+  investigation_category: "",
+  investigations: "",
+  treatment_given: "",
+
+  referral_reason: "",
+  urgency: "routine",
+  receiving_facility_id: "",
+});
+
+      setDiagnosisEntries([]);
+      setDiagnosisDraft({
+        status: "",
+        category: "",
+        diagnosis: "",
       });
+      setSelectedInvestigationCategories([]);
+      setSelectedInvestigations([]);
 
     } catch (err) {
 
@@ -1282,6 +2138,90 @@ function NewReferralForm({ onBack }) {
               step="1"
               placeholder="e.g. 22"
             />
+            <div className="form-group">
+  <label htmlFor="patient_phone">
+    Patient Phone Number
+  </label>
+
+  <input
+    id="patient_phone"
+    type="tel"
+    name="patient_phone"
+    value={form.patient_phone}
+    onChange={handleChange}
+    placeholder="e.g. 08012345678"
+  />
+</div>
+
+<div className="form-group">
+  <label htmlFor="patient_address">
+    Patient Address
+  </label>
+
+  <textarea
+    id="patient_address"
+    name="patient_address"
+    value={form.patient_address}
+    onChange={handleChange}
+    rows={2}
+    placeholder="Enter patient's address"
+  />
+</div>
+
+<div className="form-section">
+  <h4>Relative / Caregiver Information</h4>
+
+  <div className="form-group">
+    <label htmlFor="relative_name">
+      Relative / Caregiver Name
+    </label>
+
+    <input
+      id="relative_name"
+      type="text"
+      name="relative_name"
+      value={form.relative_name}
+      onChange={handleChange}
+      placeholder="Enter name"
+    />
+  </div>
+
+  <div className="form-group">
+    <label htmlFor="relative_relationship">
+      Relationship to Patient
+    </label>
+
+    <select
+      id="relative_relationship"
+      name="relative_relationship"
+      value={form.relative_relationship}
+      onChange={handleChange}
+    >
+      <option value="">Select relationship</option>
+      <option value="parent">Parent</option>
+      <option value="spouse">Spouse</option>
+      <option value="child">Child</option>
+      <option value="sibling">Sibling</option>
+      <option value="guardian">Guardian</option>
+      <option value="other">Other</option>
+    </select>
+  </div>
+
+  <div className="form-group">
+    <label htmlFor="relative_phone">
+      Relative / Caregiver Phone Number
+    </label>
+
+    <input
+      id="relative_phone"
+      type="tel"
+      name="relative_phone"
+      value={form.relative_phone}
+      onChange={handleChange}
+      placeholder="e.g. 08012345678"
+    />
+  </div>
+</div>
 
           </div>
 
@@ -1360,27 +2300,254 @@ function NewReferralForm({ onBack }) {
           placeholder="Relevant examination findings"
         />
 
-        <label>
-          Provisional Diagnosis
-        </label>
+      <div className="form-section clinical-selection-section">
+        <div className="section-heading-inline">
+          <div>
+            <h4>Diagnosis</h4>
+            <p>
+              Add as many suspected, provisional or confirmed diagnoses as clinically appropriate.
+              Each diagnosis keeps its own status and category.
+            </p>
+          </div>
+        </div>
 
-        <input
-          name="provisional_diagnosis"
-          value={form.provisional_diagnosis}
-          onChange={handleChange}
-          placeholder="Provisional diagnosis"
-        />
+        <div className="clinical-entry-grid">
+          <div className="form-group">
+            <label htmlFor="diagnosis_status">
+              Diagnosis Status
+            </label>
 
-        <label>
-          Investigations
-        </label>
+            <select
+              id="diagnosis_status"
+              value={diagnosisDraft.status}
+              onChange={(e) =>
+                setDiagnosisDraft((previous) => ({
+                  ...previous,
+                  status: e.target.value,
+                }))
+              }
+            >
+              <option value="">Select status</option>
+              <option value="suspected">Suspected</option>
+              <option value="provisional">Provisional</option>
+              <option value="confirmed">Confirmed</option>
+            </select>
+          </div>
 
-        <textarea
-          name="investigations"
-          value={form.investigations}
-          onChange={handleChange}
-          placeholder="Laboratory/imaging results"
-        />
+          <div className="form-group">
+            <label htmlFor="diagnosis_category">
+              Diagnosis Category
+            </label>
+
+            <select
+              id="diagnosis_category"
+              value={diagnosisDraft.category}
+              onChange={(e) =>
+                setDiagnosisDraft((previous) => ({
+                  ...previous,
+                  category: e.target.value,
+                  diagnosis: "",
+                }))
+              }
+            >
+              <option value="">Select category</option>
+
+              {Object.keys(DIAGNOSIS_CATEGORIES).map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="provisional_diagnosis">
+              Diagnosis
+            </label>
+
+            <select
+              id="provisional_diagnosis"
+              value={diagnosisDraft.diagnosis}
+              onChange={(e) =>
+                setDiagnosisDraft((previous) => ({
+                  ...previous,
+                  diagnosis: e.target.value,
+                }))
+              }
+              disabled={!diagnosisDraft.category}
+            >
+              <option value="">
+                {diagnosisDraft.category
+                  ? "Select diagnosis"
+                  : "Select category first"}
+              </option>
+
+              {diagnosisDraft.category &&
+                DIAGNOSIS_CATEGORIES[diagnosisDraft.category]?.map(
+                  (diagnosis) => (
+                    <option key={diagnosis} value={diagnosis}>
+                      {diagnosis}
+                    </option>
+                  )
+                )}
+            </select>
+          </div>
+
+          <div className="form-group clinical-entry-action">
+            <label>&nbsp;</label>
+
+            <button
+              type="button"
+              className="primary-button"
+              onClick={addDiagnosisEntry}
+            >
+              + Add Diagnosis
+            </button>
+          </div>
+        </div>
+
+        <div className="selection-help">
+          You can add multiple diagnoses with different statuses. For example:
+          <strong> Confirmed malaria</strong>,
+          <strong> Provisional pneumonia</strong>, and
+          <strong> Suspected sepsis</strong>.
+        </div>
+
+        {diagnosisEntries.length > 0 ? (
+          <div className="clinical-selection-list">
+            {diagnosisEntries.map((item, index) => (
+              <div className="clinical-selection-item" key={`${item.status}-${item.category}-${item.diagnosis}-${index}`}>
+                <div>
+                  <span className={`clinical-status-pill status-${item.status}`}>
+                    {item.status}
+                  </span>
+                  <strong>{item.diagnosis}</strong>
+                  <small>{item.category}</small>
+                </div>
+
+                <button
+                  type="button"
+                  className="remove-selection-button"
+                  onClick={() => removeDiagnosisEntry(index)}
+                  aria-label={`Remove ${item.diagnosis}`}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-selection-state">
+            No diagnoses added yet.
+          </div>
+        )}
+      </div>
+
+      <div className="form-section clinical-selection-section">
+        <div className="section-heading-inline">
+          <div>
+            <h4>Investigations</h4>
+            <p>
+              Select multiple investigation categories and multiple investigations.
+              Investigations from different categories can be selected in the same referral.
+            </p>
+          </div>
+        </div>
+
+        <div className="multi-selection-group">
+          <label>Investigation Categories</label>
+
+          <div className="checkbox-grid">
+            {Object.keys(INVESTIGATION_CATEGORIES).map((category) => (
+              <label
+                key={category}
+                className={`selection-checkbox ${
+                  selectedInvestigationCategories.includes(category)
+                    ? "is-selected"
+                    : ""
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedInvestigationCategories.includes(category)}
+                  onChange={() => toggleInvestigationCategory(category)}
+                />
+                <span>{category}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {selectedInvestigationCategories.length > 0 ? (
+          <div className="investigation-options-grid">
+            {selectedInvestigationCategories.map((category) => (
+              <div className="investigation-category-panel" key={category}>
+                <div className="investigation-category-header">
+                  <strong>{category}</strong>
+                  <span>
+                    {
+                      selectedInvestigations.filter(
+                        (item) => item.category === category
+                      ).length
+                    } selected
+                  </span>
+                </div>
+
+                <div className="checkbox-list">
+                  {INVESTIGATION_CATEGORIES[category]?.map(
+                    (investigation) => {
+                      const checked = selectedInvestigations.some(
+                        (item) =>
+                          item.category === category &&
+                          item.investigation === investigation
+                      );
+
+                      return (
+                        <label
+                          key={investigation}
+                          className={`selection-checkbox ${
+                            checked ? "is-selected" : ""
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              toggleInvestigation(
+                                category,
+                                investigation
+                              )
+                            }
+                          />
+                          <span>{investigation}</span>
+                        </label>
+                      );
+                    }
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-selection-state">
+            Select one or more investigation categories to display their investigations.
+          </div>
+        )}
+
+        {selectedInvestigations.length > 0 && (
+          <div className="selected-summary">
+            <strong>
+              {selectedInvestigations.length} investigation(s) selected
+            </strong>
+
+            <span>
+              {selectedInvestigations
+                .map((item) => item.investigation)
+                .join(" • ")}
+            </span>
+          </div>
+        )}
+      </div>
 
         <label>
           Treatment Given
@@ -1486,6 +2653,7 @@ function PHCStaffDashboard({ onNewReferral }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [facilityUserCount, setFacilityUserCount] = useState(null);
 
   const [selectedReferral, setSelectedReferral] =
     useState(null);
@@ -1537,6 +2705,28 @@ function PHCStaffDashboard({ onNewReferral }) {
       }
 
       const {
+        data: userCount,
+        error: userCountError,
+      } = await supabase.rpc(
+        "get_facility_user_count",
+        {
+          p_facility_id: profile.facility_id,
+        }
+      );
+
+      if (userCountError) {
+        console.warn(
+          "FACILITY USER COUNT ERROR:",
+          userCountError
+        );
+        setFacilityUserCount(null);
+      } else {
+        setFacilityUserCount(
+          Number(userCount ?? 0)
+        );
+      }
+
+      const {
         data,
         error: referralError,
       } = await supabase
@@ -1547,6 +2737,16 @@ function PHCStaffDashboard({ onNewReferral }) {
           patient_identifier,
           patient_age_months,
           patient_sex,
+          patient_phone,
+          patient_address,
+          relative_name,
+          relative_relationship,
+          relative_phone,
+          diagnosis_status,
+          diagnosis_category,
+          diagnosis_records,
+          investigation_categories,
+          investigation_records,
           chief_complaint,
           clinical_summary,
           physical_findings,
@@ -1666,10 +2866,12 @@ function PHCStaffDashboard({ onNewReferral }) {
           return;
         }
 
-        channel = supabase
-          .channel(
-            `phc-referrals-${profile.facility_id}`
-          )
+        const channelName =
+          `phc-referrals-${profile.facility_id}-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2)}`;
+
+        channel = supabase.channel(channelName)
           .on(
             "postgres_changes",
             {
@@ -1790,30 +2992,6 @@ function PHCStaffDashboard({ onNewReferral }) {
   /* =========================================================
      STATUS LABEL
      ========================================================= */
-
-  const getStatusLabel = (status) => {
-    const labels = {
-      sent: "New Referral",
-      acknowledged:
-        "Acknowledged",
-      patient_arrived:
-        "Patient Arrived",
-      under_assessment:
-        "Under Assessment",
-      admitted: "Admitted",
-      discharged:
-        "Discharged",
-      referred_again:
-        "Re-referred",
-      completed: "Completed",
-    };
-
-    return (
-      labels[status] ||
-      status ||
-      "Unknown"
-    );
-  };
 
   /* =========================================================
      OPEN REFERRAL
@@ -2158,12 +3336,15 @@ function PHCStaffDashboard({ onNewReferral }) {
                         }
                       </p>
 
-                      <p>
+                      <p
+                        className={`referral-urgency urgency-${String(
+                          referral.urgency || "unknown"
+                        ).toLowerCase()}`}
+                      >
                         Urgency:{" "}
-                        {
-                          referral.urgency ||
-                          "Not specified"
-                        }
+                        {String(
+                          referral.urgency || "Not specified"
+                        )}
                       </p>
 
                       <small>
@@ -2182,10 +3363,10 @@ function PHCStaffDashboard({ onNewReferral }) {
                     <div>
 
                       <strong>
-                        {
-                          referral.provisional_diagnosis ||
-                          "No diagnosis provided"
-                        }
+                        {formatDiagnosisRecords(
+                          referral.diagnosis_records,
+                          referral.provisional_diagnosis
+                        )}
                       </strong>
 
                       <p>
@@ -2286,6 +3467,40 @@ function PHCStaffDashboard({ onNewReferral }) {
               }
             </p>
 
+            <div className="patient-contact-grid">
+              <div>
+                <span>Patient Phone</span>
+                <strong>{selectedReferral.patient_phone || "Not recorded"}</strong>
+              </div>
+              <div>
+                <span>Patient Address</span>
+                <strong>{selectedReferral.patient_address || "Not recorded"}</strong>
+              </div>
+              <div>
+                <span>Relative / Caregiver</span>
+                <strong>{selectedReferral.relative_name || "Not recorded"}</strong>
+              </div>
+              <div>
+                <span>Relationship</span>
+                <strong>{selectedReferral.relative_relationship || "Not recorded"}</strong>
+              </div>
+              <div>
+                <span>Relative Phone</span>
+                <strong>{selectedReferral.relative_phone || "Not recorded"}</strong>
+              </div>
+              <div>
+                <span>Diagnosis Status</span>
+                <strong>
+                {formatDiagnosisRecords(
+                  selectedReferral.diagnosis_records,
+                  selectedReferral.provisional_diagnosis
+                )}
+              </strong>
+              </div>
+            </div>
+
+            <ReferralTimeline referral={selectedReferral} />
+
             <hr />
 
             {/* CLINICAL INFORMATION */}
@@ -2328,20 +3543,20 @@ function PHCStaffDashboard({ onNewReferral }) {
               <strong>
                 Provisional Diagnosis:
               </strong>{" "}
-              {
-                selectedReferral.provisional_diagnosis ||
-                "Not recorded"
-              }
+              {formatDiagnosisRecords(
+                selectedReferral.diagnosis_records,
+                selectedReferral.provisional_diagnosis
+              )}
             </p>
 
             <p>
               <strong>
                 Investigations:
               </strong>{" "}
-              {
-                selectedReferral.investigations ||
-                "Not recorded"
-              }
+              {formatInvestigationRecords(
+                selectedReferral.investigation_records,
+                selectedReferral.investigations
+              )}
             </p>
 
             <p>
@@ -2368,7 +3583,7 @@ function PHCStaffDashboard({ onNewReferral }) {
 
             {/* RECEIVING FACILITY */}
 
-            <h3>
+            <h3 className="receiving-updates-heading">
               Receiving Facility Updates
             </h3>
 
@@ -2597,6 +3812,9 @@ function ReceivingDashboard() {
   const [message, setMessage] =
     useState("");
 
+  const [facilityUserCount, setFacilityUserCount] =
+    useState(null);
+
   const [selectedReferral, setSelectedReferral] =
     useState(null);
 
@@ -2695,6 +3913,28 @@ function ReceivingDashboard() {
         ) {
           throw new Error(
             "Your account is not assigned to a receiving facility."
+          );
+        }
+
+        const {
+          data: userCount,
+          error: userCountError,
+        } = await supabase.rpc(
+          "get_facility_user_count",
+          {
+            p_facility_id: profile.facility_id,
+          }
+        );
+
+        if (userCountError) {
+          console.warn(
+            "FACILITY USER COUNT ERROR:",
+            userCountError
+          );
+          setFacilityUserCount(null);
+        } else {
+          setFacilityUserCount(
+            Number(userCount ?? 0)
           );
         }
 
@@ -3646,6 +4886,14 @@ function ReceivingDashboard() {
           =================================================== */}
 
       <div className="stats-grid">
+        <div className="stat-card facility-user-stat">
+          <span>Registered Users</span>
+          <strong>
+            {facilityUserCount ?? 0}
+          </strong>
+          <small>Users assigned to your facility</small>
+        </div>
+
 
         <div className="stat-card">
           <span>
@@ -3757,19 +5005,23 @@ function ReceivingDashboard() {
                         }
                       </p>
 
-                      <p>
+                      <span
+                        className={`referral-status status-${String(
+                          referral.status || "unknown"
+                        ).toLowerCase().replace(/\s+/g, "-")}`}
+                      >
                         Status:{" "}
-                        {
-                          referral.status
-                        }
-                      </p>
+                        {getStatusLabel(referral.status)}
+                      </span>
 
-                      <p>
+                      <span
+                        className={`referral-urgency urgency-${String(
+                          referral.urgency || "unknown"
+                        ).toLowerCase()}`}
+                      >
                         Urgency:{" "}
-                        {
-                          referral.urgency
-                        }
-                      </p>
+                        {String(referral.urgency || "Not specified")}
+                      </span>
 
                       <small>
                         Received:{" "}
@@ -3783,10 +5035,10 @@ function ReceivingDashboard() {
                     <div>
 
                       <strong>
-                        {
-                          referral.provisional_diagnosis ||
-                          "No diagnosis provided"
-                        }
+                        {formatDiagnosisRecords(
+                          referral.diagnosis_records,
+                          referral.provisional_diagnosis
+                        )}
                       </strong>
 
                       <p>
@@ -4559,6 +5811,8 @@ function AdminDashboard() {
      ======================================================= */
 
   const [facilities, setFacilities] = useState([]);
+  const [facilityUserCounts, setFacilityUserCounts] =
+    useState({});
   const [facilitiesLoading, setFacilitiesLoading] =
     useState(false);
 
@@ -4617,6 +5871,39 @@ function AdminDashboard() {
   const [message, setMessage] = useState("");
 
   /* =======================================================
+     LOAD FACILITY USER COUNTS
+     ======================================================= */
+
+  const loadFacilityUserCounts = async () => {
+    try {
+      const {
+        data,
+        error: countError,
+      } = await supabase.rpc(
+        "get_facility_user_counts"
+      );
+
+      if (countError) {
+        throw countError;
+      }
+
+      const counts = {};
+
+      (data || []).forEach((row) => {
+        counts[row.facility_id] = Number(row.user_count || 0);
+      });
+
+      setFacilityUserCounts(counts);
+    } catch (err) {
+      console.error(
+        "FACILITY USER COUNTS ERROR:",
+        err
+      );
+      setFacilityUserCounts({});
+    }
+  };
+
+  /* =======================================================
      LOAD FACILITIES
      ======================================================= */
 
@@ -4640,6 +5927,7 @@ function AdminDashboard() {
       }
 
       setFacilities(data || []);
+      await loadFacilityUserCounts();
     } catch (err) {
       console.error(
         "FACILITIES ERROR:",
@@ -4718,6 +6006,16 @@ function AdminDashboard() {
           patient_identifier,
           patient_age_months,
           patient_sex,
+          patient_phone,
+          patient_address,
+          relative_name,
+          relative_relationship,
+          relative_phone,
+          diagnosis_status,
+          diagnosis_category,
+          diagnosis_records,
+          investigation_categories,
+          investigation_records,
           chief_complaint,
           clinical_summary,
           physical_findings,
@@ -5294,6 +6592,22 @@ function AdminDashboard() {
           );
         }
 
+        // Mark newly created accounts as temporary-password accounts.
+        // The profile column is optional for backward compatibility.
+        try {
+          await supabase
+            .from("profiles")
+            .update({
+              must_change_password: true,
+            })
+            .eq("id", createData.user?.id || createData.user_id || "");
+        } catch (passwordFlagError) {
+          console.warn(
+            "TEMPORARY PASSWORD FLAG UPDATE SKIPPED:",
+            passwordFlagError
+          );
+        }
+
         setMessage(
           createData.message ||
             "User created successfully."
@@ -5769,6 +7083,10 @@ function AdminDashboard() {
                     </th>
 
                     <th style={{ textAlign: "left", padding: "12px" }}>
+                      Registered Users
+                    </th>
+
+                    <th style={{ textAlign: "left", padding: "12px" }}>
                       Status
                     </th>
 
@@ -5821,6 +7139,14 @@ function AdminDashboard() {
                             facility.lga ||
                             "—"
                           }
+                        </td>
+
+                        <td style={{
+                          padding: "12px",
+                        }}>
+                          <strong className="facility-user-count">
+                            {facilityUserCounts[facility.id] ?? 0}
+                          </strong>
                         </td>
 
                         <td style={{
@@ -6686,7 +8012,7 @@ function AdminDashboard() {
                           padding: "12px",
                         }}>
                           {
-                            getReferralStatusLabel(
+                            getStatusLabel(
                               referral.status
                             )
                           }
@@ -6918,7 +8244,7 @@ function AdminDashboard() {
       </td>
 
       <td style={{ padding: "12px" }}>
-        {getReferralStatusLabel(referral.status)}
+        {getStatusLabel(referral.status)}
       </td>
 
       <td style={{ padding: "12px" }}>
@@ -6960,6 +8286,14 @@ function AdminDashboard() {
       </div>
 
       <div className="stats-grid">
+        <div className="stat-card facility-user-stat">
+          <span>Registered Users</span>
+          <strong>
+            {users.length}
+          </strong>
+          <small>Users assigned to your facility</small>
+        </div>
+
         <button
           type="button"
           className="stat-card"
