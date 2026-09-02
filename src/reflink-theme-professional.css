@@ -1,0 +1,1477 @@
+/* =========================================================================
+   REFLINK — PROFESSIONAL POLISH LAYER
+   =========================================================================
+   No font changes. Same typeface (Inter) throughout — this file only
+   refines color, spacing, depth, borders, and consistency so the app
+   reads like a mature enterprise product instead of a first draft.
+
+   How to use:
+   1. Keep App.css exactly as it is — no class names or JSX change.
+   2. Import this file AFTER App.css:
+        import "./App.css";
+        import "./reflink-theme-professional.css";
+      (or paste it onto the end of App.css)
+
+   What changed vs. the original:
+   - Tighter, more consistent color palette (fewer competing tints)
+   - Calmer shadows and borders (crisp hairlines instead of heavy glows)
+   - Consistent radius scale (12 / 14 / 16px, not 8–26px all over)
+   - Dashboards: cleaner stat cards, tables, badges, hover states
+   - Login: centered, quieter, more confident — less "marketing gradient"
+   - Analysis Hub: clearer KPI cards, tables, and section headers
+   ========================================================================= */
+
+:root {
+  /* ---- refined brand tokens (same variable names, calmer values) ---- */
+  --ref-primary: #0b6e5a !important;
+  --ref-primary-dark: #08543f !important;
+  --ref-primary-deep: #063a2c !important;
+  --ref-primary-soft: #e6f3ee !important;
+
+  --ref-blue: #2a5aa0 !important;
+  --ref-blue-dark: #1f4478 !important;
+  --ref-blue-soft: #eaf1fa !important;
+
+  --ref-success: #157a53 !important;
+  --ref-success-soft: #e8f5ee !important;
+
+  --ref-warning: #a5680c !important;
+  --ref-warning-soft: #fbf1de !important;
+
+  --ref-danger: #ab3a3a !important;
+  --ref-danger-dark: #8a2d2d !important;
+  --ref-danger-soft: #fbeeee !important;
+
+  --ref-info: #2a5aa0 !important;
+  --ref-info-soft: #eaf1fa !important;
+
+  --ref-text: #1b2622 !important;
+  --ref-text-dark: #10201a !important;
+  --ref-text-muted: #5f6d67 !important;
+  --ref-text-light: #8b968f !important;
+
+  --ref-background: #f4f6f4 !important;
+  --ref-surface: #ffffff !important;
+  --ref-surface-soft: #f8faf8 !important;
+
+  --ref-border: #dde3de !important;
+  --ref-border-light: #e9ede9 !important;
+
+  --ref-radius-sm: 10px !important;
+  --ref-radius-md: 12px !important;
+  --ref-radius-lg: 16px !important;
+  --ref-radius-xl: 18px !important;
+
+  --ref-shadow-sm: 0 1px 2px rgba(16, 32, 26, 0.05), 0 1px 1px rgba(16, 32, 26, 0.04) !important;
+  --ref-shadow-md: 0 4px 14px rgba(16, 32, 26, 0.07) !important;
+  --ref-shadow-lg: 0 16px 40px rgba(16, 32, 26, 0.12) !important;
+}
+
+body {
+  background: var(--ref-background) !important;
+  -webkit-font-smoothing: antialiased !important;
+}
+
+/* =========================================================================
+   GLOBAL — consistent surfaces, focus states, borders
+   ========================================================================= */
+
+*:focus-visible {
+  outline: 2px solid var(--ref-primary) !important;
+  outline-offset: 2px !important;
+}
+
+button,
+input,
+select,
+textarea {
+  border-radius: var(--ref-radius-sm) !important;
+}
+
+input,
+select,
+textarea {
+  border: 1px solid var(--ref-border) !important;
+  background: var(--ref-surface) !important;
+  font-size: 13.5px !important;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: #c6d1cb !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--ref-primary) !important;
+  box-shadow: 0 0 0 3px rgba(11, 110, 90, 0.10) !important;
+}
+
+label {
+  font-weight: 600 !important;
+  color: var(--ref-text-dark) !important;
+}
+
+/* =========================================================================
+   BUTTONS — one consistent weight and shape
+   ========================================================================= */
+
+.primary-button,
+.cta-button,
+.full-width {
+  background: var(--ref-primary) !important;
+  background-image: none !important;
+  border-radius: var(--ref-radius-sm) !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  box-shadow: none !important;
+  transition: background 0.15s ease, transform 0.1s ease !important;
+}
+
+.primary-button:hover:not(:disabled),
+.cta-button:hover,
+.full-width:hover:not(:disabled) {
+  background: var(--ref-primary-dark) !important;
+  transform: none !important;
+}
+
+.primary-button:active:not(:disabled) {
+  transform: scale(0.99) !important;
+}
+
+.secondary-button {
+  background: var(--ref-surface) !important;
+  border: 1px solid var(--ref-border) !important;
+  border-radius: var(--ref-radius-sm) !important;
+  color: var(--ref-text-dark) !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.secondary-button:hover:not(:disabled) {
+  border-color: var(--ref-primary) !important;
+  color: var(--ref-primary-dark) !important;
+  background: var(--ref-primary-soft) !important;
+}
+
+.text-button,
+.back-button {
+  font-weight: 600 !important;
+  color: var(--ref-primary-dark) !important;
+}
+
+.logout-button {
+  border-radius: var(--ref-radius-sm) !important;
+}
+
+/* =========================================================================
+   TOP BAR / DASHBOARD HEADER — quieter, crisper
+   ========================================================================= */
+
+.topbar,
+.dashboard-header {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-bottom: 1px solid var(--ref-border) !important;
+  box-shadow: 0 1px 0 rgba(16, 32, 26, 0.02) !important;
+  backdrop-filter: none !important;
+}
+
+.brand-mark,
+.login-logo {
+  background: var(--ref-primary) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+.brand h1,
+.dashboard-header .brand h1 {
+  font-size: 17px !important;
+  letter-spacing: 0.02em !important;
+  color: var(--ref-text-dark) !important;
+}
+
+.brand p {
+  color: var(--ref-text-light) !important;
+  font-size: 10.5px !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+.home-nav button {
+  color: var(--ref-text-muted) !important;
+  font-weight: 600 !important;
+}
+
+.home-nav button:hover {
+  color: var(--ref-primary-dark) !important;
+}
+
+/* =========================================================================
+   LOGIN — centered, confident, no marketing gradient
+   ========================================================================= */
+
+.login-page {
+  background: var(--ref-background) !important;
+}
+
+.login-card {
+  border-radius: var(--ref-radius-lg) !important;
+  border: 1px solid var(--ref-border) !important;
+  box-shadow: var(--ref-shadow-md) !important;
+  padding: 38px !important;
+}
+
+.login-card::before {
+  height: 3px !important;
+  background: var(--ref-primary) !important;
+}
+
+.login-card h2 {
+  font-size: 22px !important;
+  letter-spacing: -0.01em !important;
+}
+
+.login-card p {
+  font-size: 13.5px !important;
+}
+
+.demo-note {
+  background: var(--ref-surface-soft) !important;
+  border: 1px solid var(--ref-border-light) !important;
+  color: var(--ref-text-light) !important;
+}
+
+/* =========================================================================
+   ROLE SELECTION
+   ========================================================================= */
+
+.role-card {
+  border-radius: var(--ref-radius-lg) !important;
+  box-shadow: var(--ref-shadow-sm) !important;
+}
+
+.role-card:hover {
+  box-shadow: var(--ref-shadow-md) !important;
+  transform: translateY(-2px) !important;
+}
+
+.role-icon {
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+/* =========================================================================
+   DASHBOARD — cleaner hierarchy, calmer cards
+   ========================================================================= */
+
+.dashboard-page {
+  background: var(--ref-background) !important;
+}
+
+.dashboard-title .eyebrow {
+  background: var(--ref-primary-soft) !important;
+  color: var(--ref-primary-dark) !important;
+  border: 1px solid rgba(11, 110, 90, 0.14) !important;
+}
+
+.dashboard-title h2 {
+  font-size: 24px !important;
+  letter-spacing: -0.01em !important;
+}
+
+.dashboard-actions {
+  background: var(--ref-surface) !important;
+  border: 1px solid var(--ref-border-light) !important;
+  border-radius: var(--ref-radius-md) !important;
+  box-shadow: none !important;
+}
+
+.stat-card {
+  background: var(--ref-surface) !important;
+  border: 1px solid var(--ref-border-light) !important;
+  border-radius: var(--ref-radius-md) !important;
+  box-shadow: var(--ref-shadow-sm) !important;
+}
+
+.stat-card::before {
+  background: var(--ref-primary) !important;
+  width: 3px !important;
+  opacity: 1 !important;
+}
+
+.stat-card span {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  color: var(--ref-text-muted) !important;
+}
+
+.stat-card strong {
+  font-size: 26px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.stat-card:hover,
+button.stat-card:hover {
+  border-color: var(--ref-primary) !important;
+  box-shadow: var(--ref-shadow-md) !important;
+  transform: none !important;
+}
+
+.dashboard-card {
+  background: var(--ref-surface) !important;
+  border: 1px solid var(--ref-border-light) !important;
+  border-radius: var(--ref-radius-md) !important;
+  box-shadow: var(--ref-shadow-sm) !important;
+}
+
+.dashboard-card h3,
+.form-header h3 {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.005em !important;
+}
+
+.dashboard-card p {
+  font-size: 13px !important;
+}
+
+/* =========================================================================
+   REFERRAL LIST + BADGES
+   ========================================================================= */
+
+.referral-list {
+  gap: 8px !important;
+}
+
+.referral-item {
+  border-radius: var(--ref-radius-md) !important;
+  border: 1px solid var(--ref-border-light) !important;
+  box-shadow: none !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.referral-item:hover {
+  border-color: var(--ref-primary) !important;
+  box-shadow: var(--ref-shadow-sm) !important;
+  transform: none !important;
+  background: var(--ref-surface) !important;
+}
+
+.referral-item > div:first-child strong {
+  background: var(--ref-primary-soft) !important;
+  color: var(--ref-primary-dark) !important;
+  border: none !important;
+  font-size: 11px !important;
+  letter-spacing: 0.02em !important;
+}
+
+.status-badge,
+.referral-status,
+.referral-urgency,
+.clinical-status-pill,
+.investigation-result-badge,
+.validation-status,
+.governance-score {
+  border-radius: 6px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em !important;
+}
+
+.referral-actions .primary-button {
+  box-shadow: none !important;
+}
+
+/* =========================================================================
+   TIMELINE
+   ========================================================================= */
+
+.referral-timeline {
+  background: var(--ref-surface-soft) !important;
+  border: 1px solid var(--ref-border-light) !important;
+  border-radius: var(--ref-radius-lg) !important;
+}
+
+.timeline-step.is-complete .timeline-dot {
+  background: var(--ref-primary) !important;
+  border-color: var(--ref-primary) !important;
+}
+
+.timeline-step.is-current .timeline-dot {
+  border-color: var(--ref-primary) !important;
+  box-shadow: 0 0 0 4px rgba(11, 110, 90, 0.12) !important;
+}
+
+/* =========================================================================
+   FORMS
+   ========================================================================= */
+
+.form-section {
+  border-top: 1px solid var(--ref-border-light) !important;
+}
+
+.form-section > h4,
+.clinical-detail-section h4,
+.selection-display-header h4 {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+.selection-checkbox {
+  border-radius: 10px !important;
+}
+
+.selection-checkbox.is-selected {
+  border-color: var(--ref-primary) !important;
+  background: var(--ref-primary-soft) !important;
+}
+
+.clinical-detail-card,
+.clinical-narrative-card,
+.selected-investigation-box {
+  border-radius: 10px !important;
+  border: 1px solid var(--ref-border-light) !important;
+}
+
+/* =========================================================================
+   ANALYSIS HUB — clearer command centre, KPI cards, tables
+   ========================================================================= */
+
+.analysis-hub-header h2 {
+  font-size: 22px !important;
+  letter-spacing: -0.01em !important;
+}
+
+.phase7-command-centre {
+  border-radius: var(--ref-radius-lg) !important;
+  border: 1px solid var(--ref-border-light) !important;
+  box-shadow: var(--ref-shadow-sm) !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+}
+
+.phase7-command-heading h3 {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+}
+
+.phase7-nav button {
+  border-radius: 8px !important;
+  font-weight: 700 !important;
+}
+
+.phase7-nav button.is-active,
+.phase7-nav button:hover {
+  border-color: var(--ref-primary) !important;
+  color: var(--ref-primary-dark) !important;
+  background: var(--ref-primary-soft) !important;
+}
+
+.analysis-step-card {
+  border-radius: var(--ref-radius-md) !important;
+  border: 1px solid var(--ref-border-light) !important;
+  box-shadow: none !important;
+}
+
+.analysis-choice {
+  border-radius: 10px !important;
+}
+
+.analysis-choice.is-active {
+  border-color: var(--ref-primary) !important;
+  background: var(--ref-primary-soft) !important;
+  box-shadow: none !important;
+}
+
+.analysis-chip {
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+}
+
+.analysis-chip.is-active {
+  background: var(--ref-primary) !important;
+  border-color: var(--ref-primary) !important;
+}
+
+.analysis-kpi-grid .stat-card,
+.intelligence-kpi,
+.governance-metrics > div,
+.validation-metrics > div {
+  background: var(--ref-surface) !important;
+  border: 1px solid var(--ref-border-light) !important;
+  border-radius: var(--ref-radius-md) !important;
+}
+
+.intelligence-kpi strong,
+.governance-metrics strong,
+.validation-metrics strong {
+  font-size: 22px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.analysis-table-wrap,
+.cross-analysis-table,
+table {
+  border-radius: var(--ref-radius-md) !important;
+  overflow: hidden !important;
+}
+
+.analysis-table th,
+table th {
+  background: var(--ref-surface-soft) !important;
+  color: var(--ref-text-muted) !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+
+.analysis-table td,
+table td {
+  border-top: 1px solid var(--ref-border-light) !important;
+  font-size: 12.5px !important;
+}
+
+.analysis-table tbody tr:hover,
+table tbody tr:hover {
+  background: var(--ref-surface-soft) !important;
+}
+
+.analysis-bar-track,
+.bar-chart-track,
+.trend-track {
+  background: var(--ref-border-light) !important;
+}
+
+.analysis-bar-track span,
+.bar-chart-fill,
+.trend-fill {
+  background: var(--ref-primary) !important;
+}
+
+.governance-score.governance-good,
+.governance-score {
+  border-radius: 999px !important;
+}
+
+.dashboard-card.intelligence-card,
+.dashboard-card.governance-card,
+.dashboard-card.validation-card,
+.dashboard-card.cross-analysis-card,
+.dashboard-card.phase6-card {
+  border: 1px solid var(--ref-border-light) !important;
+  box-shadow: var(--ref-shadow-sm) !important;
+}
+
+.analysis-note-card {
+  background: var(--ref-surface-soft) !important;
+  border: 1px solid var(--ref-border-light) !important;
+  border-radius: 10px !important;
+}
+
+/* =========================================================================
+   ADMIN — inline-styled tables get the same crisp treatment
+   ========================================================================= */
+
+.dashboard-card table {
+  font-size: 13px !important;
+}
+
+.dashboard-card table th {
+  color: var(--ref-text-muted) !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.03em !important;
+  border-bottom: 1px solid var(--ref-border) !important;
+}
+
+.dashboard-card table td {
+  border-top: 1px solid var(--ref-border-light) !important;
+}
+
+/* =========================================================================
+   MESSAGES
+   ========================================================================= */
+
+.success-message,
+.login-error,
+.error-message {
+  border-radius: var(--ref-radius-sm) !important;
+  font-size: 13px !important;
+}
+
+/* =========================================================================
+   MOTION
+   ========================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
+
+/* =========================================================================
+   FIX — sticky header ghosting bug
+   Two sticky elements (dashboard-header + phase7-command-centre) were
+   stacking, and the header's background wasn't fully opaque, so the
+   command-centre panel text bled through behind it while scrolling.
+   ========================================================================= */
+
+.dashboard-header {
+  background: #ffffff !important;
+  z-index: 60 !important;
+}
+
+.phase7-command-centre {
+  position: static !important;
+  top: auto !important;
+}
+
+/* =========================================================================
+   EXPERT PASS 2 — modals, forms, tables, scrollbars, login-as-gate
+   ========================================================================= */
+
+/* ---- Turn the appended "login-page" blocks into real overlay modals ----
+   These are reused for: the real /login screen, change-password, and every
+   referral/assessment/inpatient detail view. None of them are positioned,
+   so they render as normal page content instead of floating above it.
+   Making the container fixed + scrollable turns every one of them into a
+   proper modal/gate with zero JSX changes. */
+.login-page {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 200 !important;
+  overflow-y: auto !important;
+  padding: 40px 20px !important;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(11, 110, 90, 0.20), transparent 40%),
+    radial-gradient(circle at 85% 80%, rgba(42, 90, 160, 0.16), transparent 38%),
+    #101d18;
+}
+
+.login-card {
+  margin: auto !important;
+}
+
+/* ---- Form sections: give each a distinct, scannable block ---- */
+.form-section {
+  margin-top: 26px !important;
+  padding: 18px 18px 4px !important;
+  background: var(--ref-surface-soft) !important;
+  border: 1px solid var(--ref-border-light) !important;
+  border-radius: 12px !important;
+}
+
+.form-section > h4 {
+  color: var(--ref-primary-dark) !important;
+}
+
+.clinical-entry-grid,
+.investigation-options-grid {
+  margin-top: 4px !important;
+}
+
+.investigation-category-panel {
+  border-radius: 12px !important;
+  overflow: hidden !important;
+}
+
+.investigation-category-header {
+  background: var(--ref-surface) !important;
+}
+
+/* ---- Admin / inline-styled tables: consistent hover + zebra ---- */
+table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+}
+
+table tbody tr {
+  transition: background 0.12s ease !important;
+}
+
+table tbody tr:nth-child(even) {
+  background: var(--ref-surface-soft) !important;
+}
+
+table tbody tr:hover {
+  background: var(--ref-primary-soft) !important;
+}
+
+/* ---- Referral / assessment review cards used inside the new modal ---- */
+.referral-review-card,
+.referral-modal-heading-row {
+  background: transparent !important;
+}
+
+.patient-contact-grid > div {
+  border-radius: 10px !important;
+}
+
+/* ---- Thin, quiet scrollbars everywhere ---- */
+* {
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--ref-border) transparent !important;
+}
+
+*::-webkit-scrollbar {
+  width: 9px !important;
+  height: 9px !important;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--ref-border) !important;
+  border-radius: 999px !important;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ref-text-light) !important;
+}
+
+/* ---- Loading / empty text inside cards reads as intentional, not broken ---- */
+.dashboard-card > p:only-child,
+.empty-state,
+.empty-selection-state {
+  color: var(--ref-text-light) !important;
+  font-style: italic !important;
+}
+
+/* ---- Mobile: modal padding shouldn't eat the whole screen ---- */
+@media (max-width: 600px) {
+  .login-page {
+    padding: 18px 12px !important;
+  }
+
+  .login-card {
+    padding: 26px 20px !important;
+  }
+}
+
+/* =========================================================================
+   EXPERT PASS 3 — fixes found from real referral data
+   ========================================================================= */
+
+/* ---- "Patient:", "Status:", "Urgency:" and the Receiving/Inpatient/
+   Discharge summary lines are plain <p><strong>Label:</strong> value</p>
+   rows with no box around them, sitting next to fully-styled grid cards.
+   Give them the same boxed "detail row" treatment used elsewhere. ---- */
+.login-card > p:has(strong) {
+  text-align: left !important;
+  margin: 7px 0 !important;
+  padding: 11px 14px !important;
+  background: var(--ref-surface-soft) !important;
+  border: 1px solid var(--ref-border-light) !important;
+  border-radius: 10px !important;
+  overflow-wrap: anywhere !important;
+}
+
+.login-card > p:has(strong) strong {
+  display: inline-block !important;
+  min-width: 160px !important;
+  color: var(--ref-text-dark) !important;
+}
+
+.login-card > h3 {
+  margin-top: 26px !important;
+  padding-bottom: 8px !important;
+  border-bottom: 1px solid var(--ref-border-light) !important;
+}
+
+/* ---- The "Acknowledged" / "Admitted" / etc. label at the top-right of
+   the Referral Timeline uses a class (.timeline-current) that never had
+   a visual style — it was rendering as plain unstyled text. ---- */
+.timeline-current {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 5px 10px !important;
+  border-radius: 999px !important;
+  background: var(--ref-primary-soft) !important;
+  color: var(--ref-primary-dark) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  text-transform: capitalize !important;
+}
+
+/* ---- Investigation "original result" line reads as loose metadata ---- */
+.investigation-file-row {
+  padding-top: 10px !important;
+  margin-top: 6px !important;
+}
+
+.investigation-file-row strong,
+.investigation-file-row small {
+  color: var(--ref-text-muted) !important;
+}
+
+/* =========================================================================
+   EXPERT PASS 3 — fix unstyled key/value blocks + timeline status pill
+   These sections render inside a plain .login-card / .referral-review-card
+   container (not .referral-details-card), so they never picked up the
+   boxed key/value treatment used everywhere else. Extending the same
+   pattern here for consistency.
+   ========================================================================= */
+
+.login-card > p:has(strong),
+.referral-review-card p:has(strong) {
+  padding: 11px 13px !important;
+  background: var(--ref-surface-soft) !important;
+  border: 1px solid var(--ref-border-light) !important;
+  border-radius: 10px !important;
+  margin: 8px 0 !important;
+  overflow-wrap: anywhere !important;
+}
+
+.login-card > p:has(strong) strong,
+.referral-review-card p:has(strong) strong {
+  display: inline-block !important;
+  min-width: 150px !important;
+  margin-right: 5px !important;
+  color: var(--ref-text-dark) !important;
+}
+
+.login-card > hr,
+.referral-review-card hr {
+  border: 0 !important;
+  height: 1px !important;
+  background: var(--ref-border-light) !important;
+  margin: 26px 0 !important;
+}
+
+.login-card > h3,
+.referral-review-card h3 {
+  margin-top: 4px !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: var(--ref-text-dark) !important;
+}
+
+/* current-status pill next to the referral timeline heading */
+.timeline-current {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 6px 12px !important;
+  border-radius: 999px !important;
+  background: var(--ref-primary-soft) !important;
+  color: var(--ref-primary-dark) !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  text-transform: capitalize !important;
+}
+
+/* =========================================================================
+   FIX — empty print output
+   Making the referral modal a real fixed-position overlay (Expert Pass 2)
+   broke printing: browsers clip position:fixed + overflow:auto ancestors
+   to the viewport during print, so the hidden printable-referral-sheet
+   inside it printed as blank. Reset the modal to normal flow only for
+   print, so the print stylesheet's own visibility trick works as designed.
+   ========================================================================= */
+
+@media print {
+  .login-page,
+  .login-card,
+  .referral-review-card,
+  .app,
+  .dashboard-page,
+  .dashboard {
+    position: static !important;
+    inset: auto !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: auto !important;
+    background: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    z-index: auto !important;
+    display: block !important;
+  }
+}
+
+/* =========================================================================
+   REFLINK ADMINISTRATION — MODERN COMMAND DASHBOARD
+   Inspired by contemporary health/operations SaaS dashboards:
+   persistent navigation, compact KPI cards, analytical panels and clean
+   enterprise density. Uses REFLINK's existing visual language.
+   ========================================================================= */
+
+.admin-modern-shell {
+  display: grid !important;
+  grid-template-columns: 220px minmax(0, 1fr) !important;
+  min-height: 760px !important;
+  margin: -28px -18px -20px !important;
+  background: #f5f7f8 !important;
+  border: 1px solid var(--ref-border-light) !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+}
+
+.admin-modern-sidebar {
+  background: #102d43 !important;
+  color: #fff !important;
+  padding: 22px 14px 16px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-width: 0 !important;
+}
+
+.admin-sidebar-brand {
+  display: flex !important;
+  align-items: center !important;
+  gap: 11px !important;
+  padding: 2px 8px 28px !important;
+}
+
+.admin-sidebar-logo {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 10px !important;
+  display: grid !important;
+  place-items: center !important;
+  background: var(--ref-primary) !important;
+  color: #fff !important;
+  font-weight: 800 !important;
+  font-size: 18px !important;
+}
+
+.admin-sidebar-brand strong {
+  display: block !important;
+  font-size: 15px !important;
+  letter-spacing: .06em !important;
+}
+
+.admin-sidebar-brand span {
+  display: block !important;
+  margin-top: 2px !important;
+  color: rgba(255,255,255,.58) !important;
+  font-size: 9px !important;
+  text-transform: uppercase !important;
+  letter-spacing: .08em !important;
+}
+
+.admin-sidebar-section-label {
+  padding: 0 10px 8px !important;
+  margin-top: 8px !important;
+  color: rgba(255,255,255,.42) !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  letter-spacing: .12em !important;
+}
+
+.admin-sidebar-nav {
+  display: grid !important;
+  gap: 4px !important;
+  margin-bottom: 18px !important;
+}
+
+.admin-sidebar-nav button {
+  width: 100% !important;
+  min-height: 40px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  padding: 9px 10px !important;
+  background: transparent !important;
+  color: rgba(255,255,255,.68) !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  text-align: left !important;
+  cursor: pointer !important;
+  transition: background .16s ease, color .16s ease !important;
+}
+
+.admin-sidebar-nav button:hover,
+.admin-sidebar-nav button.is-active {
+  background: rgba(255,255,255,.10) !important;
+  color: #fff !important;
+}
+
+.admin-sidebar-nav button.is-active {
+  box-shadow: inset 3px 0 0 var(--ref-primary) !important;
+}
+
+.admin-sidebar-nav button b {
+  margin-left: auto !important;
+  min-width: 20px !important;
+  padding: 2px 6px !important;
+  border-radius: 999px !important;
+  background: rgba(255,255,255,.12) !important;
+  color: #fff !important;
+  font-size: 9px !important;
+  text-align: center !important;
+}
+
+.admin-nav-icon {
+  width: 21px !important;
+  height: 21px !important;
+  display: grid !important;
+  place-items: center !important;
+  color: rgba(255,255,255,.65) !important;
+  font-size: 15px !important;
+}
+
+.admin-sidebar-footer {
+  margin-top: auto !important;
+  padding: 13px 8px 2px !important;
+  border-top: 1px solid rgba(255,255,255,.10) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+}
+
+.admin-sidebar-footer strong,
+.admin-topbar-user > span:nth-child(2) {
+  display: block !important;
+  color: #fff !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+}
+
+.admin-sidebar-footer span:last-child {
+  display: block !important;
+  color: rgba(255,255,255,.48) !important;
+  font-size: 8.5px !important;
+  margin-top: 2px !important;
+}
+
+.admin-sidebar-avatar {
+  width: 32px !important;
+  height: 32px !important;
+  flex: 0 0 32px !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 50% !important;
+  background: #dcefeb !important;
+  color: var(--ref-primary-dark) !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+}
+
+.admin-sidebar-avatar.small {
+  width: 30px !important;
+  height: 30px !important;
+  flex-basis: 30px !important;
+}
+
+.admin-modern-content {
+  min-width: 0 !important;
+  background: #f7f8f9 !important;
+}
+
+.admin-modern-topbar {
+  height: 58px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 18px !important;
+  padding: 0 22px !important;
+  background: #fff !important;
+  border-bottom: 1px solid var(--ref-border-light) !important;
+}
+
+.admin-modern-search {
+  width: min(430px, 48%) !important;
+  height: 34px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 0 11px !important;
+  background: #f5f7f7 !important;
+  border: 1px solid #e7eceb !important;
+  border-radius: 8px !important;
+}
+
+.admin-modern-search span {
+  color: #7d8988 !important;
+  font-size: 17px !important;
+}
+
+.admin-modern-search input {
+  width: 100% !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  font-size: 10.5px !important;
+  color: var(--ref-text-dark) !important;
+}
+
+.admin-modern-search input::placeholder { color: #9ba5a4 !important; }
+
+.admin-topbar-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.admin-live-status {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  color: #687574 !important;
+  font-size: 9px !important;
+  font-weight: 650 !important;
+  white-space: nowrap !important;
+}
+
+.admin-live-status i {
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: #25a276 !important;
+  box-shadow: 0 0 0 3px rgba(37,162,118,.10) !important;
+}
+
+.admin-icon-button {
+  width: 32px !important;
+  height: 32px !important;
+  border: 1px solid #e2e8e6 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #52615f !important;
+  cursor: pointer !important;
+}
+
+.admin-topbar-user {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  cursor: pointer !important;
+}
+
+.admin-topbar-user > span:nth-child(2) { color: #33423f !important; }
+.admin-topbar-user > span:last-child { color: #85918f !important; font-size: 11px !important; }
+
+.admin-modern-main {
+  padding: 25px 26px 18px !important;
+  min-width: 0 !important;
+}
+
+.admin-modern-heading {
+  display: flex !important;
+  align-items: flex-end !important;
+  justify-content: space-between !important;
+  gap: 20px !important;
+  margin-bottom: 20px !important;
+}
+
+.admin-modern-heading .eyebrow,
+.admin-card-heading .eyebrow {
+  display: inline-block !important;
+  margin-bottom: 5px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  color: var(--ref-primary) !important;
+  font-size: 8.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: .11em !important;
+}
+
+.admin-modern-heading h2 {
+  margin: 0 !important;
+  color: #14231f !important;
+  font-size: 23px !important;
+  line-height: 1.15 !important;
+  letter-spacing: -.025em !important;
+}
+
+.admin-modern-heading p {
+  margin: 6px 0 0 !important;
+  color: #74807e !important;
+  font-size: 10.5px !important;
+}
+
+.admin-primary-action {
+  white-space: nowrap !important;
+  min-height: 34px !important;
+  border-radius: 8px !important;
+  padding: 8px 14px !important;
+  font-size: 10px !important;
+}
+
+.admin-kpi-grid {
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  margin-bottom: 14px !important;
+}
+
+.admin-kpi-card {
+  position: relative !important;
+  min-width: 0 !important;
+  min-height: 126px !important;
+  padding: 13px 13px 12px !important;
+  border: 1px solid rgba(20,42,35,.08) !important;
+  border-radius: 11px !important;
+  text-align: left !important;
+  color: #fff !important;
+  cursor: pointer !important;
+  overflow: hidden !important;
+  box-shadow: 0 3px 10px rgba(18,37,31,.08) !important;
+  transition: transform .16s ease, box-shadow .16s ease !important;
+}
+
+.admin-kpi-card:hover { transform: translateY(-2px) !important; box-shadow: 0 7px 16px rgba(18,37,31,.12) !important; }
+.admin-kpi-card::after { content: ""; position: absolute; width: 76px; height: 76px; border-radius: 50%; right: -26px; bottom: -30px; background: rgba(255,255,255,.09); }
+.admin-kpi-card .admin-kpi-icon { position: absolute; top: 11px; right: 11px; width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: rgba(255,255,255,.14); color: rgba(255,255,255,.92); font-size: 14px; }
+.admin-kpi-card > span { display: block !important; max-width: 72%; color: rgba(255,255,255,.84) !important; font-size: 8.5px !important; font-weight: 750 !important; text-transform: uppercase !important; letter-spacing: .045em !important; }
+.admin-kpi-card > strong { display: block !important; margin: 13px 0 3px !important; color: #fff !important; font-size: 26px !important; line-height: 1 !important; letter-spacing: -.03em !important; }
+.admin-kpi-card > small { display: block !important; color: rgba(255,255,255,.68) !important; font-size: 8px !important; line-height: 1.35 !important; }
+.kpi-blue { background: #2f70d7 !important; }
+.kpi-purple { background: #7252c8 !important; }
+.kpi-teal { background: #0d8c9a !important; }
+.kpi-green { background: #209765 !important; }
+.kpi-amber { background: #e09b1b !important; }
+.kpi-red { background: #d85c59 !important; }
+
+.admin-dashboard-grid {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.65fr) minmax(280px, .9fr) !important;
+  gap: 12px !important;
+  margin-bottom: 12px !important;
+}
+
+.admin-bottom-grid {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.65fr) minmax(280px, .9fr) !important;
+  gap: 12px !important;
+}
+
+.admin-chart-card,
+.admin-table-card,
+.admin-quick-card {
+  min-width: 0 !important;
+  background: #fff !important;
+  border: 1px solid #e3e9e7 !important;
+  border-radius: 11px !important;
+  box-shadow: 0 2px 8px rgba(20,38,32,.045) !important;
+  padding: 17px !important;
+}
+
+.admin-card-heading {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  margin-bottom: 15px !important;
+}
+
+.admin-card-heading h3 {
+  margin: 0 !important;
+  color: #1a2b27 !important;
+  font-size: 14px !important;
+  letter-spacing: -.01em !important;
+}
+
+.admin-card-heading p {
+  margin: 4px 0 0 !important;
+  color: #899391 !important;
+  font-size: 9px !important;
+  line-height: 1.4 !important;
+}
+
+.admin-card-heading > button {
+  flex: 0 0 auto !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--ref-primary-dark) !important;
+  padding: 2px 0 !important;
+  font-size: 9px !important;
+  font-weight: 750 !important;
+  cursor: pointer !important;
+}
+
+.admin-bar-chart {
+  height: 170px !important;
+  display: grid !important;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  align-items: end !important;
+  gap: 12px !important;
+  padding: 7px 5px 0 !important;
+  border-bottom: 1px solid #e8eeec !important;
+}
+
+.admin-bar-column {
+  height: 100% !important;
+  display: grid !important;
+  grid-template-rows: 17px 1fr 18px !important;
+  align-items: end !important;
+  text-align: center !important;
+}
+
+.admin-bar-column > span { color: #71807d !important; font-size: 8px !important; font-weight: 700 !important; }
+.admin-bar-column small { color: #8e9997 !important; font-size: 8px !important; }
+.admin-bar-track { height: 100% !important; display: flex !important; align-items: flex-end !important; justify-content: center !important; padding: 0 12px !important; }
+.admin-bar-track i { width: 100% !important; max-width: 27px !important; min-height: 4px !important; display: block !important; border-radius: 5px 5px 2px 2px !important; background: #3a75d8 !important; box-shadow: 0 2px 5px rgba(58,117,216,.16) !important; }
+
+.admin-status-list { display: grid !important; gap: 15px !important; padding: 5px 0 13px !important; }
+.admin-status-row { display: grid !important; grid-template-columns: 102px 24px 1fr !important; align-items: center !important; gap: 8px !important; }
+.admin-status-row > div:first-child { display: flex !important; align-items: center !important; gap: 7px !important; color: #566562 !important; font-size: 9px !important; font-weight: 650 !important; }
+.status-dot { width: 7px !important; height: 7px !important; border-radius: 50% !important; display: block !important; }
+.status-dot.active { background: #d9a029 !important; }
+.status-dot.acknowledged { background: #3780d9 !important; }
+.status-dot.closed { background: #28a272 !important; }
+.admin-status-row > strong { color: #263732 !important; font-size: 10px !important; text-align: right !important; }
+.admin-status-track { height: 6px !important; background: #eef2f1 !important; border-radius: 99px !important; overflow: hidden !important; }
+.status-fill { display: block !important; height: 100% !important; border-radius: inherit !important; }
+.status-fill.active { background: #d9a029 !important; }
+.status-fill.acknowledged { background: #3780d9 !important; }
+.status-fill.closed { background: #28a272 !important; }
+.admin-status-total { border-top: 1px solid #edf1ef !important; padding-top: 12px !important; display: flex !important; align-items: baseline !important; gap: 7px !important; }
+.admin-status-total strong { color: #1e302b !important; font-size: 19px !important; }
+.admin-status-total span { color: #8a9693 !important; font-size: 8.5px !important; }
+
+.admin-modern-table-wrap { overflow-x: auto !important; }
+.admin-modern-table { width: 100% !important; min-width: 610px !important; border-collapse: collapse !important; }
+.admin-modern-table th { padding: 8px 8px !important; color: #899391 !important; border-bottom: 1px solid #e7ecea !important; font-size: 7.5px !important; font-weight: 800 !important; text-transform: uppercase !important; letter-spacing: .055em !important; text-align: left !important; }
+.admin-modern-table td { padding: 10px 8px !important; border-bottom: 1px solid #eef2f0 !important; vertical-align: middle !important; color: #465551 !important; font-size: 9px !important; }
+.admin-modern-table tr:last-child td { border-bottom: 0 !important; }
+.admin-modern-table td strong { display: block !important; color: #253630 !important; font-size: 9px !important; font-weight: 700 !important; }
+.admin-modern-table td small { display: block !important; margin-top: 2px !important; color: #929d9a !important; font-size: 7.5px !important; line-height: 1.3 !important; }
+.admin-urgency-pill, .admin-status-pill { display: inline-flex !important; align-items: center !important; border-radius: 999px !important; padding: 4px 7px !important; font-size: 7.5px !important; font-weight: 750 !important; white-space: nowrap !important; }
+.admin-urgency-pill { background: #fff6df !important; color: #9a6b0a !important; }
+.admin-status-pill { background: #edf7f4 !important; color: #11735f !important; }
+.admin-status-pill.sent, .admin-status-pill.acknowledged { background: #edf4fc !important; color: #2864a8 !important; }
+.admin-status-pill.discharged, .admin-status-pill.completed { background: #edf7f1 !important; color: #1c7a53 !important; }
+.admin-status-pill.admitted { background: #f7edee !important; color: #a34a4e !important; }
+
+.admin-quick-actions { display: grid !important; gap: 7px !important; }
+.admin-quick-actions button { width: 100% !important; display: grid !important; grid-template-columns: 30px 1fr 18px !important; align-items: center !important; gap: 8px !important; padding: 9px !important; border: 1px solid #e7ecea !important; border-radius: 8px !important; background: #fafcfb !important; text-align: left !important; cursor: pointer !important; }
+.admin-quick-actions button:hover { border-color: #cbdcd7 !important; background: #f4faf8 !important; }
+.admin-quick-actions button > span { width: 27px !important; height: 27px !important; display: grid !important; place-items: center !important; border-radius: 7px !important; background: #e8f4f0 !important; color: var(--ref-primary-dark) !important; font-size: 12px !important; }
+.admin-quick-actions strong { display: block !important; color: #34433f !important; font-size: 9px !important; }
+.admin-quick-actions small { display: block !important; margin-top: 2px !important; color: #9aa4a2 !important; font-size: 7.5px !important; }
+.admin-quick-actions b { color: #8b9895 !important; font-size: 11px !important; }
+.admin-empty-dashboard { padding: 28px 10px !important; color: #899491 !important; text-align: center !important; font-size: 10px !important; }
+
+.admin-modern-footer-note { display: flex !important; justify-content: space-between !important; gap: 12px !important; padding: 12px 2px 0 !important; color: #9aa4a1 !important; font-size: 7.5px !important; }
+.admin-modern-footer-note i { display: inline-block !important; width: 5px !important; height: 5px !important; margin-right: 5px !important; border-radius: 50% !important; background: #2aa477 !important; }
+
+@media (max-width: 1180px) {
+  .admin-modern-shell { grid-template-columns: 190px minmax(0,1fr) !important; }
+  .admin-kpi-grid { grid-template-columns: repeat(3, minmax(0,1fr)) !important; }
+}
+
+@media (max-width: 860px) {
+  .admin-modern-shell { grid-template-columns: 1fr !important; margin: -18px -10px -15px !important; border-radius: 0 !important; }
+  .admin-modern-sidebar { display: none !important; }
+  .admin-modern-topbar { padding: 0 14px !important; }
+  .admin-modern-search { width: 55% !important; }
+  .admin-modern-main { padding: 20px 14px !important; }
+  .admin-dashboard-grid, .admin-bottom-grid { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 560px) {
+  .admin-modern-topbar { height: auto !important; min-height: 54px !important; padding: 9px 12px !important; }
+  .admin-modern-search { width: 100% !important; }
+  .admin-live-status, .admin-topbar-user > span:nth-child(2), .admin-topbar-user > span:last-child { display: none !important; }
+  .admin-modern-heading { align-items: flex-start !important; flex-direction: column !important; }
+  .admin-kpi-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+  .admin-kpi-card { min-height: 115px !important; }
+  .admin-bar-chart { gap: 6px !important; }
+  .admin-modern-footer-note { flex-direction: column !important; }
+}
+
+/* =========================================================
+   REFLINK IMC 2.0 — FINAL ADMIN / EXECUTIVE EXPERIENCE
+   ========================================================= */
+.admin-modern-main { max-width: 1480px !important; margin: 0 auto !important; }
+.admin-modern-heading h2 { letter-spacing: -0.035em !important; }
+.admin-modern-heading p { max-width: 760px !important; }
+.admin-primary-action { min-height: 42px !important; padding-inline: 17px !important; }
+.admin-sidebar-nav button:focus-visible,
+.admin-topbar-user:focus-visible,
+.admin-icon-button:focus-visible,
+.admin-kpi-card:focus-visible,
+.admin-quick-actions button:focus-visible,
+.admin-card-heading button:focus-visible { outline: 3px solid rgba(18,126,108,.22) !important; outline-offset: 2px !important; }
+
+.admin-executive-strip {
+  display: grid !important;
+  grid-template-columns: minmax(250px, .95fr) minmax(480px, 1.35fr) !important;
+  gap: 22px !important;
+  align-items: center !important;
+  margin: 18px 0 !important;
+  padding: 17px 19px !important;
+  border: 1px solid #dce8e4 !important;
+  border-radius: 13px !important;
+  background: linear-gradient(135deg,#f8fbfa 0%,#ffffff 62%) !important;
+  box-shadow: 0 5px 18px rgba(27,60,52,.045) !important;
+}
+.admin-executive-copy .eyebrow { display:block !important; margin-bottom:5px !important; }
+.admin-executive-copy strong { display:block !important; color:#1f342e !important; font-size:14px !important; letter-spacing:-.01em !important; }
+.admin-executive-copy p { margin:4px 0 0 !important; color:#7d8986 !important; font-size:9px !important; line-height:1.45 !important; }
+.admin-executive-metrics { display:grid !important; grid-template-columns:repeat(4,minmax(0,1fr)) !important; gap:8px !important; }
+.admin-executive-metrics > div { padding:10px 11px !important; border:1px solid #e8eeec !important; border-radius:9px !important; background:#fff !important; }
+.admin-executive-metrics span { display:block !important; color:#87928f !important; font-size:7px !important; font-weight:800 !important; text-transform:uppercase !important; letter-spacing:.06em !important; }
+.admin-executive-metrics strong { display:block !important; margin-top:5px !important; color:#244038 !important; font-size:15px !important; }
+.admin-executive-metrics .attention strong { color:#a66a10 !important; }
+.admin-executive-metrics .healthy strong { color:#1c8760 !important; }
+
+.admin-dashboard-grid-secondary { margin-top: 18px !important; }
+.admin-data-badge { display:inline-flex !important; align-items:center !important; min-height:22px !important; padding:0 8px !important; border:1px solid #e2ebe8 !important; border-radius:999px !important; background:#f7faf9 !important; color:#6e7d79 !important; font-size:7.5px !important; font-weight:800 !important; }
+.admin-funnel-list { display:grid !important; gap:11px !important; margin-top:5px !important; }
+.admin-funnel-row { display:grid !important; grid-template-columns:110px minmax(90px,1fr) 32px !important; gap:10px !important; align-items:center !important; }
+.admin-funnel-label { display:flex !important; align-items:center !important; gap:7px !important; min-width:0 !important; }
+.admin-funnel-label span { color:#9aa5a2 !important; font-size:7px !important; font-weight:800 !important; }
+.admin-funnel-label strong { color:#53635e !important; font-size:8.5px !important; }
+.admin-funnel-track { height:8px !important; overflow:hidden !important; border-radius:99px !important; background:#edf2f0 !important; }
+.admin-funnel-track i { display:block !important; height:100% !important; min-width:3px !important; border-radius:inherit !important; background:#197f6d !important; }
+.admin-funnel-value { color:#263c35 !important; font-size:10px !important; text-align:right !important; }
+.admin-method-note { display:block !important; margin-top:13px !important; color:#929c99 !important; font-size:7.5px !important; line-height:1.45 !important; }
+
+.admin-insight-list { display:grid !important; gap:8px !important; }
+.admin-insight-list .signal { display:grid !important; grid-template-columns:28px 1fr !important; gap:9px !important; align-items:start !important; padding:9px !important; border:1px solid #e8eeec !important; border-radius:9px !important; background:#fbfcfc !important; }
+.admin-insight-list .signal > span { width:24px !important; height:24px !important; display:grid !important; place-items:center !important; border-radius:7px !important; background:#edf5f2 !important; color:#147761 !important; font-size:10px !important; font-weight:900 !important; }
+.admin-insight-list .signal.attention { border-color:#efe2c8 !important; background:#fffaf0 !important; }
+.admin-insight-list .signal.attention > span { background:#fff0ce !important; color:#9a6a0c !important; }
+.admin-insight-list .signal.neutral > span { background:#eef3f5 !important; color:#58717b !important; }
+.admin-insight-list strong { display:block !important; color:#33443f !important; font-size:8.5px !important; }
+.admin-insight-list small { display:block !important; margin-top:2px !important; color:#8b9693 !important; font-size:7.5px !important; line-height:1.4 !important; }
+
+.admin-security-strip { display:grid !important; grid-template-columns:minmax(0,1.1fr) minmax(300px,.9fr) !important; gap:18px !important; margin-top:18px !important; padding:15px 17px !important; border:1px solid #e0e9e6 !important; border-radius:12px !important; background:#f8fbfa !important; }
+.admin-security-strip strong { display:block !important; margin-top:3px !important; color:#33443f !important; font-size:10px !important; }
+.admin-security-strip p { margin:4px 0 0 !important; color:#7f8b88 !important; font-size:7.5px !important; line-height:1.45 !important; }
+.admin-security-items { display:flex !important; flex-wrap:wrap !important; justify-content:flex-end !important; align-content:center !important; gap:6px !important; }
+.admin-security-items span { display:inline-flex !important; padding:6px 8px !important; border:1px solid #e1ebe8 !important; border-radius:999px !important; background:#fff !important; color:#60706b !important; font-size:7px !important; font-weight:750 !important; }
+.admin-security-items span:last-child { border-color:#eadfca !important; background:#fffaf0 !important; color:#9a6a0c !important; }
+
+@media (max-width: 1050px) {
+  .admin-executive-strip { grid-template-columns:1fr !important; }
+  .admin-executive-metrics { grid-template-columns:repeat(4,minmax(0,1fr)) !important; }
+}
+@media (max-width: 760px) {
+  .admin-executive-metrics { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+  .admin-security-strip { grid-template-columns:1fr !important; }
+  .admin-security-items { justify-content:flex-start !important; }
+  .admin-funnel-row { grid-template-columns:92px minmax(70px,1fr) 28px !important; }
+}
+
+.admin-live-status.is-attention { color:#9a6a0c !important; background:#fff8e9 !important; border-color:#eadfca !important; }
+.admin-live-status.is-attention i { background:#d39a25 !important; }
+.admin-live-status.is-ok { color:#28755f !important; }
+.admin-mobile-nav { display:none !important; }
+
+@media (max-width: 860px) {
+  .admin-mobile-nav { display:flex !important; gap:6px !important; padding:7px 12px !important; overflow-x:auto !important; border-bottom:1px solid #e4ebe9 !important; background:#fff !important; scrollbar-width:none !important; }
+  .admin-mobile-nav::-webkit-scrollbar { display:none !important; }
+  .admin-mobile-nav button { flex:0 0 auto !important; border:1px solid #e2e9e7 !important; border-radius:999px !important; background:#fff !important; padding:7px 10px !important; color:#667571 !important; font-size:8px !important; font-weight:750 !important; cursor:pointer !important; }
+  .admin-mobile-nav button.is-active { border-color:#b9d9d0 !important; background:#eaf6f2 !important; color:#126f5e !important; }
+}

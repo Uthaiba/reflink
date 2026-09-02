@@ -12,7 +12,8 @@ export default function UserManagement() {
     full_name: "",
     email: "",
     phone: "",
-    role: "referrer",
+    role: "phc_staff",
+
     facility_id: "",
     status: "active",
   });
@@ -100,7 +101,7 @@ export default function UserManagement() {
       full_name: "",
       email: "",
       phone: "",
-      role: "referrer",
+      role: "phc_staff",
       facility_id: "",
       status: "active",
     });
@@ -196,8 +197,8 @@ export default function UserManagement() {
               value={form.role}
               onChange={handleChange}
             >
-              <option value="referrer">
-                Referrer
+              <option value="phc_staff">
+                PHC Staff
               </option>
 
               <option value="receiver">

@@ -1,21 +1,29 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabase.js";
+import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
+import AnalyticsDashboard from "./components/dashboards/AnalyticsDashboard.jsx";
+import AnalysisHub from "./components/dashboards/AnalysisHub.jsx";
 import "./App.css";
+import "./reflink-theme-professional.css";
+import "./admin-dashboard-modern.css";
 
 function formatPatientAge(ageInMonths) {
   const months = Number(ageInMonths);
+  if (!Number.isFinite(months) || months < 0) return "Age not recorded";
+  const wholeMonths = Math.floor(months);
+  if (wholeMonths < 12) return `${wholeMonths} ${wholeMonths === 1 ? "month" : "months"}`;
+  const years = Math.floor(wholeMonths / 12);
+  const remainingMonths = wholeMonths % 12;
+  if (remainingMonths === 0) return `${years} ${years === 1 ? "year" : "years"}`;
+  return `${years} ${years === 1 ? "year" : "years"} ${remainingMonths} ${remainingMonths === 1 ? "month" : "months"}`;
+}
 
-  if (!Number.isFinite(months) || months < 0) {
-    return "Age not recorded";
-  }
-
-  if (months < 12) {
-    return `${months} ${months === 1 ? "month" : "months"}`;
-  }
-
-  const years = Math.floor(months / 12);
-  return `${years} ${years === 1 ? "year" : "years"}`;
+function normalizePatientAgeToMonths(value, unit) {
+  if (value === "" || value === null || value === undefined) return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) return null;
+  return unit === "years" ? Math.round(numeric * 12) : Math.round(numeric);
 }
 
 function getStatusLabel(status) {
@@ -30,6 +38,7 @@ function getStatusLabel(status) {
     discharged: "Discharged",
     referred_again: "Re-referred",
     completed: "Completed",
+    cancelled: "Cancelled",
   };
 
   return labels[status] || String(status)
@@ -75,6 +84,27 @@ function formatDiagnosisRecords(records, fallback = "") {
       })
       .filter(Boolean)
       .join(" • ");
+  }
+
+  return fallback || "Not recorded";
+}
+
+function formatDiagnosisSummary(records, fallback = "", maxItems = 2) {
+  const parsed = Array.isArray(records) ? records : parseJsonArray(records);
+
+  if (parsed.length > 0) {
+    const names = parsed
+      .map((item) =>
+        typeof item === "string" ? item : item?.diagnosis || item?.name || ""
+      )
+      .filter(Boolean);
+
+    if (!names.length) return fallback || "Not recorded";
+
+    const shown = names.slice(0, maxItems).join(", ");
+    const remaining = names.length - maxItems;
+
+    return remaining > 0 ? `${shown} +${remaining} more` : shown;
   }
 
   return fallback || "Not recorded";
@@ -141,113 +171,163 @@ function formatClinicalLabel(value) {
 }
 
 
-function getInvestigationResultLabel(status) {
-  const labels = {
-    positive: "Positive",
-    negative: "Negative",
-    pending: "Pending / Not Yet Available",
-  };
+function getInvestigationResultConfig(investigation = "") {
+  const name = String(investigation).toLowerCase();
 
-  return labels[status] || "Pending / Not Yet Available";
+  if (name.includes("haemoglobin") || name.includes("hemoglobin") || name.includes("pcv")) {
+    return {
+      type: "quantitative",
+      label: "Measurement",
+      statuses: ["pending", "within_range", "low", "high", "critical", "invalid"],
+      units: name.includes("pcv") ? ["%"] : ["g/dL", "g/L"],
+    };
+  }
+
+  const quantitativeTerms = [
+    "white blood cell", "wbc", "platelet", "urea", "creatinine",
+    "glucose", "temperature", "blood pressure", "pulse rate",
+    "respiratory rate", "oxygen saturation", "spo2", "sodium", "potassium",
+    "chloride", "bicarbonate", "albumin", "bilirubin", "ast", "alt",
+    "alkaline phosphatase", "electrolytes", "specific gravity", "ph", "titer"
+  ];
+  if (quantitativeTerms.some((term) => name.includes(term))) {
+    return {
+      type: "quantitative",
+      label: "Measured value",
+      statuses: ["pending", "within_range", "low", "high", "critical", "invalid"],
+      units: ["", "%", "g/dL", "mmol/L", "mg/dL", "µmol/L", "10^9/L", "bpm", "°C", "mmHg", "%"]
+    };
+  }
+
+  if (name.includes("urinalysis") || name.includes("urine analysis")) {
+    return {
+      type: "panel",
+      label: "Panel result",
+      statuses: ["pending", "normal", "abnormal", "inconclusive", "not_performed"],
+      units: []
+    };
+  }
+
+  if (name.includes("culture") || name.includes("microbiology") || name.includes("sputum") || name.includes("stool microscopy")) {
+    return {
+      type: "microbiology",
+      label: "Microbiology result",
+      statuses: ["pending", "growth_detected", "no_growth", "detected", "not_detected", "contaminated", "inconclusive"],
+      units: []
+    };
+  }
+
+  if (name.includes("ultrasound") || name.includes("x-ray") || name.includes("xray") || name.includes("ct scan") || name.includes("mri") || name.includes("imaging")) {
+    return {
+      type: "imaging",
+      label: "Imaging report",
+      statuses: ["pending", "no_significant_abnormality", "abnormal_finding", "inconclusive"],
+      units: []
+    };
+  }
+
+  return {
+    type: "qualitative",
+    label: "Result",
+    statuses: ["pending", "positive", "negative", "reactive", "non_reactive", "indeterminate", "invalid", "not_performed"],
+    units: []
+  };
+}
+
+const INVESTIGATION_STATUS_LABELS = {
+  pending: "Pending / Not Yet Available",
+  within_range: "Within Reference Range",
+  low: "Below Reference Range",
+  high: "Above Reference Range",
+  critical: "Critical",
+  invalid: "Invalid",
+  normal: "Normal",
+  abnormal: "Abnormal",
+  inconclusive: "Inconclusive",
+  not_performed: "Not Performed",
+  positive: "Positive",
+  negative: "Negative",
+  reactive: "Reactive",
+  non_reactive: "Non-reactive",
+  indeterminate: "Indeterminate",
+  growth_detected: "Growth Detected",
+  no_growth: "No Growth",
+  detected: "Detected",
+  not_detected: "Not Detected",
+  contaminated: "Contaminated / Repeat Required",
+  no_significant_abnormality: "No Significant Abnormality",
+  abnormal_finding: "Abnormal Finding",
+};
+
+function getInvestigationResultLabel(status) {
+  return INVESTIGATION_STATUS_LABELS[status] || formatClinicalLabel(status || "pending");
 }
 
 function getInvestigationResultClass(status) {
-  if (status === "positive") return "investigation-result-positive";
-  if (status === "negative") return "investigation-result-negative";
+  if (["positive", "reactive", "growth_detected", "abnormal", "abnormal_finding", "high", "low", "critical"].includes(status)) return "investigation-result-positive";
+  if (["negative", "non_reactive", "no_growth", "not_detected", "normal", "within_range", "no_significant_abnormality"].includes(status)) return "investigation-result-negative";
   return "investigation-result-pending";
 }
 
 function normalizeInvestigationRecord(item) {
   if (typeof item === "string") {
-    return {
-      category: "",
-      investigation: item,
-      result_status: "pending",
-      result_value: "",
-    };
+    return { category: "", investigation: item, result_status: "pending", result_value: "", result_unit: "", reference_range: "", interpretation: "", result_notes: "", result_file_path: "", result_file_name: "", result_file_type: "", result_file_size: null };
   }
-
   return {
     ...item,
     category: item?.category || "",
-    investigation:
-      item?.investigation || item?.name || "Investigation",
+    investigation: item?.investigation || item?.name || "Investigation",
     result_status: item?.result_status || "pending",
     result_value: item?.result_value || "",
+    result_unit: item?.result_unit || "",
+    reference_range: item?.reference_range || "",
+    interpretation: item?.interpretation || "",
+    result_notes: item?.result_notes || "",
+    result_file_path: item?.result_file_path || "",
+    result_file_name: item?.result_file_name || "",
+    result_file_type: item?.result_file_type || "",
+    result_file_size: item?.result_file_size || null,
   };
 }
 
-function InvestigationResultCards({
-  investigations,
-  editable = false,
-  onResultChange,
-}) {
-  if (!investigations.length) {
-    return (
-      <div className="empty-selection-state">
-        No investigation was recorded.
-      </div>
-    );
-  }
-
+function InvestigationResultCards({ investigations, editable = false, onResultChange, onFileUpload }) {
+  if (!investigations.length) return <div className="empty-selection-state">No investigation was recorded.</div>;
   const normalized = investigations.map(normalizeInvestigationRecord);
-
   return (
     <div className="investigation-result-list">
       {normalized.map((item, index) => {
-        const status = item.result_status || "pending";
-
+        const config = getInvestigationResultConfig(item.investigation);
         return (
-          <div
-            className="investigation-result-card"
-            key={`${item.category}-${item.investigation}-${index}`}
-          >
+          <div className="investigation-result-card" key={`${item.category}-${item.investigation}-${index}`}>
             <div className="investigation-result-main">
               <span className="investigation-checkmark">✓</span>
-
-              <div className="investigation-result-name">
-                <strong>{item.investigation}</strong>
-                {item.category && (
-                  <small>{item.category}</small>
-                )}
-              </div>
+              <div className="investigation-result-name"><strong>{item.investigation}</strong>{item.category && <small>{item.category}</small>}</div>
             </div>
-
             <div className="investigation-result-control">
-              <span>Result</span>
-
+              <span>{config.label}</span>
               {editable ? (
-                <select
-                  value={status}
-                  onChange={(event) =>
-                    onResultChange?.(
-                      index,
-                      event.target.value
-                    )
-                  }
-                  aria-label={`Result for ${item.investigation}`}
-                >
-                  <option value="pending">
-                    Pending / Not Yet Available
-                  </option>
-                  <option value="positive">Positive</option>
-                  <option value="negative">Negative</option>
+                <select value={item.result_status} onChange={(e) => onResultChange?.(index, { result_status: e.target.value })} aria-label={`Result for ${item.investigation}`}>
+                  {config.statuses.map((status) => <option value={status} key={status}>{getInvestigationResultLabel(status)}</option>)}
                 </select>
-              ) : (
-                <span
-                  className={`investigation-result-badge ${getInvestigationResultClass(status)}`}
-                >
-                  {getInvestigationResultLabel(status)}
-                </span>
-              )}
+              ) : <span className={`investigation-result-badge ${getInvestigationResultClass(item.result_status)}`}>{getInvestigationResultLabel(item.result_status)}</span>}
             </div>
-
-            {item.result_value && (
-              <div className="investigation-result-value">
-                <span>Result detail</span>
-                <strong>{item.result_value}</strong>
+            {editable && (
+              <div className="investigation-result-detail-grid">
+                {config.type === "quantitative" && <>
+                  <label><span>Value</span><input value={item.result_value} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder="e.g. 32" /></label>
+                  <label><span>Unit</span><input value={item.result_unit} onChange={(e) => onResultChange?.(index, { result_unit: e.target.value })} placeholder="% / g/dL" /></label>
+                  <label><span>Reference range</span><input value={item.reference_range} onChange={(e) => onResultChange?.(index, { reference_range: e.target.value })} placeholder="Use performing laboratory range" /></label>
+                </>}
+                {config.type === "panel" && <label className="investigation-result-notes"><span>Panel findings</span><textarea value={item.result_value} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder="Record pH, protein, glucose, blood, nitrite, leukocytes, specific gravity and other findings." rows={3} /></label>}
+                {(config.type === "qualitative" || config.type === "microbiology" || config.type === "imaging") && <label className="investigation-result-notes"><span>Result / report detail</span><textarea value={item.result_value} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder={config.type === "imaging" ? "Enter report findings and impression." : "Enter organism, finding or additional result detail."} rows={3} /></label>}
+                <label className="investigation-result-notes"><span>Clinical/laboratory note</span><textarea value={item.result_notes} onChange={(e) => onResultChange?.(index, { result_notes: e.target.value })} placeholder="Optional note" rows={2} /></label>
               </div>
             )}
+            {!editable && item.result_value && <div className="investigation-result-value"><span>Result detail</span><strong>{item.result_value}</strong>{item.result_unit && <small>{item.result_unit}</small>}{item.reference_range && <small>Reference: {item.reference_range}</small>}</div>}
+            <div className="investigation-file-row">
+              <div><span>Original result</span><strong>{item.result_file_name || "No result document attached"}</strong>{item.result_file_size ? <small>{Math.round(item.result_file_size / 1024)} KB</small> : null}</div>
+              {editable && <label className="upload-result-button">📎 {item.result_file_name ? "Replace result" : "Upload result"}<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv" onChange={(e) => onFileUpload?.(index, e.target.files?.[0] || null)} /></label>}
+            </div>
           </div>
         );
       })}
@@ -266,227 +346,676 @@ function PrintReferralSheet({
 
   const hasReceivingUpdate = Boolean(
     referral?.assessment_findings ||
-    referral?.final_diagnosis ||
-    referral?.treatment_provided ||
-    referral?.procedures_performed ||
-    referral?.clinical_feedback ||
-    referral?.disposition
+      referral?.final_diagnosis ||
+      referral?.diagnosis_category ||
+      referral?.diagnosis_status ||
+      referral?.treatment_provided ||
+      referral?.procedures_performed ||
+      referral?.clinical_feedback ||
+      referral?.disposition
   );
+
+  const referralId =
+    referral?.referral_number || "DRAFT REFERRAL";
+
+  const patientIdentifier =
+    referral?.patient_identifier || "Not recorded";
+
+  const referringFacility =
+    referral?.referring_facility?.name ||
+    referral?.referring_facility_name ||
+    "Not recorded";
+
+  const receivingFacility =
+    referral?.receiving_facility?.name ||
+    referral?.receiving_facility_name ||
+    "Not recorded";
 
   return (
     <div className="printable-referral-sheet">
+
+      {/* =====================================================
+          DOCUMENT HEADER
+      ===================================================== */}
       <header className="print-document-header">
-        <div>
-          <div className="print-brand">REFLINK</div>
-          <h1>Patient Referral Form</h1>
-          <p>Digital referral • {copyLabel}</p>
+
+        <div className="print-brand-block">
+          <div className="print-brand-mark">
+            <span>R</span>
+          </div>
+
+          <div>
+            <div className="print-brand">REFLINK</div>
+
+            <div className="print-brand-subtitle">
+              DIGITAL REFERRAL & CARE CONTINUITY SYSTEM
+            </div>
+
+            <h1>Patient Referral Form</h1>
+
+            <p>
+              Secure inter-facility referral • {copyLabel}
+            </p>
+          </div>
         </div>
 
         <div className="print-referral-meta">
           <span>REFLINK ID</span>
-          <strong>{referral?.referral_number || "DRAFT REFERRAL"}</strong>
-          <small>{formatReferralDateTime(referral?.created_at)}</small>
+
+          <strong>{referralId}</strong>
+
+          <small>
+            Created:{" "}
+            {formatReferralDateTime(referral?.created_at)}
+          </small>
         </div>
+
       </header>
 
-      <section className="print-section print-identity-section">
-        <div className="print-identity-grid">
+
+      {/* =====================================================
+          STATUS BAR
+      ===================================================== */}
+      <section className="print-status-bar">
+
+        <div>
+          <span>REFERRAL STATUS</span>
+          <strong>
+            {getStatusLabel(referral?.status)}
+          </strong>
+        </div>
+
+        <div>
+          <span>URGENCY</span>
+          <strong>
+            {formatClinicalLabel(referral?.urgency)}
+          </strong>
+        </div>
+
+        <div>
+          <span>DOCUMENT TYPE</span>
+          <strong>{copyLabel}</strong>
+        </div>
+
+      </section>
+
+
+      {/* =====================================================
+          PATIENT INFORMATION
+      ===================================================== */}
+      <section className="print-section">
+
+        <div className="print-section-title">
+          <span>01</span>
+          <h2>Patient Information</h2>
+        </div>
+
+        <div className="print-grid print-patient-grid">
+
           <div>
-            <span>Patient / Identifier</span>
-            <strong>{referral?.patient_identifier || "Not recorded"}</strong>
+            <span>Patient Identifier</span>
+            <strong>{patientIdentifier}</strong>
           </div>
+
           <div>
             <span>Age</span>
-            <strong>{formatPatientAge(referral?.patient_age_months)}</strong>
+            <strong>
+              {formatPatientAge(
+                referral?.patient_age_months
+              )}
+            </strong>
           </div>
+
           <div>
             <span>Sex</span>
-            <strong>{formatClinicalLabel(referral?.patient_sex)}</strong>
+            <strong>
+              {formatClinicalLabel(
+                referral?.patient_sex
+              )}
+            </strong>
           </div>
+
           <div>
-            <span>Urgency</span>
-            <strong>{formatClinicalLabel(referral?.urgency)}</strong>
+            <span>Patient Phone</span>
+            <strong>
+              {referral?.patient_phone ||
+                "Not recorded"}
+            </strong>
           </div>
+
+          <div className="print-grid-span-2">
+            <span>Patient Address</span>
+            <strong>
+              {referral?.patient_address ||
+                "Not recorded"}
+            </strong>
+          </div>
+
         </div>
+
       </section>
 
+
+      {/* =====================================================
+          NEXT OF KIN
+      ===================================================== */}
+      {(referral?.relative_name ||
+        referral?.relative_phone ||
+        referral?.relative_relationship) && (
+
+        <section className="print-section">
+
+          <div className="print-section-title">
+            <span>02</span>
+            <h2>Next of Kin / Emergency Contact</h2>
+          </div>
+
+          <div className="print-grid">
+
+            <div>
+              <span>Name</span>
+              <strong>
+                {referral?.relative_name ||
+                  "Not recorded"}
+              </strong>
+            </div>
+
+            <div>
+              <span>Relationship</span>
+              <strong>
+                {referral?.relative_relationship ||
+                  "Not recorded"}
+              </strong>
+            </div>
+
+            <div>
+              <span>Phone</span>
+              <strong>
+                {referral?.relative_phone ||
+                  "Not recorded"}
+              </strong>
+            </div>
+
+          </div>
+
+        </section>
+      )}
+
+
+      {/* =====================================================
+          REFERRAL PATHWAY
+      ===================================================== */}
       <section className="print-section">
-        <h2>Referral Information</h2>
-        <div className="print-grid">
-          <div>
-            <span>Referring Facility</span>
-            <strong>
-              {referral?.referring_facility?.name ||
-                referral?.referring_facility_name ||
-                "Not recorded"}
-            </strong>
+
+        <div className="print-section-title">
+          <span>03</span>
+          <h2>Referral Pathway</h2>
+        </div>
+
+        <div className="referral-pathway">
+
+          <div className="facility-card">
+            <span>FROM — REFERRING FACILITY</span>
+
+            <strong>{referringFacility}</strong>
+
+            {referral?.referring_facility?.lga && (
+              <small>
+                {referral.referring_facility.lga}
+                {referral.referring_facility.state
+                  ? `, ${referral.referring_facility.state}`
+                  : ""}
+              </small>
+            )}
           </div>
-          <div>
-            <span>Receiving Facility</span>
-            <strong>
-              {referral?.receiving_facility?.name ||
-                referral?.receiving_facility_name ||
-                "Not recorded"}
-            </strong>
+
+          <div className="pathway-arrow">
+            →
           </div>
-          <div>
-            <span>Status</span>
-            <strong>{getStatusLabel(referral?.status)}</strong>
+
+          <div className="facility-card">
+            <span>TO — RECEIVING FACILITY</span>
+
+            <strong>{receivingFacility}</strong>
+
+            {referral?.receiving_facility?.lga && (
+              <small>
+                {referral.receiving_facility.lga}
+                {referral.receiving_facility.state
+                  ? `, ${referral.receiving_facility.state}`
+                  : ""}
+              </small>
+            )}
           </div>
+
+        </div>
+
+        <div className="print-grid referral-date-grid">
+
           <div>
             <span>Referral Date</span>
-            <strong>{formatReferralDateTime(referral?.created_at)}</strong>
+            <strong>
+              {formatReferralDateTime(
+                referral?.created_at
+              )}
+            </strong>
           </div>
+
+          <div>
+            <span>Referral Number</span>
+            <strong>{referralId}</strong>
+          </div>
+
         </div>
+
       </section>
 
+
+      {/* =====================================================
+          CLINICAL PRESENTATION
+      ===================================================== */}
       <section className="print-section">
-        <h2>Clinical Summary</h2>
+
+        <div className="print-section-title">
+          <span>04</span>
+          <h2>Clinical Presentation</h2>
+        </div>
+
         <div className="print-narrative-grid">
-          <div>
+
+          <div className="print-narrative-card">
             <span>Chief Complaint</span>
-            <p>{referral?.chief_complaint || "Not recorded"}</p>
+            <p>
+              {referral?.chief_complaint ||
+                "Not recorded"}
+            </p>
           </div>
-          <div>
+
+          <div className="print-narrative-card">
             <span>Clinical Summary</span>
-            <p>{referral?.clinical_summary || "Not recorded"}</p>
+            <p>
+              {referral?.clinical_summary ||
+                "Not recorded"}
+            </p>
           </div>
-          <div>
+
+          <div className="print-narrative-card">
             <span>Physical Findings</span>
-            <p>{referral?.physical_findings || "Not recorded"}</p>
+            <p>
+              {referral?.physical_findings ||
+                "Not recorded"}
+            </p>
           </div>
-          <div>
-            <span>Treatment Given at Referring Facility</span>
-            <p>{referral?.treatment_given || "Not recorded"}</p>
-          </div>
-          <div>
+
+          <div className="print-narrative-card">
             <span>Reason for Referral</span>
-            <p>{referral?.referral_reason || "Not recorded"}</p>
+            <p>
+              {referral?.referral_reason ||
+                "Not recorded"}
+            </p>
           </div>
+
         </div>
+
       </section>
 
+
+      {/* =====================================================
+          TREATMENT GIVEN
+      ===================================================== */}
       <section className="print-section">
-        <h2>Diagnosis</h2>
+
+        <div className="print-section-title">
+          <span>05</span>
+          <h2>Treatment Given Before Referral</h2>
+        </div>
+
+        <div className="print-narrative-card">
+          <span>Treatment / Interventions</span>
+
+          <p>
+            {referral?.treatment_given ||
+              "No treatment documented."}
+          </p>
+        </div>
+
+      </section>
+
+
+      {/* =====================================================
+          DIAGNOSIS
+      ===================================================== */}
+      <section className="print-section">
+
+        <div className="print-section-title">
+          <span>06</span>
+          <h2>Diagnosis</h2>
+        </div>
+
         {diagnoses.length ? (
+
           <table className="print-table">
+
             <thead>
               <tr>
                 <th>#</th>
                 <th>Status</th>
                 <th>Category</th>
-                <th>Diagnosis</th>
+                <th>Diagnosis / Clinical Impression</th>
               </tr>
             </thead>
+
             <tbody>
+
               {diagnoses.map((item, index) => (
-                <tr key={`${item?.diagnosis || index}-${index}`}>
+
+                <tr
+                  key={`${item?.diagnosis || index}-${index}`}
+                >
+
                   <td>{index + 1}</td>
-                  <td>{formatClinicalLabel(item?.status)}</td>
-                  <td>{item?.category || "Not recorded"}</td>
-                  <td>{item?.diagnosis || item?.name || "Not recorded"}</td>
+
+                  <td>
+                    {formatClinicalLabel(
+                      item?.status
+                    )}
+                  </td>
+
+                  <td>
+                    {item?.category ||
+                      "Not recorded"}
+                  </td>
+
+                  <td>
+                    {item?.diagnosis ||
+                      item?.name ||
+                      "Not recorded"}
+                  </td>
+
                 </tr>
+
               ))}
+
             </tbody>
+
           </table>
+
         ) : (
-          <p>None recorded.</p>
+
+          <div className="print-empty-state">
+            No diagnosis recorded.
+          </div>
+
         )}
+
       </section>
 
+
+      {/* =====================================================
+          INVESTIGATIONS
+      ===================================================== */}
       <section className="print-section">
-        <h2>Investigations & Results</h2>
+
+        <div className="print-section-title">
+          <span>07</span>
+          <h2>Investigations & Results</h2>
+        </div>
+
         {investigations.length ? (
+
           <table className="print-table">
+
             <thead>
               <tr>
                 <th>#</th>
                 <th>Category</th>
                 <th>Investigation</th>
-                <th>Result</th>
+                <th>Result / Status</th>
               </tr>
             </thead>
+
             <tbody>
+
               {investigations.map((item, index) => (
-                <tr key={`${item.category}-${item.investigation}-${index}`}>
+
+                <tr
+                  key={`${item.category}-${item.investigation}-${index}`}
+                >
+
                   <td>{index + 1}</td>
-                  <td>{item.category || "Not recorded"}</td>
-                  <td>{item.investigation}</td>
-                  <td>{getInvestigationResultLabel(item.result_status)}</td>
+
+                  <td>
+                    {item.category ||
+                      "Other"}
+                  </td>
+
+                  <td>
+                    {item.investigation}
+                  </td>
+
+                  <td>
+                    {getInvestigationResultLabel(
+                      item.result_status
+                    )}
+                  </td>
+
                 </tr>
+
               ))}
+
             </tbody>
+
           </table>
+
         ) : (
-          <p>None recorded.</p>
+
+          <div className="print-empty-state">
+            No investigations recorded.
+          </div>
+
         )}
+
       </section>
 
+
+      {/* =====================================================
+          RECEIVING FACILITY UPDATE
+      ===================================================== */}
       {hasReceivingUpdate && (
-        <section className="print-section">
-          <h2>Receiving Facility Update</h2>
+
+        <section className="print-section receiving-update-section">
+
+          <div className="print-section-title">
+            <span>08</span>
+            <h2>Receiving Facility Update</h2>
+          </div>
+
           <div className="print-narrative-grid">
+
             {referral?.assessment_findings && (
-              <div>
+              <div className="print-narrative-card">
                 <span>Assessment Findings</span>
-                <p>{referral.assessment_findings}</p>
+                <p>
+                  {referral.assessment_findings}
+                </p>
               </div>
             )}
+
             {referral?.final_diagnosis && (
-              <div>
-                <span>Final Diagnosis</span>
-                <p>{referral.final_diagnosis}</p>
+              <div className="print-narrative-card">
+                <span>Final Diagnosis / Clinical Impression</span>
+                <p>
+                  {referral.final_diagnosis}
+                </p>
               </div>
             )}
+
+            {referral?.diagnosis_status && (
+              <div>
+                <span>Diagnosis Status</span>
+                <strong>
+                  {formatClinicalLabel(
+                    referral.diagnosis_status
+                  )}
+                </strong>
+              </div>
+            )}
+
+            {referral?.diagnosis_category && (
+              <div>
+                <span>Diagnosis Category</span>
+                <strong>
+                  {referral.diagnosis_category}
+                </strong>
+              </div>
+            )}
+
             {referral?.treatment_provided && (
-              <div>
+              <div className="print-narrative-card">
                 <span>Treatment Provided</span>
-                <p>{referral.treatment_provided}</p>
+                <p>
+                  {referral.treatment_provided}
+                </p>
               </div>
             )}
+
             {referral?.procedures_performed && (
-              <div>
+              <div className="print-narrative-card">
                 <span>Procedures Performed</span>
-                <p>{referral.procedures_performed}</p>
+                <p>
+                  {referral.procedures_performed}
+                </p>
               </div>
             )}
+
             {referral?.clinical_feedback && (
-              <div>
+              <div className="print-narrative-card">
                 <span>Clinical Feedback</span>
-                <p>{referral.clinical_feedback}</p>
+                <p>
+                  {referral.clinical_feedback}
+                </p>
               </div>
             )}
+
             {referral?.disposition && (
               <div>
                 <span>Disposition</span>
-                <p>{formatClinicalLabel(referral.disposition)}</p>
+                <strong>
+                  {formatClinicalLabel(
+                    referral.disposition
+                  )}
+                </strong>
               </div>
             )}
+
           </div>
+
         </section>
+
       )}
 
+
+      {/* =====================================================
+          REFERRAL CONTINUITY
+      ===================================================== */}
+      <section className="print-section">
+
+        <div className="print-section-title">
+          <span>09</span>
+          <h2>Referral Continuity</h2>
+        </div>
+
+        <div className="print-continuity">
+
+          <div>
+            <span>01</span>
+            <strong>Sent</strong>
+          </div>
+
+          <div className="continuity-line" />
+
+          <div>
+            <span>02</span>
+            <strong>Acknowledged</strong>
+          </div>
+
+          <div className="continuity-line" />
+
+          <div>
+            <span>03</span>
+            <strong>Patient Arrived</strong>
+          </div>
+
+          <div className="continuity-line" />
+
+          <div>
+            <span>04</span>
+            <strong>Assessment</strong>
+          </div>
+
+          <div className="continuity-line" />
+
+          <div>
+            <span>05</span>
+            <strong>Outcome</strong>
+          </div>
+
+        </div>
+
+      </section>
+
+
+      {/* =====================================================
+          SIGNATURES
+      ===================================================== */}
       <section className="print-signature-section">
-        <div>
+
+        <div className="signature-block">
           <span>Referring Health Worker</span>
           <div className="signature-line" />
           <small>Signature / Date</small>
         </div>
-        <div>
+
+        <div className="signature-block">
           <span>Receiving Health Worker</span>
           <div className="signature-line" />
           <small>Signature / Date</small>
         </div>
-        <div>
+
+        <div className="signature-block stamp-signature">
           <span>Facility Stamp</span>
           <div className="stamp-box" />
           <small>Official facility stamp</small>
         </div>
+
       </section>
 
+
+      {/* =====================================================
+          DOCUMENT FOOTER
+      ===================================================== */}
       <footer className="print-document-footer">
-        REFLINK • Keep this paper copy with the patient referral record.
+
+        <div>
+          <strong>REFLINK</strong>
+          <span>
+            Digital referral for continuity of care
+          </span>
+        </div>
+
+        <div>
+          <span>REFLINK ID:</span>
+          <strong>{referralId}</strong>
+        </div>
+
+        <p>
+          Keep this paper copy with the patient
+          referral record. Confidential clinical
+          information — handle appropriately.
+        </p>
+
       </footer>
+
     </div>
   );
 }
@@ -2002,7 +2531,13 @@ const handleSignIn = async () => {
 
             {role === "Administrator" && (
               <AdministratorRoute>
-                <AdminDashboard />
+                <AdminDashboard
+                  profile={profile}
+                  AnalyticsDashboard={AnalyticsDashboard}
+                  AnalysisHub={AnalysisHub}
+                  formatPatientAge={formatPatientAge}
+                  getStatusLabel={getStatusLabel}
+                />
               </AdministratorRoute>
             )}
 
@@ -2243,11 +2778,29 @@ const INVESTIGATION_CATEGORIES = {
     "No investigation performed",
   ],
 };
+function InvestigationResultEditor({ item, onChange, onFileChange }) {
+  const config = getInvestigationResultConfig(item?.investigation);
+  return (
+    <div className="referral-investigation-result-editor">
+      <select value={item.result_status || "pending"} onChange={(e) => onChange({ result_status: e.target.value })}>
+        {config.statuses.map((status) => <option key={status} value={status}>{getInvestigationResultLabel(status)}</option>)}
+      </select>
+      {config.type === "quantitative" ? <>
+        <input value={item.result_value || ""} onChange={(e) => onChange({ result_value: e.target.value })} placeholder="Result value" />
+        <input value={item.result_unit || ""} onChange={(e) => onChange({ result_unit: e.target.value })} placeholder="Unit" />
+        <input value={item.reference_range || ""} onChange={(e) => onChange({ reference_range: e.target.value })} placeholder="Lab reference range" />
+      </> : <textarea value={item.result_value || ""} onChange={(e) => onChange({ result_value: e.target.value })} placeholder={config.type === "panel" ? "Structured panel findings" : "Result/report detail"} rows={2} />}
+      <label className="upload-result-button compact-upload">📎 Upload<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv" onChange={(e) => onFileChange(e.target.files?.[0] || null)} /></label>
+    </div>
+  );
+}
+
 function NewReferralForm({ onBack }) {
 
   const [form, setForm] = useState({
   patient_identifier: "",
   patient_age_months: "",
+  patient_age_unit: "years",
   patient_sex: "",
 
   // NEW PATIENT CONTACT INFORMATION
@@ -2439,31 +2992,40 @@ provisional_diagnosis: "",
           investigation,
           result_status: "pending",
           result_value: "",
+          result_unit: "",
+          reference_range: "",
+          interpretation: "",
+          result_notes: "",
+          result_file_path: "",
+          result_file_name: "",
+          result_file_type: "",
+          result_file_size: null,
         },
       ];
     });
   };
 
-  const updateInvestigationResult = (index, resultStatus) => {
-    setSelectedInvestigations((previous) =>
-      previous.map((item, itemIndex) =>
-        itemIndex === index
-          ? {
-              ...item,
-              result_status: resultStatus,
-            }
-          : item
-      )
-    );
+  const updateInvestigationResult = (index, patch) => {
+    setSelectedInvestigations((previous) => previous.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
+  };
+
+  const handleInvestigationFileSelection = (index, file) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setError("Investigation result file must not exceed 10 MB."); return; }
+    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp", "text/plain", "text/csv"];
+    if (file.type && !allowed.includes(file.type)) { setError("Unsupported investigation result file type."); return; }
+    updateInvestigationResult(index, { result_file: file, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size });
+    setError("");
   };
 
   const printDraftReferral = () => {
     const draftReferral = {
       referral_number: "DRAFT REFERRAL",
       patient_identifier: form.patient_identifier,
-      patient_age_months: form.patient_age_months
-        ? Number(form.patient_age_months) * 12
-        : null,
+      patient_age_months: normalizePatientAgeToMonths(
+        form.patient_age_months,
+        form.patient_age_unit
+      ),
       patient_sex: form.patient_sex,
       patient_phone: form.patient_phone,
       patient_address: form.patient_address,
@@ -2562,9 +3124,10 @@ provisional_diagnosis: "",
     form.patient_identifier,
 
   patient_age_months:
-    form.patient_age_months
-      ? Number(form.patient_age_months) * 12
-      : null,
+    normalizePatientAgeToMonths(
+      form.patient_age_months,
+      form.patient_age_unit
+    ),
 
   patient_sex:
     form.patient_sex ||
@@ -2631,7 +3194,7 @@ provisional_diagnosis: "",
     selectedInvestigationCategories,
 
   investigation_records:
-    selectedInvestigations,
+    selectedInvestigations.map(({ result_file, ...item }) => item),
 
   investigations:
     selectedInvestigations
@@ -2683,12 +3246,13 @@ provisional_diagnosis: "",
       );
 
       const {
+        data: insertedReferral,
         error: referralError,
       } = await supabase
         .from("referrals")
-        .insert(
-          referralPayload
-        );
+        .insert(referralPayload)
+        .select("id")
+        .single();
 
       if (referralError) {
         console.error(
@@ -2697,6 +3261,27 @@ provisional_diagnosis: "",
         );
 
         throw referralError;
+      }
+
+      let savedInvestigationRecords = selectedInvestigations.map(({ result_file, ...item }) => item);
+      if (insertedReferral?.id) {
+        for (let i = 0; i < selectedInvestigations.length; i += 1) {
+          const file = selectedInvestigations[i]?.result_file;
+          if (!file) continue;
+          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+          const path = `${insertedReferral.id}/${Date.now()}-${i}-${safeName}`;
+          const { error: uploadError } = await supabase.storage
+            .from("referral-investigation-results")
+            .upload(path, file, { upsert: false, contentType: file.type || undefined });
+          if (uploadError) throw uploadError;
+          savedInvestigationRecords = savedInvestigationRecords.map((item, itemIndex) =>
+            itemIndex === i ? { ...item, result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size } : item
+          );
+        }
+        if (savedInvestigationRecords.length) {
+          const { error: resultMetaError } = await supabase.from("referrals").update({ investigation_records: savedInvestigationRecords }).eq("id", insertedReferral.id);
+          if (resultMetaError) throw resultMetaError;
+        }
       }
 
       const referringFacility = facilities.find(
@@ -2708,6 +3293,7 @@ provisional_diagnosis: "",
 
       const savedReferral = {
         ...referralPayload,
+        investigation_records: savedInvestigationRecords,
         referral_number: referralNumber,
         created_at: new Date().toISOString(),
         referring_facility_name: referringFacility?.name || "Not recorded",
@@ -2727,6 +3313,7 @@ provisional_diagnosis: "",
       setForm({
   patient_identifier: "",
   patient_age_months: "",
+  patient_age_unit: "years",
   patient_sex: "",
 
   patient_phone: "",
@@ -2877,19 +3464,37 @@ provisional_diagnosis: "",
 
           <div>
 
-            <label>
-              Age (years)
-            </label>
-
-            <input
-              type="number"
-              name="patient_age_months"
-              value={form.patient_age_months}
-              onChange={handleChange}
-              min="0"
-              step="1"
-              placeholder="e.g. 22"
-            />
+            <label>Patient Age</label>
+            <div className="age-input-row">
+              <input
+                type="number"
+                name="patient_age_months"
+                value={form.patient_age_months}
+                onChange={handleChange}
+                min="0"
+                step="1"
+                placeholder={form.patient_age_unit === "months" ? "e.g. 8" : "e.g. 22"}
+                aria-label="Patient age value"
+              />
+              <select
+                name="patient_age_unit"
+                value={form.patient_age_unit}
+                onChange={handleChange}
+                aria-label="Patient age unit"
+              >
+                <option value="months">Months</option>
+                <option value="years">Years</option>
+              </select>
+            </div>
+            <div className="form-help-text">
+              Use months for infants and young children; use years for older children and adults.
+              REFLINK stores the normalized value in months for consistent analytics.
+            </div>
+            <div className="form-help-text age-normalized-preview">
+              {form.patient_age_months !== ""
+                ? `Recorded as: ${formatPatientAge(normalizePatientAgeToMonths(form.patient_age_months, form.patient_age_unit))}`
+                : "Recorded age will appear here."}
+            </div>
             <div className="form-group">
   <label htmlFor="patient_phone">
     Patient Phone Number
@@ -3003,10 +3608,6 @@ provisional_diagnosis: "",
 
               <option value="other">
                 Other
-              </option>
-
-              <option value="unknown">
-                Unknown
               </option>
 
             </select>
@@ -3302,17 +3903,11 @@ provisional_diagnosis: "",
                     <strong>{item.investigation}</strong>
                     <small>{item.category}</small>
                   </div>
-                  <select
-                    value={item.result_status || "pending"}
-                    onChange={(event) =>
-                      updateInvestigationResult(index, event.target.value)
-                    }
-                    aria-label={`Result for ${item.investigation}`}
-                  >
-                    <option value="pending">Pending / Not Yet Available</option>
-                    <option value="positive">Positive</option>
-                    <option value="negative">Negative</option>
-                  </select>
+                  <InvestigationResultEditor
+                    item={item}
+                    onChange={(patch) => updateInvestigationResult(index, patch)}
+                    onFileChange={(file) => handleInvestigationFileSelection(index, file)}
+                  />
                 </div>
               ))}
             </div>
@@ -4141,7 +4736,7 @@ function PHCStaffDashboard({ onNewReferral }) {
                     <div>
 
                       <strong>
-                        {formatDiagnosisRecords(
+                        {formatDiagnosisSummary(
                           referral.diagnosis_records,
                           referral.provisional_diagnosis
                         )}
@@ -4547,6 +5142,16 @@ function ReceivingDashboard() {
     useState(null);
 
   /* =======================================================
+     STRUCTURED DIAGNOSIS CATEGORIES
+     ======================================================= */
+
+  const [diagnosisCategories, setDiagnosisCategories] =
+    useState([]);
+
+  const [diagnosisCategoriesLoading, setDiagnosisCategoriesLoading] =
+    useState(false);
+
+  /* =======================================================
      ASSESSMENT FORM
      ======================================================= */
 
@@ -4554,6 +5159,8 @@ function ReceivingDashboard() {
     useState({
       assessment_findings: "",
       final_diagnosis: "",
+      diagnosis_category: "",
+      diagnosis_status: "",
       treatment_provided: "",
       procedures_performed: "",
       clinical_feedback: "",
@@ -4577,9 +5184,32 @@ function ReceivingDashboard() {
       follow_up_plan: "",
     });
 
+  const handleInvestigationFileUpload = async (index, file) => {
+    if (!selectedReferral || !file) return;
+    if (file.size > 10 * 1024 * 1024) { setError("Investigation result file must not exceed 10 MB."); return; }
+    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp", "text/plain", "text/csv"];
+    if (file.type && !allowed.includes(file.type)) { setError("Unsupported investigation result file type."); return; }
+    const current = getInvestigationRecords(selectedReferral).map(normalizeInvestigationRecord);
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = `${selectedReferral.id}/${Date.now()}-${index}-${safeName}`;
+    setActionLoading(`${selectedReferral.id}-investigation-file-${index}`);
+    try {
+      const { error: uploadError } = await supabase.storage.from("referral-investigation-results").upload(path, file, { upsert: false, contentType: file.type || undefined });
+      if (uploadError) throw uploadError;
+      const updated = current.map((item, itemIndex) => itemIndex === index ? { ...item, result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size } : item);
+      const { error } = await supabase.from("referrals").update({ investigation_records: updated }).eq("id", selectedReferral.id);
+      if (error) throw error;
+      const updatedReferral = { ...selectedReferral, investigation_records: updated };
+      setSelectedReferral(updatedReferral);
+      setReferrals((previous) => previous.map((item) => item.id === selectedReferral.id ? updatedReferral : item));
+      setMessage(`${updated[index].investigation} result document uploaded successfully.`);
+    } catch (err) { console.error("INVESTIGATION FILE UPLOAD ERROR:", err); setError(err.message || "Unable to upload investigation result."); }
+    finally { setActionLoading(null); }
+  };
+
   const handleInvestigationResultChange = async (
     index,
-    resultStatus
+    patch
   ) => {
     if (!selectedReferral) return;
 
@@ -4592,7 +5222,7 @@ function ReceivingDashboard() {
         itemIndex === index
           ? {
               ...item,
-              result_status: resultStatus,
+              ...patch,
             }
           : item
     );
@@ -4641,6 +5271,56 @@ function ReceivingDashboard() {
       setActionLoading(null);
     }
   };
+
+  /* =======================================================
+     LOAD DIAGNOSIS CATEGORIES
+     ======================================================= */
+
+  const loadDiagnosisCategories =
+    async () => {
+
+      setDiagnosisCategoriesLoading(true);
+
+      try {
+
+        const {
+          data,
+          error,
+        } = await supabase
+          .from("diagnosis_categories")
+          .select("id, name")
+          .eq("is_active", true)
+          .order("name", {
+            ascending: true,
+          });
+
+        if (error) {
+          console.error(
+            "DIAGNOSIS CATEGORIES ERROR:",
+            error
+          );
+          throw error;
+        }
+
+        setDiagnosisCategories(
+          data || []
+        );
+
+      } catch (err) {
+
+        console.error(
+          "Unable to load diagnosis categories:",
+          err
+        );
+
+        setDiagnosisCategories([]);
+
+      } finally {
+
+        setDiagnosisCategoriesLoading(false);
+
+      }
+    };
 
   /* =======================================================
      LOAD INCOMING REFERRALS
@@ -4886,6 +5566,12 @@ function ReceivingDashboard() {
 
       final_diagnosis:
         referral.final_diagnosis || "",
+
+      diagnosis_category:
+        referral.diagnosis_category || "",
+
+      diagnosis_status:
+        referral.diagnosis_status || "",
 
       treatment_provided:
         referral.treatment_provided || "",
@@ -5320,68 +6006,51 @@ function ReceivingDashboard() {
       }
     };
 
-  /* =======================================================
-     START ASSESSMENT
-     ======================================================= */
+ /* =======================================================
+   START ASSESSMENT
+   ======================================================= */
 
-  const handleStartAssessment =
-    async (referralId) => {
+const handleStartAssessment = async (referralId) => {
+  setError("");
+  setMessage("");
+  setActionLoading(referralId);
 
-      setError("");
-      setMessage("");
-      setActionLoading(
-        referralId
-      );
+  try {
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("referrals")
+      .update({
+        status: "under_assessment",
+      })
+      .eq("id", referralId)
+      .select()
+      .single();
 
-      try {
+    if (error) {
+      console.error("START ASSESSMENT ERROR:", error);
+      throw error;
+    }
 
-        const {
-          data,
-          error,
-        } = await supabase
-          .from("referrals")
-          .update({
+    setMessage(
+      `Clinical assessment started for ${data.referral_number}.`
+    );
 
-            status:
-              "under_assessment",
+    await loadIncomingReferrals();
 
-          })
-          .eq(
-            "id",
-            referralId
-          )
-          .select()
-          .single();
+  } catch (err) {
+    console.error("Start assessment error:", err);
 
-        if (error) {
-          throw error;
-        }
+    setError(
+      err.message ||
+        "Unable to start clinical assessment."
+    );
 
-        setMessage(
-          `Clinical assessment started for ${data.referral_number}.`
-        );
-
-        await loadIncomingReferrals();
-
-      } catch (err) {
-
-        console.error(
-          err
-        );
-
-        setError(
-          err.message ||
-          "Unable to start clinical assessment."
-        );
-
-      } finally {
-
-        setActionLoading(
-          null
-        );
-
-      }
-    };
+  } finally {
+    setActionLoading(null);
+  }
+};
 
   /* =======================================================
      SAVE CLINICAL ASSESSMENT
@@ -5422,6 +6091,22 @@ function ReceivingDashboard() {
         }
 
         if (
+          !assessmentForm.diagnosis_status
+        ) {
+          throw new Error(
+            "Please select the diagnosis status."
+          );
+        }
+
+        if (
+          !assessmentForm.diagnosis_category
+        ) {
+          throw new Error(
+            "Please select the diagnosis category."
+          );
+        }
+
+        if (
           !assessmentForm.disposition
         ) {
           throw new Error(
@@ -5447,6 +6132,14 @@ function ReceivingDashboard() {
 
           final_diagnosis:
             assessmentForm.final_diagnosis,
+
+          diagnosis_category:
+            assessmentForm.diagnosis_category ||
+            null,
+
+          diagnosis_status:
+            assessmentForm.diagnosis_status ||
+            null,
 
           treatment_provided:
             assessmentForm.treatment_provided ||
@@ -5532,6 +6225,8 @@ function ReceivingDashboard() {
           setAssessmentForm({
             assessment_findings: "",
             final_diagnosis: "",
+            diagnosis_category: "",
+            diagnosis_status: "",
             treatment_provided: "",
             procedures_performed: "",
             clinical_feedback: "",
@@ -5595,6 +6290,8 @@ function ReceivingDashboard() {
           setAssessmentForm({
             assessment_findings: "",
             final_diagnosis: "",
+            diagnosis_category: "",
+            diagnosis_status: "",
             treatment_provided: "",
             procedures_performed: "",
             clinical_feedback: "",
@@ -5631,6 +6328,7 @@ function ReceivingDashboard() {
 
   useEffect(() => {
     loadIncomingReferrals();
+    loadDiagnosisCategories();
   }, []);
 
   /* =======================================================
@@ -5867,7 +6565,7 @@ function ReceivingDashboard() {
                     <div>
 
                       <strong>
-                        {formatDiagnosisRecords(
+                        {formatDiagnosisSummary(
                           referral.diagnosis_records,
                           referral.provisional_diagnosis
                         )}
@@ -6000,6 +6698,14 @@ function ReceivingDashboard() {
                                 referral.final_diagnosis ||
                                 "",
 
+                              diagnosis_category:
+                                referral.diagnosis_category ||
+                                "",
+
+                              diagnosis_status:
+                                referral.diagnosis_status ||
+                                "",
+
                               treatment_provided:
                                 referral.treatment_provided ||
                                 "",
@@ -6020,7 +6726,7 @@ function ReceivingDashboard() {
 
                           }}
                         >
-                          Open Clinical Assessment
+                          Continue Clinical Assessment
                         </button>
 
                       )}
@@ -6475,6 +7181,77 @@ function ReceivingDashboard() {
                   />
 
                   <label>
+                    Diagnosis Status *
+                  </label>
+
+                  <select
+                    name="diagnosis_status"
+                    value={
+                      assessmentForm.diagnosis_status
+                    }
+                    onChange={
+                      handleAssessmentChange
+                    }
+                    required
+                  >
+                    <option value="">
+                      Select diagnosis status
+                    </option>
+
+                    <option value="suspected">
+                      Suspected
+                    </option>
+
+                    <option value="provisional">
+                      Provisional
+                    </option>
+
+                    <option value="confirmed">
+                      Confirmed
+                    </option>
+                  </select>
+
+                  <label>
+                    Diagnosis Category *
+                  </label>
+
+                  <select
+                    name="diagnosis_category"
+                    value={
+                      assessmentForm.diagnosis_category
+                    }
+                    onChange={
+                      handleAssessmentChange
+                    }
+                    required
+                    disabled={
+                      diagnosisCategoriesLoading
+                    }
+                  >
+                    <option value="">
+                      {diagnosisCategoriesLoading
+                        ? "Loading diagnosis categories..."
+                        : "Select diagnosis category"}
+                    </option>
+
+                    {diagnosisCategories.map(
+                      (category) => (
+                        <option
+                          key={category.id}
+                          value={category.name}
+                        >
+                          {category.name}
+                        </option>
+                      )
+                    )}
+                  </select>
+
+                  <small className="form-help-text">
+                    Select the clinical category that best describes
+                    the receiving-facility diagnosis.
+                  </small>
+
+                  <label>
                     Treatment / Interventions Administered
                   </label>
 
@@ -6735,2669 +7512,8 @@ function AdministratorRoute({ children }) {
   return children;
 }
 
-/* =======================================================
-   ADMIN DASHBOARD
-   ======================================================= */
 
-function AdminDashboard() {
-  const [view, setView] = useState("home");
 
-  /* =======================================================
-     FACILITIES
-     ======================================================= */
 
-  const [facilities, setFacilities] = useState([]);
-  const [facilityUserCounts, setFacilityUserCounts] =
-    useState({});
-  const [facilitiesLoading, setFacilitiesLoading] =
-    useState(false);
 
-  const [editingFacility, setEditingFacility] =
-    useState(null);
-
-  const [facilitySearch, setFacilitySearch] =
-    useState("");
-
-  const [facilityForm, setFacilityForm] =
-    useState({
-      name: "",
-      facility_type: "",
-      state: "",
-      lga: "",
-      is_active: true,
-    });
-
-  /* =======================================================
-     USERS
-     ======================================================= */
-
-  const [users, setUsers] = useState([]);
-  const [usersLoading, setUsersLoading] =
-    useState(false);
-
-  const [userSearch, setUserSearch] =
-    useState("");
-
-  const [editingUser, setEditingUser] =
-    useState(null);
-
-  const [userForm, setUserForm] =
-    useState({
-      full_name: "",
-      email: "",
-      password: "",
-      role: "",
-      facility_id: "",
-    });
-
-  /* =======================================================
-     REFERRALS
-     ======================================================= */
-
-  const [referrals, setReferrals] = useState([]);
-  const [referralsLoading, setReferralsLoading] =
-    useState(false);
-
-  /* =======================================================
-     GENERAL STATE
-     ======================================================= */
-
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-
-  /* =======================================================
-     LOAD FACILITY USER COUNTS
-     ======================================================= */
-
-  const loadFacilityUserCounts = async () => {
-    try {
-      const {
-        data,
-        error: countError,
-      } = await supabase.rpc(
-        "get_facility_user_counts"
-      );
-
-      if (countError) {
-        throw countError;
-      }
-
-      const counts = {};
-
-      (data || []).forEach((row) => {
-        counts[row.facility_id] = Number(row.user_count || 0);
-      });
-
-      setFacilityUserCounts(counts);
-    } catch (err) {
-      console.error(
-        "FACILITY USER COUNTS ERROR:",
-        err
-      );
-      setFacilityUserCounts({});
-    }
-  };
-
-  /* =======================================================
-     LOAD FACILITIES
-     ======================================================= */
-
-  const loadFacilities = async () => {
-    setFacilitiesLoading(true);
-    setError("");
-
-    try {
-      const {
-        data,
-        error: facilitiesError,
-      } = await supabase
-        .from("facilities")
-        .select(
-          "id, name, facility_type, state, lga, is_active"
-        )
-        .order("name");
-
-      if (facilitiesError) {
-        throw facilitiesError;
-      }
-
-      setFacilities(data || []);
-      await loadFacilityUserCounts();
-    } catch (err) {
-      console.error(
-        "FACILITIES ERROR:",
-        err
-      );
-
-      setError(
-        err?.message ||
-          "Unable to load facilities."
-      );
-
-      setFacilities([]);
-    } finally {
-      setFacilitiesLoading(false);
-    }
-  };
-
-  /* =======================================================
-     LOAD USERS / PROFILES
-     ======================================================= */
-
-  const loadUsers = async () => {
-    setUsersLoading(true);
-    setError("");
-
-    try {
-      const {
-        data,
-        error: usersError,
-      } = await supabase
-        .from("profiles")
-        .select(
-          "id, full_name, role, facility_id"
-        )
-        .order("full_name");
-
-      if (usersError) {
-        throw usersError;
-      }
-
-      setUsers(data || []);
-    } catch (err) {
-      console.error(
-        "USERS ERROR:",
-        err
-      );
-
-      setError(
-        err?.message ||
-          "Unable to load REFLINK users."
-      );
-
-      setUsers([]);
-    } finally {
-      setUsersLoading(false);
-    }
-  };
-
-  /* =======================================================
-     LOAD REFERRALS
-     ======================================================= */
-
-  const loadReferrals = async () => {
-    setReferralsLoading(true);
-    setError("");
-
-    try {
-      const {
-        data,
-        error: referralsError,
-      } = await supabase
-        .from("referrals")
-        .select(`
-          id,
-          referral_number,
-          patient_identifier,
-          patient_age_months,
-          patient_sex,
-          patient_phone,
-          patient_address,
-          relative_name,
-          relative_relationship,
-          relative_phone,
-          diagnosis_status,
-          diagnosis_category,
-          diagnosis_records,
-          investigation_categories,
-          investigation_records,
-          chief_complaint,
-          clinical_summary,
-          physical_findings,
-          provisional_diagnosis,
-          investigations,
-          treatment_given,
-          referral_reason,
-          urgency,
-          referring_facility_id,
-          receiving_facility_id,
-          referring_user_id,
-          status,
-          created_at,
-          acknowledged_at,
-          patient_arrived_at,
-          completed_at,
-          assessment_findings,
-          final_diagnosis,
-          treatment_provided,
-          procedures_performed,
-          clinical_feedback,
-          disposition,
-          assessment_completed_at,
-          discharged_at,
-          admission_at,
-          ward_unit,
-          admission_diagnosis,
-          clinical_progress,
-          inpatient_treatment,
-          discharge_diagnosis,
-          condition_at_discharge,
-          discharge_medications,
-          follow_up_plan,
-
-          referring_facility:facilities!referrals_referring_facility_id_fkey (
-            id,
-            name,
-            facility_type,
-            state,
-            lga,
-            is_active
-          ),
-
-          receiving_facility:facilities!referrals_receiving_facility_id_fkey (
-            id,
-            name,
-            facility_type,
-            state,
-            lga,
-            is_active
-          )
-        `)
-        .order("created_at", {
-          ascending: false,
-        });
-
-      if (referralsError) {
-        throw referralsError;
-      }
-
-      setReferrals(data || []);
-    } catch (err) {
-      console.error(
-        "REFERRALS ERROR:",
-        err
-      );
-
-      setError(
-        err?.message ||
-          "Unable to load referrals."
-      );
-
-      setReferrals([]);
-    } finally {
-      setReferralsLoading(false);
-    }
-  };
-
-  /* =======================================================
-     LOAD DATA WHEN VIEW CHANGES
-     ======================================================= */
-
-  useEffect(() => {
-    if (view === "facilities") {
-      loadFacilities();
-    }
-
-    if (view === "users") {
-      loadFacilities();
-      loadUsers();
-    }
-
-    if (
-      view === "referrals" ||
-      view === "active-referrals"
-    ) {
-      loadReferrals();
-    }
-  }, [view]);
-
-  /* =======================================================
-     FACILITY FORM
-     ======================================================= */
-
-  const resetFacilityForm = () => {
-    setFacilityForm({
-      name: "",
-      facility_type: "",
-      state: "",
-      lga: "",
-      is_active: true,
-    });
-
-    setEditingFacility(null);
-  };
-
-  const handleFacilityFormChange = (e) => {
-    const {
-      name,
-      value,
-    } = e.target;
-
-    setFacilityForm(
-      (previous) => ({
-        ...previous,
-        [name]: value,
-      })
-    );
-  };
-
-  /* =======================================================
-     EDIT FACILITY
-     ======================================================= */
-
-  const startEditFacility = (
-    facility
-  ) => {
-    setEditingFacility(facility);
-
-    setFacilityForm({
-      name:
-        facility.name || "",
-
-      facility_type:
-        facility.facility_type || "",
-
-      state:
-        facility.state || "",
-
-      lga:
-        facility.lga || "",
-
-      is_active:
-        facility.is_active ?? true,
-    });
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-  };
-
-  /* =======================================================
-     SAVE FACILITY
-     ======================================================= */
-
-  const saveFacility = async (
-    e
-  ) => {
-    e.preventDefault();
-
-    setError("");
-    setMessage("");
-    setSaving(true);
-
-    try {
-      if (!facilityForm.name.trim()) {
-        throw new Error(
-          "Facility name is required."
-        );
-      }
-
-      const payload = {
-        name:
-          facilityForm.name.trim(),
-
-        facility_type:
-          facilityForm.facility_type
-            .trim() || null,
-
-        state:
-          facilityForm.state.trim() ||
-          null,
-
-        lga:
-          facilityForm.lga.trim() ||
-          null,
-
-        is_active:
-          facilityForm.is_active,
-      };
-
-      if (editingFacility) {
-        const {
-          error: updateError,
-        } = await supabase
-          .from("facilities")
-          .update(payload)
-          .eq(
-            "id",
-            editingFacility.id
-          );
-
-        if (updateError) {
-          throw updateError;
-        }
-
-        setMessage(
-          "Facility updated successfully."
-        );
-      } else {
-        const {
-          error: insertError,
-        } = await supabase
-          .from("facilities")
-          .insert([
-            payload,
-          ]);
-
-        if (insertError) {
-          throw insertError;
-        }
-
-        setMessage(
-          "Facility added successfully."
-        );
-      }
-
-      resetFacilityForm();
-
-      await loadFacilities();
-
-      // Keep referral facility names current
-      if (
-        view === "referrals" ||
-        view === "active-referrals"
-      ) {
-        await loadReferrals();
-      }
-    } catch (err) {
-      console.error(
-        "SAVE FACILITY ERROR:",
-        err
-      );
-
-      setError(
-        err?.message ||
-          "Unable to save facility."
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  /* =======================================================
-     TOGGLE FACILITY
-     ======================================================= */
-
-  const toggleFacilityStatus =
-    async (facility) => {
-      setError("");
-      setMessage("");
-
-      const newStatus =
-        !facility.is_active;
-
-      try {
-        const {
-          error: updateError,
-        } = await supabase
-          .from("facilities")
-          .update({
-            is_active:
-              newStatus,
-          })
-          .eq(
-            "id",
-            facility.id
-          );
-
-        if (updateError) {
-          throw updateError;
-        }
-
-        setMessage(
-          newStatus
-            ? `${facility.name} has been activated.`
-            : `${facility.name} has been deactivated.`
-        );
-
-        await loadFacilities();
-
-        if (
-          view === "referrals" ||
-          view === "active-referrals"
-        ) {
-          await loadReferrals();
-        }
-      } catch (err) {
-        console.error(
-          "FACILITY STATUS ERROR:",
-          err
-        );
-
-        setError(
-          err?.message ||
-            "Unable to update facility status."
-        );
-      }
-    };
-
-  /* =======================================================
-     FILTER FACILITIES
-     ======================================================= */
-
-  const filteredFacilities =
-    facilities.filter(
-      (facility) => {
-        const searchText =
-          facilitySearch
-            .toLowerCase()
-            .trim();
-
-        return (
-          facility.name
-            ?.toLowerCase()
-            .includes(
-              searchText
-            ) ||
-          facility.facility_type
-            ?.toLowerCase()
-            .includes(
-              searchText
-            ) ||
-          facility.state
-            ?.toLowerCase()
-            .includes(
-              searchText
-            ) ||
-          facility.lga
-            ?.toLowerCase()
-            .includes(
-              searchText
-            )
-        );
-      }
-    );
-
-  /* =======================================================
-     USER FORM
-     ======================================================= */
-
-  const resetUserForm = () => {
-    setEditingUser(null);
-
-    setUserForm({
-      full_name: "",
-      email: "",
-      password: "",
-      role: "",
-      facility_id: "",
-    });
-  };
-
-  /* =======================================================
-     EDIT USER
-     ======================================================= */
-
-  const startEditUser = async (
-    user
-  ) => {
-    setError("");
-    setMessage("");
-
-    try {
-      setEditingUser(user);
-
-      const {
-        data,
-        error,
-      } = await supabase
-        .from("profiles")
-        .select(`
-          id,
-          full_name,
-          role,
-          facility_id
-        `)
-        .eq("id", user.id)
-        .limit(1);
-
-      if (error) {
-        console.error(
-          "EDIT USER LOAD ERROR:",
-          error
-        );
-
-        throw error;
-      }
-
-      const profile =
-        data?.[0];
-
-      if (!profile) {
-        throw new Error(
-          "The selected user profile could not be found."
-        );
-      }
-
-      setUserForm({
-        full_name:
-          profile.full_name ||
-          "",
-
-        email: "",
-
-        password: "",
-
-        role:
-          profile.role ||
-          "",
-
-        facility_id:
-          profile.facility_id ||
-          "",
-      });
-
-      window.scrollTo({
-        top: 0,
-        behavior: "smooth",
-      });
-    } catch (err) {
-      console.error(
-        "START EDIT USER ERROR:",
-        err
-      );
-
-      setError(
-        err?.message ||
-          "Unable to load the selected user."
-      );
-
-      setEditingUser(null);
-    }
-  };
-
-  const handleUserFormChange = (
-    e
-  ) => {
-    const {
-      name,
-      value,
-    } = e.target;
-
-    setUserForm(
-      (previous) => ({
-        ...previous,
-        [name]: value,
-      })
-    );
-  };
-
-  /* =======================================================
-     CREATE OR UPDATE USER PROFILE
-     ======================================================= */
-
-  const saveUser = async (
-    e
-  ) => {
-    e.preventDefault();
-
-    setError("");
-    setMessage("");
-    setSaving(true);
-
-    try {
-      if (
-        !userForm.full_name.trim()
-      ) {
-        throw new Error(
-          "Full name is required."
-        );
-      }
-
-      if (!userForm.role) {
-        throw new Error(
-          "User role is required."
-        );
-      }
-
-      if (!userForm.facility_id) {
-        throw new Error(
-          "Healthcare facility is required."
-        );
-      }
-
-      if (!editingUser) {
-        if (!userForm.email.trim()) {
-          throw new Error(
-            "Email is required."
-          );
-        }
-
-        if (!userForm.password) {
-          throw new Error(
-            "Temporary password is required."
-          );
-        }
-
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-
-        if (sessionError || !session?.access_token) {
-          throw new Error(
-            "Your session has expired. Please sign in again."
-          );
-        }
-
-        const {
-          data: createData,
-          error: createError,
-        } = await supabase.functions.invoke(
-          "create-user",
-          {
-            body: {
-              full_name:
-                userForm.full_name.trim(),
-              email:
-                userForm.email.trim(),
-              password: userForm.password,
-              role: userForm.role,
-              facility_id:
-                userForm.facility_id,
-            },
-            headers: {
-              Authorization:
-                `Bearer ${session.access_token}`,
-            },
-          }
-        );
-
-        if (createError || !createData?.success) {
-          let functionMessage =
-            createData?.error;
-
-          if (
-            !functionMessage &&
-            createError?.context instanceof Response
-          ) {
-            const errorBody = await createError.context
-              .clone()
-              .json()
-              .catch(() => null);
-
-            functionMessage = errorBody?.error;
-          }
-
-          throw new Error(
-            functionMessage ||
-              createError?.message ||
-              "Unable to create the user."
-          );
-        }
-
-        // Mark newly created accounts as temporary-password accounts.
-        // The profile column is optional for backward compatibility.
-        try {
-          await supabase
-            .from("profiles")
-            .update({
-              must_change_password: true,
-            })
-            .eq("id", createData.user?.id || createData.user_id || "");
-        } catch (passwordFlagError) {
-          console.warn(
-            "TEMPORARY PASSWORD FLAG UPDATE SKIPPED:",
-            passwordFlagError
-          );
-        }
-
-        setMessage(
-          createData.message ||
-            "User created successfully."
-        );
-
-        resetUserForm();
-
-        await loadUsers();
-        return;
-      }
-
-      const payload = {
-        full_name:
-          userForm.full_name.trim(),
-
-        role:
-          userForm.role,
-
-        facility_id:
-          userForm.facility_id,
-      };
-
-      const {
-        error: updateError,
-      } = await supabase
-        .from("profiles")
-        .update(payload)
-        .eq(
-          "id",
-          editingUser.id
-        );
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      setMessage(
-        `${payload.full_name} profile updated successfully.`
-      );
-
-      resetUserForm();
-
-      await loadUsers();
-    } catch (err) {
-      console.error(
-        "SAVE USER ERROR:",
-        err
-      );
-
-      setError(
-        err?.message ||
-          "Unable to update user profile."
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  /* =======================================================
-     REFERRAL HELPERS
-     ======================================================= */
-
-  const getReferralFacilityName = (
-    referral,
-    type
-  ) => {
-    const facility =
-      type === "referring"
-        ? referral.referring_facility
-        : referral.receiving_facility;
-
-    return (
-      facility?.name ||
-      "Facility not assigned"
-    );
-  };
-
-  const getReferralStatusLabel = (
-    status
-  ) => {
-    if (!status) {
-      return "Unknown";
-    }
-
-    return status
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (letter) =>
-        letter.toUpperCase()
-      );
-  };
-
-  /* =======================================================
-     FILTER USERS
-     ======================================================= */
-
-  const filteredUsers =
-    users.filter(
-      (user) => {
-        const facility =
-          facilities.find(
-            (item) =>
-              item.id ===
-              user.facility_id
-          );
-
-        const searchText =
-          userSearch
-            .toLowerCase()
-            .trim();
-
-        return (
-          user.full_name
-            ?.toLowerCase()
-            .includes(
-              searchText
-            ) ||
-          user.role
-            ?.toLowerCase()
-            .includes(
-              searchText
-            ) ||
-          facility?.name
-            ?.toLowerCase()
-            .includes(
-              searchText
-            )
-        );
-      }
-    );
-
-  /* =======================================================
-     FACILITY VIEW
-     ======================================================= */
-
-  if (
-    view ===
-    "facilities"
-  ) {
-    return (
-      <>
-        <div className="dashboard-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => {
-              resetFacilityForm();
-              setError("");
-              setMessage("");
-              setView("home");
-            }}
-          >
-            ← Back to Administration
-          </button>
-
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => {
-              resetFacilityForm();
-
-              window.scrollTo({
-                top: 0,
-                behavior: "smooth",
-              });
-            }}
-          >
-            + Add Facility
-          </button>
-        </div>
-
-        {error && (
-          <div className="error-message">
-            {error}
-          </div>
-        )}
-
-        {message && (
-          <div className="success-message">
-            {message}
-          </div>
-        )}
-
-        <div className="dashboard-card">
-          <span className="eyebrow">
-            FACILITY MANAGEMENT
-          </span>
-
-          <h3>
-            Healthcare Facilities
-          </h3>
-
-          <p>
-            Manage facilities connected
-            to the REFLINK referral
-            network.
-          </p>
-
-          <form
-            onSubmit={
-              saveFacility
-            }
-            className="form-grid"
-          >
-            <div>
-              <label>
-                Facility Name
-              </label>
-
-              <input
-                type="text"
-                name="name"
-                value={
-                  facilityForm.name
-                }
-                onChange={
-                  handleFacilityFormChange
-                }
-                placeholder="e.g. Buni Yadi General Hospital"
-                required
-              />
-            </div>
-
-            <div>
-              <label>
-                Facility Type
-              </label>
-
-              <select
-                name="facility_type"
-                value={
-                  facilityForm.facility_type
-                }
-                onChange={
-                  handleFacilityFormChange
-                }
-              >
-                <option value="">
-                  Select facility type
-                </option>
-
-                <option value="PHC">
-                  Primary Health Centre
-                </option>
-
-                <option value="Hospital">
-                  Hospital
-                </option>
-
-                <option value="General Hospital">
-                  General Hospital
-                </option>
-
-                <option value="Specialist Hospital">
-                  Specialist Hospital
-                </option>
-
-                <option value="Teaching Hospital">
-                  Teaching Hospital
-                </option>
-
-                <option value="Clinic">
-                  Clinic
-                </option>
-
-                <option value="Maternity">
-                  Maternity
-                </option>
-
-                <option value="Other">
-                  Other
-                </option>
-              </select>
-            </div>
-
-            <div>
-              <label>
-                State
-              </label>
-
-              <input
-                type="text"
-                name="state"
-                value={
-                  facilityForm.state
-                }
-                onChange={
-                  handleFacilityFormChange
-                }
-                placeholder="e.g. Yobe"
-              />
-            </div>
-
-            <div>
-              <label>
-                LGA
-              </label>
-
-              <input
-                type="text"
-                name="lga"
-                value={
-                  facilityForm.lga
-                }
-                onChange={
-                  handleFacilityFormChange
-                }
-                placeholder="e.g. Gujba"
-              />
-            </div>
-
-            <div>
-              <label>
-                Status
-              </label>
-
-              <select
-                value={
-                  facilityForm.is_active
-                    ? "active"
-                    : "inactive"
-                }
-                onChange={(e) =>
-                  setFacilityForm(
-                    (previous) => ({
-                      ...previous,
-                      is_active:
-                        e.target
-                          .value ===
-                        "active",
-                    })
-                  )
-                }
-              >
-                <option value="active">
-                  Active
-                </option>
-
-                <option value="inactive">
-                  Inactive
-                </option>
-              </select>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "flex-end",
-                gap: "10px",
-              }}
-            >
-              <button
-                type="submit"
-                className="primary-button"
-                disabled={saving}
-              >
-                {saving
-                  ? "Saving..."
-                  : editingFacility
-                  ? "Update Facility"
-                  : "Save Facility"}
-              </button>
-
-              {editingFacility && (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={
-                    resetFacilityForm
-                  }
-                >
-                  Cancel Edit
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
-
-        <div className="dashboard-card">
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "15px",
-              flexWrap: "wrap",
-            }}
-          >
-            <div>
-              <h3>
-                Facility Directory
-              </h3>
-
-              <p>
-                {facilities.length}{" "}
-                facilities registered
-                in REFLINK.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={
-                loadFacilities
-              }
-              disabled={
-                facilitiesLoading
-              }
-            >
-              {facilitiesLoading
-                ? "Refreshing..."
-                : "↻ Refresh"}
-            </button>
-          </div>
-
-          <div
-            style={{
-              marginTop: "20px",
-            }}
-          >
-            <input
-              type="text"
-              value={
-                facilitySearch
-              }
-              onChange={(e) =>
-                setFacilitySearch(
-                  e.target.value
-                )
-              }
-              placeholder="Search facility, type, state or LGA..."
-            />
-          </div>
-
-          {facilitiesLoading ? (
-            <p>
-              Loading facilities...
-            </p>
-          ) : filteredFacilities.length ===
-            0 ? (
-            <p>
-              No facilities found.
-            </p>
-          ) : (
-            <div
-              style={{
-                overflowX: "auto",
-                marginTop: "20px",
-              }}
-            >
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                }}
-              >
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: "left", padding: "12px" }}>
-                      Facility Name
-                    </th>
-
-                    <th style={{ textAlign: "left", padding: "12px" }}>
-                      Type
-                    </th>
-
-                    <th style={{ textAlign: "left", padding: "12px" }}>
-                      State
-                    </th>
-
-                    <th style={{ textAlign: "left", padding: "12px" }}>
-                      LGA
-                    </th>
-
-                    <th style={{ textAlign: "left", padding: "12px" }}>
-                      Registered Users
-                    </th>
-
-                    <th style={{ textAlign: "left", padding: "12px" }}>
-                      Status
-                    </th>
-
-                    <th style={{ textAlign: "left", padding: "12px" }}>
-                      Actions
-                    </th>
-                  </tr>
-</thead>
-
-                <tbody>
-                  {filteredFacilities.map(
-                    (facility) => (
-                      <tr
-                        key={
-                          facility.id
-                        }
-                      >
-                        <td style={{
-                          padding: "12px",
-                        }}>
-                          <strong>
-                            {
-                              facility.name
-                            }
-                          </strong>
-                        </td>
-
-                        <td style={{
-                          padding: "12px",
-                        }}>
-                          {
-                            facility.facility_type ||
-                            "—"
-                          }
-                        </td>
-
-                        <td style={{
-                          padding: "12px",
-                        }}>
-                          {
-                            facility.state ||
-                            "—"
-                          }
-                        </td>
-
-                        <td style={{
-                          padding: "12px",
-                        }}>
-                          {
-                            facility.lga ||
-                            "—"
-                          }
-                        </td>
-
-                        <td style={{
-                          padding: "12px",
-                        }}>
-                          <strong className="facility-user-count">
-                            {facilityUserCounts[facility.id] ?? 0}
-                          </strong>
-                        </td>
-
-                        <td style={{
-                          padding: "12px",
-                        }}>
-                          {facility.is_active
-                            ? "🟢 Active"
-                            : "🔴 Inactive"}
-                        </td>
-
-                        <td style={{
-                          padding: "12px",
-                        }}>
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: "8px",
-                              flexWrap: "wrap",
-                            }}
-                          >
-                            <button
-                              type="button"
-                              className="secondary-button"
-                              onClick={() =>
-                                startEditFacility(
-                                  facility
-                                )
-                              }
-                            >
-                              Edit
-                            </button>
-
-                            <button
-                              type="button"
-                              className={
-                                facility.is_active
-                                  ? "secondary-button"
-                                  : "primary-button"
-                              }
-                              onClick={() =>
-                                toggleFacilityStatus(
-                                  facility
-                                )
-                              }
-                            >
-                              {facility.is_active
-                                ? "Deactivate"
-                                : "Activate"}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </>
-    );
-  }
-
-  /* =======================================================
-     USER MANAGEMENT VIEW
-     ======================================================= */
-
-  if (
-    view ===
-    "users"
-  ) {
-    return (
-      <>
-        <div className="dashboard-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => {
-              resetUserForm();
-              setError("");
-              setMessage("");
-              setView("home");
-            }}
-          >
-            ← Back to Administration
-          </button>
-
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => {
-              loadUsers();
-              loadFacilities();
-            }}
-            disabled={
-              usersLoading
-            }
-          >
-            {usersLoading
-              ? "Refreshing..."
-              : "↻ Refresh Users"}
-          </button>
-        </div>
-
-        {error && (
-          <div className="error-message">
-            {error}
-          </div>
-        )}
-
-        {message && (
-          <div className="success-message">
-            {message}
-          </div>
-        )}
-
-        <div className="dashboard-card">
-          <span className="eyebrow">
-            USER MANAGEMENT
-          </span>
-
-          <h3>
-            REFLINK User Management
-          </h3>
-
-          <p>
-            Manage the role and healthcare
-            facility assigned to registered
-            REFLINK profiles.
-          </p>
-
-          <form
-            onSubmit={
-              saveUser
-            }
-            className="form-grid"
-          >
-            <div>
-              <label>
-                Full Name
-              </label>
-
-              <input
-                type="text"
-                name="full_name"
-                value={
-                  userForm.full_name
-                }
-                onChange={
-                  handleUserFormChange
-                }
-                placeholder="User full name"
-                required
-              />
-            </div>
-
-            {!editingUser && (
-              <>
-                <div>
-                  <label>
-                    Email Address
-                  </label>
-
-                  <input
-                    type="email"
-                    name="email"
-                    value={
-                      userForm.email
-                    }
-                    onChange={
-                      handleUserFormChange
-                    }
-                    placeholder="name@facility.org"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label>
-                    Temporary Password
-                  </label>
-
-                  <input
-                    type="password"
-                    name="password"
-                    value={
-                      userForm.password
-                    }
-                    onChange={
-                      handleUserFormChange
-                    }
-                    placeholder="Set a temporary password"
-                    required
-                  />
-                </div>
-              </>
-            )}
-
-            <div>
-              <label>
-                Role
-              </label>
-
-              <select
-                name="role"
-                value={
-                  userForm.role
-                }
-                onChange={
-                  handleUserFormChange
-                }
-                required
-              >
-                <option value="">
-                  Select user role
-                </option>
-
-                <option value="administrator">
-                  Administrator
-                </option>
-
-                <option value="phc_staff">
-                  PHC Staff
-                </option>
-
-                <option value="receiving_staff">
-                  Receiving Staff
-                </option>
-              </select>
-            </div>
-
-            <div>
-              <label>
-                Healthcare Facility
-              </label>
-
-              <select
-                name="facility_id"
-                value={
-                  userForm.facility_id
-                }
-                onChange={
-                  handleUserFormChange
-                }
-                required
-              >
-                <option value="">
-                  Select facility
-                </option>
-
-                {facilities
-                  .filter(
-                    (
-                      facility
-                    ) =>
-                      facility.is_active
-                  )
-                  .map(
-                    (
-                      facility
-                    ) => (
-                      <option
-                        key={
-                          facility.id
-                        }
-                        value={
-                          facility.id
-                        }
-                      >
-                        {
-                          facility.name
-                        }
-                      </option>
-                    )
-                  )}
-              </select>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "flex-end",
-                gap: "10px",
-              }}
-            >
-              <button
-                type="submit"
-                className="primary-button"
-                disabled={
-                  saving
-                }
-              >
-                {saving
-                  ? "Saving..."
-                  : editingUser
-                    ? "Update User"
-                    : "Create User"}
-              </button>
-
-              {editingUser && (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={
-                    resetUserForm
-                  }
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-          </form>
-
-          {!editingUser && (
-            <p
-              style={{
-                marginTop: "15px",
-              }}
-            >
-              Create a new REFLINK account, or select a user below to edit
-              their profile.
-            </p>
-          )}
-        </div>
-
-        <div className="dashboard-card">
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "15px",
-              flexWrap: "wrap",
-            }}
-          >
-            <div>
-              <h3>
-                REFLINK Users
-              </h3>
-
-              <p>
-                {users.length} user
-                profile(s) registered.
-              </p>
-            </div>
-          </div>
-
-          <div
-            style={{
-              marginTop: "20px",
-            }}
-          >
-            <input
-              type="text"
-              value={
-                userSearch
-              }
-              onChange={(e) =>
-                setUserSearch(
-                  e.target.value
-                )
-              }
-              placeholder="Search user, role or facility..."
-            />
-          </div>
-
-          {usersLoading ? (
-            <p>
-              Loading users...
-            </p>
-          ) : filteredUsers.length ===
-            0 ? (
-            <p>
-              No user profiles found.
-            </p>
-          ) : (
-            <div
-              style={{
-                overflowX: "auto",
-                marginTop: "20px",
-              }}
-            >
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                }}
-              >
-                <thead>
-                  <tr>
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Name
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Role
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Facility
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      User ID
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {filteredUsers.map(
-                    (user) => {
-                      const facility =
-                        facilities.find(
-                          (
-                            item
-                          ) =>
-                            item.id ===
-                            user.facility_id
-                        );
-
-                      return (
-                        <tr
-                          key={
-                            user.id
-                          }
-                        >
-                          <td style={{
-                            padding: "12px",
-                          }}>
-                            <strong>
-                              {
-                                user.full_name
-                              }
-                            </strong>
-                          </td>
-
-                          <td style={{
-                            padding: "12px",
-                          }}>
-                            {user.role ===
-                            "administrator"
-                              ? "Administrator"
-                              : user.role ===
-                                "phc_staff"
-                              ? "PHC Staff"
-                              : user.role ===
-                                "receiving_staff"
-                              ? "Receiving Staff"
-                              : user.role ||
-                                "—"}
-                          </td>
-
-                          <td style={{
-                            padding: "12px",
-                          }}>
-                            {
-                              facility?.name ||
-                              "Facility not assigned"
-                            }
-                          </td>
-
-                          <td
-                            style={{
-                              padding: "12px",
-                              fontSize: "12px",
-                            }}
-                          >
-                            {
-                              user.id
-                            }
-                          </td>
-
-                          <td style={{
-                            padding: "12px",
-                          }}>
-                            <button
-                              type="button"
-                              className="secondary-button"
-                              onClick={() =>
-                                startEditUser(
-                                  user
-                                )
-                              }
-                            >
-                              Edit User
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    }
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </>
-    );
-  }
-
-  /* =======================================================
-     REFERRAL NETWORK VIEW
-     ======================================================= */
-
-  if (
-    view ===
-    "referrals"
-  ) {
-    return (
-      <>
-        <div className="dashboard-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => {
-              setError("");
-              setMessage("");
-              setView("home");
-            }}
-          >
-            ← Back to Administration
-          </button>
-
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={
-              loadReferrals
-            }
-            disabled={
-              referralsLoading
-            }
-          >
-            {referralsLoading
-              ? "Refreshing..."
-              : "↻ Refresh Referrals"}
-          </button>
-        </div>
-
-        {error && (
-          <div className="error-message">
-            {error}
-          </div>
-        )}
-
-        {message && (
-          <div className="success-message">
-            {message}
-          </div>
-        )}
-
-        <div className="dashboard-card">
-          <span className="eyebrow">
-            REFERRAL NETWORK
-          </span>
-
-          <h3>
-            REFLINK Referral Network
-          </h3>
-
-          <p>
-            Monitor and manage referral activity
-            across the REFLINK healthcare network.
-          </p>
-
-          <div className="stats-grid">
-            <div className="stat-card">
-              <span>
-                Total Referrals
-              </span>
-
-              <strong>
-                {referrals.length}
-              </strong>
-            </div>
-
-            <div className="stat-card">
-              <span>
-                Active Referrals
-              </span>
-
-              <strong>
-                {
-                  referrals.filter(
-                    (referral) =>
-                      ![
-                        "completed",
-                        "discharged",
-                      ].includes(
-                        referral.status
-                      )
-                  ).length
-                }
-              </strong>
-            </div>
-
-            <div className="stat-card">
-              <span>
-                Completed
-              </span>
-
-              <strong>
-                {
-                  referrals.filter(
-                    (referral) =>
-                      referral.status ===
-                      "completed"
-                  ).length
-                }
-              </strong>
-            </div>
-
-            <div className="stat-card">
-              <span>
-                Discharged
-              </span>
-
-              <strong>
-                {
-                  referrals.filter(
-                    (referral) =>
-                      referral.status ===
-                      "discharged"
-                  ).length
-                }
-              </strong>
-            </div>
-          </div>
-        </div>
-
-        <div className="dashboard-card">
-          <h3>
-            Referral Records
-          </h3>
-
-          <p>
-            {referrals.length} referral
-            {referrals.length === 1
-              ? ""
-              : "s"} registered in REFLINK.
-          </p>
-
-          {referralsLoading ? (
-            <p>
-              Loading referrals...
-            </p>
-          ) : referrals.length === 0 ? (
-            <p>
-              No referral records found.
-            </p>
-          ) : (
-            <div
-              style={{
-                overflowX: "auto",
-                marginTop: "20px",
-              }}
-            >
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                }}
-              >
-                <thead>
-                  <tr>
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Referral No.
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Patient
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Referring Facility
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Receiving Facility
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Urgency
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Status
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Created
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {referrals.map(
-                    (referral) => (
-                      <tr
-                        key={
-                          referral.id
-                        }
-                      >
-                        <td style={{
-                          padding: "12px",
-                        }}>
-                          <strong>
-                            {
-                              referral.referral_number ||
-                              "—"
-                            }
-                          </strong>
-                        </td>
-
-                        <td style={{
-                          padding: "12px",
-                        }}>
-                          <strong>
-                            {
-                              referral.patient_identifier ||
-                              "Unknown patient"
-                            }
-                          </strong>
-
-                          <br />
-
-                          <small>
-                            {
-                              formatPatientAge(
-                                referral.patient_age_months
-                              )
-                            }
-
-                            {" · "}
-
-                            {
-                              referral.patient_sex ||
-                              "Sex not recorded"
-                            }
-                          </small>
-                        </td>
-
-                        <td style={{
-                          padding: "12px",
-                        }}>
-                          <strong>
-                            {
-                              getReferralFacilityName(
-                                referral,
-                                "referring"
-                              )
-                            }
-                          </strong>
-
-                          {referral
-                            .referring_facility
-                            ?.lga && (
-                            <>
-                              <br />
-
-                              <small>
-                                {
-                                  referral
-                                    .referring_facility
-                                    .lga
-                                }
-
-                                {referral
-                                  .referring_facility
-                                  ?.state
-                                  ? `, ${referral.referring_facility.state}`
-                                  : ""}
-                              </small>
-                            </>
-                          )}
-                        </td>
-
-                        <td style={{
-                          padding: "12px",
-                        }}>
-                          <strong>
-                            {
-                              getReferralFacilityName(
-                                referral,
-                                "receiving"
-                              )
-                            }
-                          </strong>
-
-                          {referral
-                            .receiving_facility
-                            ?.lga && (
-                            <>
-                              <br />
-
-                              <small>
-                                {
-                                  referral
-                                    .receiving_facility
-                                    .lga
-                                }
-
-                                {referral
-                                  .receiving_facility
-                                  ?.state
-                                  ? `, ${referral.receiving_facility.state}`
-                                  : ""}
-                              </small>
-                            </>
-                          )}
-                        </td>
-
-                        <td style={{
-                          padding: "12px",
-                        }}>
-                          {
-                            referral.urgency ||
-                            "Not specified"
-                          }
-                        </td>
-
-                        <td style={{
-                          padding: "12px",
-                        }}>
-                          {
-                            getStatusLabel(
-                              referral.status
-                            )
-                          }
-                        </td>
-
-                        <td style={{
-                          padding: "12px",
-                        }}>
-                          {
-                            referral.created_at
-                              ? new Date(
-                                  referral.created_at
-                                ).toLocaleString()
-                              : "—"
-                          }
-                        </td>
-                      </tr>
-                    )
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </>
-    );
-  }
-
-  /* =======================================================
-     ACTIVE REFERRALS VIEW
-     ======================================================= */
-
-  if (
-    view ===
-    "active-referrals"
-  ) {
-    const activeReferrals =
-      referrals.filter(
-        (referral) =>
-          ![
-            "completed",
-            "discharged",
-          ].includes(
-            referral.status
-          )
-      );
-
-    return (
-      <>
-        <div className="dashboard-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => {
-              setError("");
-              setMessage("");
-              setView("home");
-            }}
-          >
-            ← Back to Administration
-          </button>
-
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={
-              loadReferrals
-            }
-            disabled={
-              referralsLoading
-            }
-          >
-            {referralsLoading
-              ? "Refreshing..."
-              : "↻ Refresh Active Referrals"}
-          </button>
-        </div>
-
-        {error && (
-          <div className="error-message">
-            {error}
-          </div>
-        )}
-
-        <div className="dashboard-card">
-          <span className="eyebrow">
-            ACTIVE REFERRALS
-          </span>
-
-          <h3>
-            Active Referral Network
-          </h3>
-
-          <p>
-            Referrals that have not yet been
-            completed or discharged.
-          </p>
-
-          <div className="stat-card">
-            <span>
-              Active Referrals
-            </span>
-
-            <strong>
-              {
-                activeReferrals.length
-              }
-            </strong>
-          </div>
-        </div>
-
-        <div className="dashboard-card">
-          <h3>
-            Active Referral Records
-          </h3>
-
-          {referralsLoading ? (
-            <p>
-              Loading active referrals...
-            </p>
-          ) : activeReferrals.length ===
-            0 ? (
-            <p>
-              No active referrals found.
-            </p>
-          ) : (
-            <div
-              style={{
-                overflowX: "auto",
-                marginTop: "20px",
-              }}
-            >
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                }}
-              >
-                <thead>
-                  <tr>
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Referral No.
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Patient
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      From
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      To
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Urgency
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Status
-                    </th>
-
-                    <th style={{
-                      textAlign: "left",
-                      padding: "12px",
-                    }}>
-                      Created
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody>
-  {activeReferrals.map((referral) => (
-    <tr key={referral.id}>
-      <td style={{ padding: "12px" }}>
-        <strong>
-          {referral.referral_number || "—"}
-        </strong>
-      </td>
-
-      <td style={{ padding: "12px" }}>
-        <strong>
-          {referral.patient_identifier || "—"}
-        </strong>
-
-        <br />
-
-        <small>
-          {formatPatientAge(referral.patient_age_months)}
-
-          {" · "}
-
-          {referral.patient_sex || "Sex not recorded"}
-        </small>
-      </td>
-
-      <td style={{ padding: "12px" }}>
-        {referral.referring_facility?.name ||
-          "Facility not assigned"}
-      </td>
-
-      <td style={{ padding: "12px" }}>
-        {referral.receiving_facility?.name ||
-          "Facility not assigned"}
-      </td>
-
-      <td style={{ padding: "12px" }}>
-        {referral.urgency || "Not specified"}
-      </td>
-
-      <td style={{ padding: "12px" }}>
-        {getStatusLabel(referral.status)}
-      </td>
-
-      <td style={{ padding: "12px" }}>
-        {referral.created_at
-          ? new Date(
-              referral.created_at
-            ).toLocaleString()
-          : "—"}
-      </td>
-    </tr>
-  ))}
-</tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </>
-    );
-  }
-
-  /* =======================================================
-     ADMINISTRATION HOME
-     ======================================================= */
-
-  return (
-    <>
-      <div className="dashboard-actions">
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={() => {
-            loadFacilities();
-            loadUsers();
-            loadReferrals();
-          }}
-        >
-          ↻ Refresh Dashboard
-        </button>
-      </div>
-
-      <div className="stats-grid">
-        <div className="stat-card facility-user-stat">
-          <span>Registered Users</span>
-          <strong>
-            {users.length}
-          </strong>
-          <small>Users assigned to your facility</small>
-        </div>
-
-        <button
-          type="button"
-          className="stat-card"
-          onClick={() =>
-            setView(
-              "facilities"
-            )
-          }
-          style={{
-            cursor: "pointer",
-          }}
-        >
-          <span>
-            Facilities
-          </span>
-
-          <strong>
-            {facilities.length}
-          </strong>
-
-          <small>
-            Click to manage facilities →
-          </small>
-        </button>
-
-        <button
-          type="button"
-          className="stat-card"
-          onClick={() =>
-            setView(
-              "users"
-            )
-          }
-          style={{
-            cursor: "pointer",
-          }}
-        >
-          <span>
-            Users
-          </span>
-
-          <strong>
-            {users.length}
-          </strong>
-
-          <small>
-            Click to manage users →
-          </small>
-        </button>
-
-        <button
-          type="button"
-          className="stat-card"
-          onClick={() =>
-            setView(
-              "referrals"
-            )
-          }
-          style={{
-            cursor: "pointer",
-            textAlign: "left",
-          }}
-        >
-          <span>
-            Total Referrals
-          </span>
-
-          <strong>
-            {referrals.length}
-          </strong>
-
-          <small>
-            View referral network →
-          </small>
-        </button>
-
-        <button
-          type="button"
-          className="stat-card"
-          onClick={() =>
-            setView(
-              "active-referrals"
-            )
-          }
-          style={{
-            cursor: "pointer",
-            textAlign: "left",
-          }}
-        >
-          <span>
-            Active Referrals
-          </span>
-
-          <strong>
-            {
-              referrals.filter(
-                (referral) =>
-                  ![
-                    "completed",
-                    "discharged",
-                  ].includes(
-                    referral.status
-                  )
-              ).length
-            }
-          </strong>
-
-          <small>
-            View active referrals →
-          </small>
-        </button>
-      </div>
-
-      <div className="dashboard-card">
-        <span className="eyebrow">
-          SYSTEM ADMINISTRATION
-        </span>
-
-        <h3>
-          REFLINK Administration
-        </h3>
-
-        <p>
-          Manage healthcare facilities,
-          system users and referral
-          activity across the REFLINK
-          network.
-        </p>
-
-        <div className="dashboard-actions">
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() =>
-              setView(
-                "facilities"
-              )
-            }
-          >
-            Manage Facilities →
-          </button>
-
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() =>
-              setView(
-                "users"
-              )
-            }
-          >
-            Manage Users →
-          </button>
-
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() =>
-              setView(
-                "referrals"
-              )
-            }
-          >
-            Referral Network →
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
 export default App;
