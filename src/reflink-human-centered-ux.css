@@ -1,0 +1,391 @@
+/*
+ * REFLINK — Human-centred professional UX layer
+ * Purpose: calmer hierarchy, clearer clinical work, no decorative gradients
+ * Import AFTER App.css, reflink-theme-professional.css and reflink-branding.css.
+ * This file intentionally does not change JSX, data, routing, or Supabase logic.
+ */
+
+:root {
+  --ref-primary: #176b59 !important;
+  --ref-primary-dark: #105443 !important;
+  --ref-primary-deep: #0b3e32 !important;
+  --ref-primary-soft: #edf5f1 !important;
+
+  --ref-blue: #355d82 !important;
+  --ref-blue-dark: #294a68 !important;
+  --ref-blue-soft: #eef3f8 !important;
+
+  --ref-success: #23714e !important;
+  --ref-success-soft: #edf5ef !important;
+  --ref-warning: #95641e !important;
+  --ref-warning-soft: #faf3e5 !important;
+  --ref-danger: #a63737 !important;
+  --ref-danger-dark: #812b2b !important;
+  --ref-danger-soft: #faeeee !important;
+  --ref-info: #355d82 !important;
+  --ref-info-soft: #eef3f8 !important;
+
+  --ref-text: #26332e !important;
+  --ref-text-dark: #192620 !important;
+  --ref-text-muted: #5d6a63 !important;
+  --ref-text-light: #78847d !important;
+  --ref-background: #f5f7f5 !important;
+  --ref-surface: #ffffff !important;
+  --ref-surface-soft: #f8faf8 !important;
+  --ref-border: #dce4de !important;
+  --ref-border-light: #e8ede9 !important;
+
+  --ref-radius-sm: 7px !important;
+  --ref-radius-md: 10px !important;
+  --ref-radius-lg: 12px !important;
+  --ref-radius-xl: 14px !important;
+  --ref-shadow-sm: 0 1px 2px rgba(24, 42, 33,  0.035) !important;
+  --ref-shadow-md: 0 2px 8px rgba(24, 42, 33, 0.055) !important;
+  --ref-shadow-lg: 0 5px 16px rgba(24, 42, 33, 0.07) !important;
+}
+
+/* Keep the visual canvas calm and solid. This includes the login gate,
+   whose position/overlay behavior is deliberately left intact. */
+body,
+.app,
+.hero,
+.dashboard-page,
+.page-content,
+.dashboard,
+.login-page {
+  background: var(--ref-background) !important;
+  background-image: none !important;
+}
+
+.topbar,
+.dashboard-header {
+  background: #fff !important;
+  background-image: none !important;
+  box-shadow: 0 1px 0 var(--ref-border-light) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Friendly, restrained surfaces rather than floating panels. */
+.dashboard-card,
+.phase7-command-centre,
+.analysis-step-card,
+.intelligence-kpi,
+.governance-metrics > div,
+.validation-metrics > div,
+.analysis-note-card,
+.login-card,
+.role-card {
+  background: #fff !important;
+  background-image: none !important;
+  border: 1px solid var(--ref-border) !important;
+  border-radius: var(--ref-radius-lg) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.dashboard-card {
+  padding: 22px !important;
+}
+
+.dashboard-card + .dashboard-card {
+  margin-top: 18px !important;
+}
+
+.dashboard-card h3,
+.form-header h3,
+.phase7-command-heading h3 {
+  color: var(--ref-text-dark) !important;
+  font-size: 16px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+}
+
+.dashboard-card p {
+  color: var(--ref-text-muted) !important;
+  line-height: 1.55 !important;
+}
+
+/* Remove the marketing-style gradient and decorative accent strip from cards. */
+.login-page {
+  background: var(--ref-background) !important;
+  background-image: none !important;
+}
+
+.login-card::before,
+.stat-card::before {
+  display: none !important;
+  content: none !important;
+}
+
+.login-card {
+  box-shadow: 0 2px 10px rgba(24, 42, 33, 0.045) !important;
+}
+
+.brand-mark,
+.login-logo,
+.role-icon {
+  background: var(--ref-primary-soft) !important;
+  background-image: none !important;
+  color: var(--ref-primary-dark) !important;
+  box-shadow: none !important;
+}
+
+/* The action row should read as page controls, not a separate floating panel. */
+.dashboard-actions {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
+.primary-button,
+.cta-button,
+.full-width {
+  background: var(--ref-primary) !important;
+  background-image: none !important;
+  color: #fff !important;
+  border: 1px solid var(--ref-primary) !important;
+  border-radius: 7px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: background-color 140ms ease, border-color 140ms ease !important;
+}
+
+.primary-button:hover:not(:disabled),
+.cta-button:hover:not(:disabled),
+.full-width:hover:not(:disabled) {
+  background: var(--ref-primary-dark) !important;
+  border-color: var(--ref-primary-dark) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.secondary-button {
+  background: #fff !important;
+  background-image: none !important;
+  border: 1px solid var(--ref-border) !important;
+  border-radius: 7px !important;
+  color: var(--ref-text-dark) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.secondary-button:hover:not(:disabled) {
+  background: var(--ref-surface-soft) !important;
+  border-color: #aebdb4 !important;
+  color: var(--ref-primary-dark) !important;
+}
+
+/* Hierarchy: one lead total; supporting counts remain quieter. No rainbow KPIs. */
+.stats-grid {
+  gap: 12px !important;
+}
+
+.stats-grid:has(> .stat-card:nth-child(4):last-child) {
+  grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr)) !important;
+}
+
+.stat-card,
+button.stat-card {
+  min-width: 0 !important;
+  min-height: 100px !important;
+  padding: 17px 18px !important;
+  background: #fff !important;
+  background-image: none !important;
+  border: 1px solid var(--ref-border) !important;
+  border-radius: var(--ref-radius-md) !important;
+  box-shadow: none !important;
+  text-align: left !important;
+  transform: none !important;
+  transition: border-color 140ms ease, background-color 140ms ease !important;
+}
+
+.stat-card span {
+  display: block !important;
+  color: var(--ref-text-muted) !important;
+  font-size: 11px !important;
+  line-height: 1.45 !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+.stat-card strong {
+  display: block !important;
+  margin-top: 10px !important;
+  color: var(--ref-text-dark) !important;
+  font-size: 23px !important;
+  line-height: 1.1 !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.stats-grid > .stat-card:first-child {
+  background: #f0f6f2 !important;
+  border-color: #cadbd0 !important;
+}
+
+.stats-grid > .stat-card:first-child strong {
+  font-size: 30px !important;
+  font-weight: 700 !important;
+}
+
+.stat-card:hover,
+button.stat-card:hover {
+  background: #fbfdfb !important;
+  border-color: #aabeb2 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* Lists are work surfaces, not floating tiles. */
+.referral-list {
+  gap: 0 !important;
+}
+
+.referral-item {
+  background: #fff !important;
+  background-image: none !important;
+  border: 1px solid var(--ref-border-light) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: background-color 140ms ease, border-color 140ms ease !important;
+}
+
+.referral-item:hover {
+  background: #fbfdfb !important;
+  border-color: #b9c9bf !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* Badges stay compact; their colours should communicate a real state only.
+   Do not assign a different decorative colour to every metric. */
+.status-badge,
+.referral-status,
+.referral-urgency,
+.clinical-status-pill,
+.investigation-result-badge,
+.validation-status,
+.timeline-current {
+  border-radius: 5px !important;
+  padding: 3px 7px !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  box-shadow: none !important;
+}
+
+.timeline-current {
+  background: var(--ref-primary-soft) !important;
+  color: var(--ref-primary-dark) !important;
+}
+
+/* Tables: clear column headings and quiet row separators; avoid overdesigned cards. */
+table {
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+  box-shadow: none !important;
+}
+
+table th {
+  background: #f4f7f4 !important;
+  color: var(--ref-text-muted) !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.015em !important;
+  text-transform: none !important;
+  border-bottom: 1px solid var(--ref-border) !important;
+}
+
+table td {
+  color: var(--ref-text) !important;
+  border-top: 1px solid var(--ref-border-light) !important;
+}
+
+table tbody tr:nth-child(even) {
+  background: #fff !important;
+}
+
+table tbody tr:hover {
+  background: #f7faf7 !important;
+}
+
+/* Form controls: accessible focus, calm fills, no unnecessary glows. */
+input,
+select,
+textarea {
+  background: #fff !important;
+  border: 1px solid #cfd9d2 !important;
+  border-radius: 7px !important;
+  box-shadow: none !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--ref-primary) !important;
+  box-shadow: 0 0 0 2px rgba(23, 107, 89, 0.12) !important;
+}
+
+*:focus-visible {
+  outline: 2px solid rgba(23, 107, 89, 0.72) !important;
+  outline-offset: 2px !important;
+}
+
+/* Empty/error states should read plainly and helpfully, not like placeholders. */
+.empty-state,
+.empty-selection-state,
+.dashboard-card > p:only-child {
+  font-style: normal !important;
+  color: var(--ref-text-muted) !important;
+}
+
+.success-message,
+.login-error,
+.error-message {
+  box-shadow: none !important;
+  border-radius: 7px !important;
+}
+
+.role-card:hover {
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* Respect a user's motion preference and avoid decorative movement. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@media (max-width: 1050px) {
+  .stats-grid:has(> .stat-card:nth-child(4):last-child) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .dashboard-card {
+    padding: 17px !important;
+  }
+
+  .stats-grid:has(> .stat-card:nth-child(4):last-child) {
+    grid-template-columns: 1fr !important;
+  }
+
+  .stats-grid > .stat-card:first-child {
+    min-height: 94px !important;
+  }
+}
+
+/* Printing remains governed by the existing print stylesheet. */

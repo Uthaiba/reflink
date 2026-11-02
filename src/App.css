@@ -3727,98 +3727,9 @@ button.referral-item:focus-visible {
     padding: 0 !important;
   }
 
-  @page {
-  size: A4 portrait;
-  margin: 8mm;
-}
-
-@media print {
-
-  /* Hide the entire application */
-  body > * {
+  body * {
     visibility: hidden !important;
   }
-
-  /* Show ONLY the referral slip */
-  .printable-referral-sheet,
-  .printable-referral-sheet * {
-    visibility: visible !important;
-  }
-
-  /* Put the referral slip at the top-left of the printed page */
-  .printable-referral-sheet {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-
-    width: 194mm !important;
-    max-width: 194mm !important;
-
-    margin: 0 !important;
-    padding: 0 !important;
-
-    min-height: 0 !important;
-    height: auto !important;
-
-    background: #ffffff !important;
-    box-shadow: none !important;
-    border: none !important;
-
-    overflow: visible !important;
-
-    font-size: 8pt !important;
-    line-height: 1.2 !important;
-  }
-
-  /* Never create artificial pages */
-  .printable-referral-sheet,
-  .printable-referral-sheet * {
-    page-break-before: auto !important;
-    page-break-after: auto !important;
-  }
-
-  /* Keep individual clinical blocks together */
-  .print-section,
-  .print-grid,
-  .print-narrative-card,
-  .facility-card,
-  .print-table,
-  .print-signature-section {
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
-  }
-
-  /* Compact spacing */
-  .print-section {
-    margin-top: 4px !important;
-    margin-bottom: 4px !important;
-  }
-
-  .print-section-title {
-    margin-bottom: 2px !important;
-    padding-bottom: 2px !important;
-  }
-
-  .print-grid > div {
-    padding: 3px 5px !important;
-    min-height: 0 !important;
-  }
-
-  .print-narrative-card {
-    padding: 4px 5px !important;
-    min-height: 0 !important;
-  }
-
-  .print-table th,
-  .print-table td {
-    padding: 2px 4px !important;
-  }
-
-  .print-document-footer {
-    margin-top: 4px !important;
-    padding-top: 3px !important;
-  }
-}
 
   .printable-referral-sheet,
   .printable-referral-sheet * {
@@ -9603,619 +9514,593 @@ textarea:focus {
 @media(max-width:600px){.investigation-result-detail-grid,.referral-investigation-result-editor{grid-template-columns:1fr}.investigation-file-row{align-items:flex-start;flex-direction:column}}
 
 /* =========================================================
-   REFLINK — FINAL CLINICAL PRINT ENGINE
-   A4 PORTRAIT | SINGLE DOCUMENT FLOW
+   REFLINK V2 — NEW REFERRAL FORM LAYOUT FIX
+   Step 1B
    ========================================================= */
 
-@media print {
+.referral-form-card form {
+  width: 100%;
+}
 
-  @page {
-    size: A4 portrait;
-    margin: 8mm;
+/* Normal field labels must occupy their own line */
+.referral-form-card form > label,
+.referral-form-card .form-group > label {
+  display: block !important;
+  width: 100%;
+  margin: 18px 0 7px;
+  line-height: 1.35;
+}
+
+/* Normal form controls should fill their available width */
+.referral-form-card form > input,
+.referral-form-card form > select,
+.referral-form-card form > textarea,
+.referral-form-card .form-group > input,
+.referral-form-card .form-group > select,
+.referral-form-card .form-group > textarea {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Keep the age value + unit together */
+.referral-form-card .age-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px;
+  gap: 10px;
+  width: 100%;
+}
+
+/* Normal textareas */
+.referral-form-card textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+/* Section headings */
+.referral-form-card form > h3 {
+  margin-top: 30px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ref-border-light);
+}
+
+/* Section spacing */
+.referral-form-card .form-section {
+  margin-top: 24px;
+}
+
+/* Don't let checkbox labels inherit the normal field-label layout */
+.referral-form-card .selection-checkbox {
+  display: flex !important;
+  width: auto !important;
+  margin: 0 !important;
+}
+
+/* Responsive age control */
+@media (max-width: 600px) {
+  .referral-form-card .age-input-row {
+    grid-template-columns: 1fr;
+  }
+}
+/* =========================================================
+   REFLINK V2 — CLINICAL INFORMATION
+   Step 1C
+   ========================================================= */
+
+.referral-form-card .reflink-clinical-checks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 10px 0 12px;
+}
+
+/* Clinical checkbox cards */
+.referral-form-card .reflink-clinical-checks .selection-checkbox {
+  min-height: 54px;
+  padding: 13px 14px;
+  box-sizing: border-box;
+}
+
+/* Other physical finding input */
+.referral-form-card input[name="physical_findings_other"],
+.referral-form-card input[name="chief_complaint_other"],
+.referral-form-card input[name="treatment_given_other"] {
+  margin-top: 8px;
+}
+
+/* Clinical narrative fields */
+.referral-form-card textarea[name="clinical_summary"],
+.referral-form-card textarea[name="physical_findings"],
+.referral-form-card textarea[name="treatment_given"],
+.referral-form-card textarea[name="referral_reason"] {
+  width: 100%;
+  min-height: 95px;
+  margin-top: 8px;
+}
+
+/* Clinical information visual grouping */
+.referral-form-card .reflink-clinical-checks
+  .selection-checkbox.is-selected {
+  border-width: 1px;
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.08);
+}
+
+@media (max-width: 900px) {
+  .referral-form-card .reflink-clinical-checks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .referral-form-card .reflink-clinical-checks {
+    grid-template-columns: 1fr;
+  }
+}
+/* =========================================================
+   REFLINK V2 — DIAGNOSIS & INVESTIGATIONS
+   Step 1D
+   ========================================================= */
+
+/* Diagnosis section */
+.referral-form-card .clinical-selection-section {
+  margin-top: 26px;
+  padding: 20px;
+  border: 1px solid var(--ref-border-light);
+  border-radius: 16px;
+  background: var(--ref-surface);
+}
+
+/* Diagnosis heading */
+.referral-form-card .clinical-selection-section h4 {
+  margin: 0 0 6px;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+/* Diagnosis explanation */
+.referral-form-card .clinical-selection-section
+.section-heading-inline p {
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* Diagnosis controls */
+.referral-form-card .clinical-entry-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 0.8fr)
+    minmax(190px, 1fr)
+    minmax(220px, 1.2fr)
+    minmax(160px, 0.9fr);
+  gap: 12px;
+  align-items: end;
+}
+
+/* Diagnosis add button */
+.referral-form-card .clinical-entry-action .primary-button {
+  width: 100%;
+  min-height: 44px;
+}
+
+/* Investigation category cards */
+.referral-form-card .investigation-options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+/* Investigation category panel */
+.referral-form-card .investigation-category-panel {
+  min-width: 0;
+}
+
+/* Investigation checkboxes */
+.referral-form-card .investigation-category-panel
+.selection-checkbox {
+  min-height: 48px;
+}
+
+/* Selected diagnosis/investigation area */
+.referral-form-card .clinical-selection-list,
+.referral-form-card .referral-investigation-edit-list {
+  margin-top: 14px;
+}
+
+/* Responsive diagnosis */
+@media (max-width: 1100px) {
+  .referral-form-card .clinical-entry-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* -------------------------------------------------------
-     GLOBAL PRINT RESET
-     ------------------------------------------------------- */
+  .referral-form-card .investigation-options-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
-  html,
-  body {
-    width: 210mm !important;
-    min-width: 210mm !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #fff !important;
-    color: #111 !important;
+@media (max-width: 650px) {
+  .referral-form-card .clinical-entry-grid {
+    grid-template-columns: 1fr;
   }
 
-  body {
-    font-family: Arial, Helvetica, sans-serif !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
+  .referral-form-card .clinical-selection-section {
+    padding: 15px;
+  }
+}
+/* =========================================================
+   REFLINK — PATIENT INFORMATION LAYOUT
+   Step 1B
+   ========================================================= */
+
+.referral-form-card .patient-information-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 20px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.referral-form-card .patient-information-grid .form-group {
+  min-width: 0;
+}
+
+.referral-form-card .patient-information-grid label,
+.referral-form-card .caregiver-section label {
+  display: block !important;
+  width: 100%;
+  margin-bottom: 7px;
+}
+
+.referral-form-card .patient-information-grid input,
+.referral-form-card .patient-information-grid select,
+.referral-form-card .patient-information-grid textarea,
+.referral-form-card .caregiver-section input,
+.referral-form-card .caregiver-section select,
+.referral-form-card .caregiver-section textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.referral-form-card .caregiver-section {
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid var(--ref-border-light);
+  border-radius: 14px;
+  background: var(--ref-surface);
+}
+
+.referral-form-card .caregiver-section h4 {
+  margin: 0 0 16px;
+  color: var(--ref-primary);
+}
+
+.referral-form-card .caregiver-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.referral-form-card .age-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px;
+  gap: 10px;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .referral-form-card .patient-information-grid {
+    grid-template-columns: 1fr;
   }
 
-  /* -------------------------------------------------------
-     HIDE APPLICATION UI
-     ------------------------------------------------------- */
+  .referral-form-card .caregiver-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
-  body > * {
-    visibility: hidden !important;
+@media (max-width: 600px) {
+  .referral-form-card .age-input-row {
+    grid-template-columns: 1fr;
+  }
+}
+/* =========================================================
+   REFLINK V2 — INVESTIGATION RESULT LAYOUT FIX
+   ========================================================= */
+
+/* Separate investigation name from result-entry controls */
+.referral-investigation-edit-row {
+  display: grid !important;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 4fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.referral-investigation-edit-row > div:first-child {
+  min-width: 0;
+  padding-top: 8px;
+}
+
+/* Prevent controls from overlapping adjacent grid columns */
+.referral-investigation-edit-row .referral-investigation-result-editor {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.referral-investigation-edit-row
+.referral-investigation-result-editor > select {
+  width: 100%;
+  min-width: 0 !important;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.referral-investigation-result-editor > input,
+.referral-investigation-result-editor > textarea {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.referral-investigation-result-editor > textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+/* Numeric results: status, value, unit, reference range, upload */
+.referral-investigation-result-editor.is-quantitative {
+  grid-template-columns:
+    minmax(185px, 1.15fr)
+    minmax(120px, 0.9fr)
+    minmax(80px, 0.55fr)
+    minmax(150px, 1.1fr)
+    auto;
+}
+
+/* Written reports: status, report details, upload */
+.referral-investigation-result-editor.is-textual {
+  grid-template-columns:
+    minmax(185px, 0.9fr)
+    minmax(240px, 2fr)
+    auto;
+}
+
+/* Keep the upload control within its own column */
+.referral-investigation-result-editor .compact-upload {
+  justify-self: start;
+  align-self: center;
+  min-width: 100px;
+  box-sizing: border-box;
+}
+
+/* Tablet layout */
+@media (max-width: 1100px) {
+  .referral-investigation-edit-row {
+    grid-template-columns: 1fr;
   }
 
-  /*
-     Only the clinical referral document is printable.
-  */
-  .printable-referral-sheet,
-  .printable-referral-sheet * {
-    visibility: visible !important;
+  .referral-investigation-result-editor.is-quantitative {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* -------------------------------------------------------
-     PRINT DOCUMENT
-     ------------------------------------------------------- */
+  .referral-investigation-result-editor.is-textual {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 
-  .printable-referral-sheet {
-    display: block !important;
+/* Mobile layout */
+@media (max-width: 600px) {
+  .referral-investigation-result-editor.is-quantitative,
+  .referral-investigation-result-editor.is-textual {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* =========================================================
+   REFLINK V2 — FINAL INVESTIGATION RESULT LAYOUT
+   ========================================================= */
 
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
+/* Keep the investigation name and editor in separate columns */
+.referral-investigation-edit-row {
+  display: grid !important;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 5fr) !important;
+  align-items: center;
+  gap: 16px !important;
+  width: 100%;
+  box-sizing: border-box;
+}
 
-    width: 194mm !important;
-    max-width: 194mm !important;
+.referral-investigation-edit-row > div:first-child {
+  min-width: 0;
+}
 
-    min-width: 0 !important;
-    min-height: 0 !important;
-    height: auto !important;
+/* Base editor layout */
+.referral-investigation-result-editor {
+  display: grid !important;
+  width: 100%;
+  min-width: 0;
+  gap: 10px !important;
+  align-items: center;
+  box-sizing: border-box;
+}
 
-    margin: 0 !important;
-    padding: 0 !important;
+/* Numerical investigations:
+   Status | Value | Unit | Reference range | Upload */
+.referral-investigation-result-editor:not(:has(> textarea)) {
+  grid-template-columns:
+    minmax(230px, 1.25fr)
+    minmax(150px, 0.9fr)
+    minmax(90px, 0.55fr)
+    minmax(170px, 1.1fr)
+    auto !important;
+}
 
-    background: #fff !important;
-    color: #111 !important;
+/* Written reports and narrative investigations:
+   Status | Report details | Upload */
+.referral-investigation-result-editor:has(> textarea) {
+  grid-template-columns:
+    minmax(230px, 1fr)
+    minmax(260px, 2.3fr)
+    auto !important;
+  align-items: start;
+}
 
-    border: 0 !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
+/* Stop individual controls from overflowing their columns */
+.referral-investigation-result-editor > select,
+.referral-investigation-result-editor > input,
+.referral-investigation-result-editor > textarea {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+}
 
-    overflow: visible !important;
+.referral-investigation-result-editor > select {
+  min-height: 44px;
+}
 
-    font-family: Arial, Helvetica, sans-serif !important;
-    font-size: 8.2pt !important;
-    line-height: 1.25 !important;
+.referral-investigation-result-editor > textarea {
+  min-height: 80px;
+  resize: vertical;
+}
 
-    box-sizing: border-box !important;
+/* Keep upload controls within their own column */
+.referral-investigation-result-editor > .compact-upload {
+  justify-self: start;
+  align-self: center;
+  width: auto;
+  min-width: 80px;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
 
-    page-break-before: auto !important;
-    page-break-after: auto !important;
-    page-break-inside: auto !important;
-
-    break-before: auto !important;
-    break-after: auto !important;
-    break-inside: auto !important;
+/* Smaller screens: stack controls instead of squeezing them */
+@media (max-width: 1050px) {
+  .referral-investigation-edit-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: start;
   }
 
-  .printable-referral-sheet *,
-  .printable-referral-sheet *::before,
-  .printable-referral-sheet *::after {
-    box-sizing: border-box !important;
+  .referral-investigation-result-editor:not(:has(> textarea)),
+  .referral-investigation-result-editor:has(> textarea) {
+    grid-template-columns: minmax(0, 1fr) !important;
   }
 
-  /* -------------------------------------------------------
-     DOCUMENT HEADER
-     ------------------------------------------------------- */
+  .referral-investigation-result-editor > .compact-upload {
+    justify-self: start;
+  }
+}
+/* REFLINK V2 — explicit investigation result layouts */
 
-  .print-document-header {
-    display: flex !important;
-    align-items: flex-start !important;
-    justify-content: space-between !important;
+.referral-investigation-edit-row {
+  display: grid !important;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(0, 5fr) !important;
+  align-items: center;
+  gap: 16px !important;
+  width: 100%;
+}
 
-    gap: 12mm !important;
+.referral-investigation-edit-row > div:first-child {
+  min-width: 0;
+}
 
-    margin: 0 0 4mm !important;
-    padding: 0 0 3mm !important;
+.referral-investigation-edit-row
+.referral-investigation-result-editor {
+  display: grid !important;
+  width: 100% !important;
+  min-width: 0;
+  gap: 10px !important;
+  align-items: center;
+  box-sizing: border-box;
+}
 
-    border-bottom: 1.5px solid #222 !important;
+/* Numerical investigations:
+   status | value | unit | reference range | upload */
 
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
+.referral-investigation-edit-row
+.referral-investigation-result-editor.is-quantitative {
+  grid-template-columns:
+    minmax(210px, 1.2fr)
+    minmax(140px, 1fr)
+    minmax(80px, 0.55fr)
+    minmax(145px, 1.1fr)
+    minmax(80px, auto) !important;
+}
+
+/* Written reports:
+   status | report details | upload */
+
+.referral-investigation-edit-row
+.referral-investigation-result-editor.is-textual {
+  grid-template-columns:
+    minmax(210px, 0.95fr)
+    minmax(250px, 2fr)
+    minmax(80px, auto) !important;
+  align-items: start;
+}
+
+/* Keep every control inside its own grid column */
+
+.referral-investigation-edit-row
+.referral-investigation-result-editor
+> .investigation-result-status,
+.referral-investigation-edit-row
+.referral-investigation-result-editor
+> .investigation-result-value,
+.referral-investigation-edit-row
+.referral-investigation-result-editor
+> .investigation-result-unit,
+.referral-investigation-edit-row
+.referral-investigation-result-editor
+> .investigation-reference-range,
+.referral-investigation-edit-row
+.referral-investigation-result-editor
+> .investigation-result-report {
+  position: static !important;
+  display: block;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100%;
+  margin: 0 !important;
+  box-sizing: border-box;
+}
+
+.referral-investigation-edit-row
+.investigation-result-status {
+  min-height: 44px;
+}
+
+.referral-investigation-edit-row
+.investigation-result-report {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.referral-investigation-result-upload {
+  justify-self: start;
+  align-self: center;
+  min-width: 80px;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+/* Stack fields on narrower screens instead of overlapping */
+
+@media (max-width: 1050px) {
+  .referral-investigation-edit-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: start;
   }
 
-  .print-brand {
-    font-size: 17pt !important;
-    font-weight: 900 !important;
-    line-height: 1 !important;
-    letter-spacing: .08em !important;
-  }
-
-  .print-brand-subtitle {
-    margin-top: 1mm !important;
-    font-size: 5.8pt !important;
-    line-height: 1.2 !important;
-  }
-
-  .print-brand-mark {
-    width: 9mm !important;
-    height: 9mm !important;
-
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-
-    font-size: 14pt !important;
-  }
-
-  .print-document-header h1 {
-    margin: 2mm 0 0 !important;
-    font-size: 12pt !important;
-    line-height: 1.1 !important;
-  }
-
-  .print-document-header p {
-    margin: 1mm 0 0 !important;
-    font-size: 6.5pt !important;
-    line-height: 1.2 !important;
-  }
-
-  .print-referral-meta {
-    min-width: 38mm !important;
-
-    padding: 2.5mm 3mm !important;
-
-    border: 1px solid #555 !important;
-    border-radius: 1.5mm !important;
-
-    background: #fafafa !important;
-  }
-
-  .print-referral-meta strong {
-    font-size: 4.5pt !important;
-  }
-
-  /* -------------------------------------------------------
-     STATUS BAR
-     ------------------------------------------------------- */
-
-  .print-status-bar {
-    display: grid !important;
-
-    grid-template-columns: repeat(3, 1fr) !important;
-
-    gap: 2mm !important;
-
-    margin: 0 0 3mm !important;
-  }
-
-  .print-status-bar > div {
-    padding: 2mm 2.5mm !important;
-
-    border: 1px solid #bbb !important;
-    border-radius: 1.2mm !important;
-
-    background: #f7f7f7 !important;
-  }
-
-  .print-status-bar span {
-    display: block !important;
-
-    margin-bottom: .5mm !important;
-
-    font-size: 5.4pt !important;
-    font-weight: 700 !important;
-    text-transform: uppercase !important;
-    letter-spacing: .04em !important;
-  }
-
-  .print-status-bar strong {
-    font-size: 4.5pt !important;
-  }
-
-  /* -------------------------------------------------------
-     SECTION STRUCTURE
-     ------------------------------------------------------- */
-
-  .print-section {
-    margin: 3mm 0 0 !important;
-
-    page-break-before: auto !important;
-    page-break-after: auto !important;
-    page-break-inside: auto !important;
-
-    break-before: auto !important;
-    break-after: auto !important;
-    break-inside: auto !important;
-  }
-
-  .print-section-title {
-    display: flex !important;
-    align-items: center !important;
-
-    gap: 2mm !important;
-
-    margin: 0 0 1.5mm !important;
-    padding: 0 0 1mm !important;
-
-    border-bottom: 1px solid #999 !important;
-  }
-
-  .print-section-title > span {
-    width: 5mm !important;
-    height: 5mm !important;
-
-    flex: 0 0 5mm !important;
-
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-
-    font-size: 5.5pt !important;
-    font-weight: 800 !important;
-  }
-
-  .print-section-title h2 {
-    margin: 0 !important;
-
-    font-size: 8.2pt !important;
-    font-weight: 800 !important;
-
-    line-height: 1.1 !important;
-
-    text-transform: uppercase !important;
-    letter-spacing: .04em !important;
-  }
-
-  /* -------------------------------------------------------
-     INFORMATION GRIDS
-     ------------------------------------------------------- */
-
-  .print-grid {
-    display: grid !important;
-
-    gap: 0 !important;
-
-    width: 100% !important;
-
-    border: 1px solid #aaa !important;
-    border-radius: 1mm !important;
-
-    overflow: hidden !important;
-  }
-
-  .print-grid > div {
-    min-height: 0 !important;
-
-    padding: 2mm 2.5mm !important;
-
-    border-right: 1px solid #ccc !important;
-    border-bottom: 1px solid #ccc !important;
-  }
-
-  .print-grid span {
-    display: block !important;
-
-    margin-bottom: .5mm !important;
-
-    font-size: 4.5pt !important;
-    font-weight: 700 !important;
-
-    text-transform: uppercase !important;
-    letter-spacing: .03em !important;
-  }
-
-  .print-grid strong {
-    font-size: 4.5pt !important;
-    font-weight: 700 !important;
-  }
-
-  /* -------------------------------------------------------
-     REFERRAL PATHWAY
-     ------------------------------------------------------- */
-
-  .referral-pathway {
-    display: grid !important;
-
-    grid-template-columns: 1fr 8mm 1fr !important;
-
-    align-items: center !important;
-
-    gap: 2mm !important;
-  }
-
-  .facility-card {
-    min-height: 15mm !important;
-
-    padding: 2.5mm !important;
-
-    border: 1px solid #aaa !important;
-    border-radius: 1.2mm !important;
-
-    background: #fafafa !important;
-
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  .facility-card span {
-    display: block !important;
-
-    margin-bottom: .5mm !important;
-
-    font-size: 4.5pt !important;
-    font-weight: 700 !important;
-
-    text-transform: uppercase !important;
-  }
-
-  .facility-card strong {
-    font-size: 4.5pt !important;
-  }
-
-  .facility-card small {
-    display: block !important;
-
-    margin-top: 1mm !important;
-
-    font-size: 4.5pt !important;
-  }
-
-  .pathway-arrow {
-    text-align: center !important;
-
-    font-size: 13pt !important;
-    font-weight: 700 !important;
-  }
-
-  /* -------------------------------------------------------
-     NARRATIVE CONTENT
-     ------------------------------------------------------- */
-
-  .print-narrative-grid {
-    display: grid !important;
-
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-
-    gap: 2mm !important;
-  }
-
-  .print-narrative-card {
-    min-height: 10mm !important;
-
-    padding: 2.5mm !important;
-
-    border: 1px solid #aaa !important;
-    border-radius: 1.2mm !important;
-
-    background: #fff !important;
-
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  .print-narrative-card span {
-    display: block !important;
-
-    margin-bottom: .7mm !important;
-
-    font-size: 5.3pt !important;
-    font-weight: 700 !important;
-
-    text-transform: uppercase !important;
-  }
-
-  .print-narrative-card p {
-    margin: 0 !important;
-
-    font-size: 7pt !important;
-    line-height: 1.25 !important;
-  }
-
-  /* -------------------------------------------------------
-     TABLES
-     ------------------------------------------------------- */
-
-  .print-table {
-    width: 100% !important;
-
-    border-collapse: collapse !important;
-
-    font-size: 6.8pt !important;
-
-    page-break-inside: auto !important;
-  }
-
-  .print-table th,
-  .print-table td {
-    padding: 1.7mm 2mm !important;
-
-    border: 1px solid #aaa !important;
-
-    text-align: left !important;
-
-    vertical-align: top !important;
-
-    line-height: 1.2 !important;
-  }
-
-  .print-table th {
-    font-size: 5.5pt !important;
-
-    font-weight: 800 !important;
-
-    text-transform: uppercase !important;
-  }
-
-  .print-table td {
-    font-size: 4.5pt !important;
-  }
-
-  /* -------------------------------------------------------
-     EMPTY STATES
-     ------------------------------------------------------- */
-
-  .print-empty-state {
-    padding: 2.5mm !important;
-
-    border: 1px dashed #aaa !important;
-
-    font-size: 4.5pt !important;
-
-    color: #555 !important;
-  }
-
-  /* -------------------------------------------------------
-     CONTINUITY
-     ------------------------------------------------------- */
-
-  .print-continuity {
-    display: flex !important;
-
-    align-items: flex-start !important;
-    justify-content: space-between !important;
-
-    gap: 1mm !important;
-
-    width: 100% !important;
-  }
-
-  .print-continuity > div:not(.continuity-line) {
-    min-width: 25mm !important;
-
-    text-align: center !important;
-  }
-
-  .print-continuity > div:not(.continuity-line) span {
-    width: 6mm !important;
-    height: 6mm !important;
-
-    margin: 0 auto 1mm !important;
-
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-
-    font-size: 4.5pt !important;
-  }
-
-  .print-continuity strong {
-    display: block !important;
-
-    font-size: 4.5pt !important;
-    line-height: 1.15 !important;
-  }
-
-  /* -------------------------------------------------------
-     SIGNATURES
-     ------------------------------------------------------- */
-
-  .print-signature-section {
-    display: grid !important;
-
-    grid-template-columns: repeat(3, 1fr) !important;
-
-    gap: 8mm !important;
-
-    margin-top: 5mm !important;
-
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  .signature-block {
-    min-height: 18mm !important;
-  }
-
-  .signature-line {
-    height: 8mm !important;
-
-    margin-top: 2mm !important;
-
-    border-bottom: 1px solid #222 !important;
-  }
-
-  .stamp-box {
-    height: 12mm !important;
-
-    margin-top: 1.5mm !important;
-
-    border: 1px dashed #777 !important;
-  }
-
-  .signature-block small {
-    font-size: 4.5pt !important;
-  }
-
-  /* -------------------------------------------------------
-     FOOTER
-     ------------------------------------------------------- */
-
-  .print-document-footer {
-    margin-top: 4mm !important;
-    padding-top: 2mm !important;
-
-    border-top: 1px solid #888 !important;
-
-    font-size: 4.5pt !important;
-
-    line-height: 1.2 !important;
-
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  /* -------------------------------------------------------
-     PAGE BREAK POLICY
-     ------------------------------------------------------- */
-
-  /*
-     Never force artificial pages.
-     The browser decides where the A4 page naturally ends.
-  */
-
-  .printable-referral-sheet,
-  .print-section,
-  .print-grid,
-  .print-narrative-grid,
-  .referral-pathway,
-  .receiving-update-section,
-  .print-signature-section {
-    page-break-before: auto !important;
-    page-break-after: auto !important;
-  }
-
-  .printable-referral-sheet {
-    page-break-inside: auto !important;
-    break-inside: auto !important;
-  }
-
-  /*
-     Keep these clinical units together.
-  */
-
-  .print-narrative-card,
-  .facility-card,
-  .print-signature-section {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  /* -------------------------------------------------------
-     REMOVE SCREEN-ONLY EFFECTS
-     ------------------------------------------------------- */
-
-  button,
-  .print-referral-button,
-  .screen-only,
-  .no-print {
-    display: none !important;
-  }
-
-  /* -------------------------------------------------------
-     PREVENT HORIZONTAL OVERFLOW
-     ------------------------------------------------------- */
-
-  .printable-referral-sheet img,
-  .printable-referral-sheet table,
-  .printable-referral-sheet svg {
-    max-width: 100% !important;
+  .referral-investigation-edit-row
+  .referral-investigation-result-editor.is-quantitative,
+  .referral-investigation-edit-row
+  .referral-investigation-result-editor.is-textual {
+    grid-template-columns: minmax(0, 1fr) !important;
   }
 }

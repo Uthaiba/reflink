@@ -1,0 +1,291 @@
+/* REFLINK — Referral detail UX refinement
+   Scoped to the referral-detail overlay only. Keeps clinical data and logic unchanged. */
+
+.login-page:has(.referral-source-details) {
+  align-items: flex-start !important;
+  justify-content: center !important;
+  padding: 22px clamp(12px, 2.5vw, 38px) !important;
+  background: #f4f6f4 !important;
+}
+
+.login-page:has(.referral-source-details) .login-card {
+  width: min(1180px, calc(100vw - 48px)) !important;
+  max-width: 1180px !important;
+  margin: 0 auto !important;
+  padding: clamp(20px, 2.4vw, 34px) !important;
+  border: 1px solid #dce5df !important;
+  border-radius: 14px !important;
+  background: #fff !important;
+  box-shadow: 0 2px 7px rgba(16, 32, 26, 0.045) !important;
+  color: #182721 !important;
+  font-size: 14px !important;
+  line-height: 1.55 !important;
+}
+
+.login-page:has(.referral-source-details) .referral-modal-heading-row {
+  align-items: center !important;
+  gap: 18px !important;
+  margin-bottom: 18px !important;
+}
+
+.login-page:has(.referral-source-details) .referral-modal-heading-row h2 {
+  margin: 5px 0 0 !important;
+  font-size: clamp(22px, 2vw, 27px) !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.025em !important;
+}
+
+.login-page:has(.referral-source-details) .print-referral-button {
+  min-height: 42px !important;
+  white-space: normal !important;
+  box-shadow: none !important;
+}
+
+.login-page:has(.referral-source-details) .login-card > p:has(strong) {
+  display: flex !important;
+  align-items: baseline !important;
+  gap: 12px !important;
+  margin: 7px 0 !important;
+  padding: 11px 13px !important;
+  border: 1px solid #e1e8e3 !important;
+  border-radius: 8px !important;
+  background: #f8faf8 !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  overflow-wrap: anywhere !important;
+}
+
+.login-page:has(.referral-source-details) .login-card > p:has(strong) strong {
+  flex: 0 0 175px !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  color: #24372e !important;
+  font-size: 12.5px !important;
+  font-weight: 650 !important;
+}
+
+.login-page:has(.referral-source-details) .patient-contact-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  margin: 14px 0 8px !important;
+}
+
+.login-page:has(.referral-source-details) .patient-contact-grid > div {
+  min-width: 0 !important;
+  padding: 13px 14px !important;
+  border: 1px solid #e1e8e3 !important;
+  border-radius: 9px !important;
+  background: #f8faf8 !important;
+  box-shadow: none !important;
+}
+
+.login-page:has(.referral-source-details) .patient-contact-grid span,
+.login-page:has(.referral-source-details) .clinical-detail-card > span,
+.login-page:has(.referral-source-details) .clinical-narrative-card > span {
+  display: block !important;
+  margin-bottom: 5px !important;
+  color: #5d6b64 !important;
+  font-size: 10.5px !important;
+  font-weight: 650 !important;
+  line-height: 1.4 !important;
+  letter-spacing: 0.035em !important;
+}
+
+.login-page:has(.referral-source-details) .patient-contact-grid strong,
+.login-page:has(.referral-source-details) .clinical-detail-card strong {
+  display: block !important;
+  color: #182721 !important;
+  font-size: 13.5px !important;
+  font-weight: 650 !important;
+  line-height: 1.5 !important;
+  overflow-wrap: anywhere !important;
+}
+
+.login-page:has(.referral-source-details) .source-details-heading {
+  padding: 18px 20px !important;
+  border: 1px solid #e1e8e3 !important;
+  border-radius: 10px !important;
+  background: #f8faf8 !important;
+}
+
+.login-page:has(.referral-source-details) .source-details-heading h3 {
+  margin: 5px 0 7px !important;
+  font-size: 18px !important;
+  line-height: 1.35 !important;
+  font-weight: 700 !important;
+}
+
+.login-page:has(.referral-source-details) .source-details-heading p {
+  max-width: 900px !important;
+  margin: 0 !important;
+  color: #58675f !important;
+  font-size: 13.5px !important;
+  line-height: 1.6 !important;
+}
+
+.login-page:has(.referral-source-details) .clinical-detail-section {
+  margin-top: 16px !important;
+  padding: 18px !important;
+  border: 1px solid #e1e8e3 !important;
+  border-radius: 10px !important;
+  background: #f8faf8 !important;
+  box-shadow: none !important;
+}
+
+.login-page:has(.referral-source-details) .clinical-detail-section > h4,
+.login-page:has(.referral-source-details) .selection-display-header h4 {
+  margin: 0 0 12px !important;
+  color: #24372e !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  line-height: 1.4 !important;
+}
+
+.login-page:has(.referral-source-details) .clinical-detail-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 9px !important;
+}
+
+.login-page:has(.referral-source-details) .clinical-detail-card,
+.login-page:has(.referral-source-details) .clinical-narrative-card {
+  min-width: 0 !important;
+  padding: 13px 14px !important;
+  border: 1px solid #e1e8e3 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+.login-page:has(.referral-source-details) .clinical-narrative-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 9px !important;
+}
+
+.login-page:has(.referral-source-details) .clinical-narrative-card p {
+  margin: 0 !important;
+  color: #26362f !important;
+  font-size: 13.5px !important;
+  line-height: 1.6 !important;
+  overflow-wrap: anywhere !important;
+}
+
+.login-page:has(.referral-source-details) .selected-investigation-group {
+  border: 1px solid #dfe7e1 !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+.login-page:has(.referral-source-details) .selected-investigation-group-header {
+  padding: 11px 13px !important;
+  border-bottom: 1px solid #e3e9e4 !important;
+  background: #f6f8f6 !important;
+  font-size: 13px !important;
+}
+
+.login-page:has(.referral-source-details) .referral-timeline {
+  margin-top: 16px !important;
+  padding: 18px !important;
+  border: 1px solid #e1e8e3 !important;
+  border-radius: 10px !important;
+  background: #f8faf8 !important;
+  box-shadow: none !important;
+}
+
+.login-page:has(.referral-source-details) .timeline-content strong {
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+}
+
+.login-page:has(.referral-source-details) .timeline-content span {
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+
+.login-page:has(.referral-source-details) .login-card > hr {
+  height: 1px !important;
+  margin: 22px 0 !important;
+  border: 0 !important;
+  background: #e1e8e3 !important;
+}
+
+.login-page:has(.referral-source-details) .login-card > h3,
+.login-page:has(.referral-source-details) .receiving-updates-heading {
+  margin: 22px 0 10px !important;
+  padding-bottom: 9px !important;
+  border-bottom: 1px solid #e1e8e3 !important;
+  color: #24372e !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  line-height: 1.4 !important;
+}
+
+.login-page:has(.referral-source-details) .selection-count-badge {
+  border-radius: 6px !important;
+  background: #eef4f0 !important;
+  color: #355448 !important;
+  box-shadow: none !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+}
+
+@media (max-width: 900px) {
+  .login-page:has(.referral-source-details) .clinical-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .login-page:has(.referral-source-details) .patient-contact-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .login-page:has(.referral-source-details) {
+    padding: 10px !important;
+  }
+
+  .login-page:has(.referral-source-details) .login-card {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 16px !important;
+    border-radius: 10px !important;
+  }
+
+  .login-page:has(.referral-source-details) .referral-modal-heading-row {
+    align-items: stretch !important;
+    flex-direction: column !important;
+  }
+
+  .login-page:has(.referral-source-details) .print-referral-button {
+    width: 100% !important;
+  }
+
+  .login-page:has(.referral-source-details) .login-card > p:has(strong) {
+    display: block !important;
+  }
+
+  .login-page:has(.referral-source-details) .login-card > p:has(strong) strong {
+    display: block !important;
+    margin-bottom: 3px !important;
+  }
+
+  .login-page:has(.referral-source-details) .patient-contact-grid,
+  .login-page:has(.referral-source-details) .clinical-detail-grid,
+  .login-page:has(.referral-source-details) .clinical-narrative-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .login-page:has(.referral-source-details) .clinical-detail-card-wide {
+    grid-column: auto !important;
+  }
+}
+
+@media print {
+  .login-page:has(.referral-source-details) .login-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+}

@@ -1,0 +1,356 @@
+/* REFLINK brand consistency: shared across home, authentication, dashboards and print. */
+.brand-logo-image,
+.brand-mark-image,
+.footer-brand-mark-image {
+  display: block;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  object-position: center;
+}
+
+.brand-logo-image,
+.brand-mark-image,
+.footer-brand-mark-image {
+  padding: 2px;
+  border-radius: 11px;
+  background: #ffffff;
+}
+
+.login-logo-image {
+  display: block;
+  width: min(100%, 280px);
+  max-height: 86px;
+  height: auto;
+  object-fit: contain;
+  object-position: left center;
+  margin: 0 0 20px;
+}
+
+.print-brand {
+  display: flex;
+  align-items: flex-start;
+  margin: 0 0 5px;
+}
+
+.print-brand-logo {
+  display: block;
+  width: min(100%, 255px);
+  max-width: 255px;
+  max-height: 70px;
+  height: auto;
+  object-fit: contain;
+  object-position: left center;
+}
+
+/* Keep the wordmark legible on compact devices. */
+@media (max-width: 640px) {
+  .brand-logo-image,
+  .brand-mark-image,
+  .footer-brand-mark-image {
+    width: 40px;
+    height: 40px;
+  }
+
+  .login-logo-image {
+    width: min(100%, 245px);
+    max-height: 74px;
+  }
+
+  .print-brand-logo {
+    max-width: 205px;
+    max-height: 58px;
+  }
+}
+
+/*
+ * Print layout fix:
+ * - hide all non-print content from layout, not just visually
+ * - explicitly restore ancestors of the referral sheet using a more-specific selector
+ * - preserve the document subtree and allow long clinical sections to flow across pages
+ */
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  html,
+  body,
+  #root {
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  /*
+   * Hide non-printing nodes. The two :not() clauses exclude the print sheet
+   * and its descendants. Ancestors are re-enabled below with greater specificity.
+   */
+  body *:not(.printable-referral-sheet):not(.printable-referral-sheet *) {
+    display: none !important;
+  }
+
+  /*
+   * Keep only the ancestor chain alive. This selector intentionally includes
+   * the same :not() clauses plus :has(), so it outranks the hide selector.
+   * Without that extra specificity, an ancestor can remain display:none and
+   * the print preview becomes entirely blank.
+   */
+  body *:not(.printable-referral-sheet):not(.printable-referral-sheet *):has(.printable-referral-sheet) {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  .printable-referral-sheet,
+  .printable-referral-sheet * {
+    visibility: visible !important;
+  }
+
+  .printable-referral-sheet {
+    display: block !important;
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+    color: #111 !important;
+    background: #fff !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-size: 9pt !important;
+  }
+
+  .print-document-header {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: start !important;
+    column-gap: 8px !important;
+    row-gap: 0 !important;
+    padding-bottom: 5px !important;
+    margin: 0 0 6px !important;
+    border-bottom: 1px solid #111 !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    break-after: avoid-page !important;
+    page-break-after: avoid !important;
+  }
+
+  .print-document-header > div:first-child,
+  .print-referral-meta {
+    min-width: 0 !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .print-brand-logo {
+    display: block !important;
+    width: 150px !important;
+    max-width: 150px !important;
+    max-height: 38px !important;
+    height: auto !important;
+    margin: 0 0 3px !important;
+    object-fit: contain !important;
+    object-position: left center !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-document-header h1 {
+    margin: 2px 0 3px !important;
+    font-size: 14pt !important;
+    line-height: 1.15 !important;
+    break-before: avoid-page !important;
+    page-break-before: avoid !important;
+  }
+
+  .print-document-header p {
+    margin: 0 0 2px !important;
+    font-size: 8pt !important;
+    break-before: avoid-page !important;
+    page-break-before: avoid !important;
+  }
+
+  .print-referral-meta {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    text-align: right !important;
+    font-size: 8pt !important;
+  }
+
+  .print-section {
+    margin-top: 7px !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .print-section h2 {
+    margin: 0 0 4px !important;
+    break-after: avoid-page !important;
+    page-break-after: avoid !important;
+    font-size: 11pt !important;
+  }
+
+  .print-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+    font-size: 8pt !important;
+  }
+
+  .print-table thead {
+    display: table-header-group !important;
+  }
+
+  .print-table tr,
+  .print-signature-section {
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
+  }
+
+  .print-table th,
+  .print-table td {
+    padding: 3px 4px !important;
+    vertical-align: top !important;
+  }
+
+  .print-signature-section {
+    margin-top: 12px !important;
+  }
+
+  /* Avoid carrying unneeded screen interaction controls into print. */
+  button,
+  input,
+  select,
+  textarea,
+  .intelligence-actions {
+    display: none !important;
+  }
+}
+
+/* Compact print finishing pass: reduce excess spacing while keeping the
+   signature and facility-stamp fields usable. Long referrals may still span
+   additional pages when their content genuinely requires it. */
+@media print {
+  @page {
+    size: A4;
+    margin: 7mm;
+  }
+
+  .printable-referral-sheet {
+    font-size: 8.5pt !important;
+    line-height: 1.25 !important;
+  }
+
+  .print-document-header {
+    column-gap: 6px !important;
+    padding-bottom: 3px !important;
+    margin-bottom: 3px !important;
+  }
+
+  .print-brand-logo {
+    width: 138px !important;
+    max-width: 138px !important;
+    max-height: 34px !important;
+    margin-bottom: 2px !important;
+  }
+
+  .print-document-header h1 {
+    font-size: 12.5pt !important;
+    margin: 1px 0 2px !important;
+  }
+
+  .print-document-header p {
+    font-size: 7.5pt !important;
+    margin-bottom: 1px !important;
+  }
+
+  .print-section {
+    margin-top: 4px !important;
+  }
+
+  .print-section h2 {
+    font-size: 10pt !important;
+    margin-bottom: 2px !important;
+  }
+
+  .print-grid,
+  .print-narrative-grid {
+    gap: 3px !important;
+  }
+
+  .print-grid > div,
+  .print-narrative-grid > div {
+    padding: 3px 4px !important;
+  }
+
+  .print-grid span,
+  .print-narrative-grid span {
+    margin-bottom: 1px !important;
+    font-size: 6.5pt !important;
+  }
+
+  .print-grid strong {
+    font-size: 8pt !important;
+  }
+
+  .print-narrative-grid p {
+    line-height: 1.2 !important;
+  }
+
+  .print-table {
+    font-size: 7.5pt !important;
+  }
+
+  .print-table th,
+  .print-table td {
+    padding: 2px 3px !important;
+  }
+
+  .print-signature-section {
+    gap: 8px !important;
+    margin-top: 5px !important;
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
+  }
+
+  .print-signature-section > div {
+    min-height: 52px !important;
+  }
+
+  .signature-line {
+    height: 25px !important;
+  }
+
+  .stamp-box {
+    height: 36px !important;
+  }
+
+  .print-document-footer {
+    margin-top: 6px !important;
+    padding-top: 3px !important;
+  }
+}

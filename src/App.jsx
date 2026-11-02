@@ -1,12 +1,18 @@
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
+import { cacheValue, createClientId, getCachedValue, getQueueCount, queueReferral, syncQueuedReferrals } from "./lib/offlineReferralQueue.js";
+import { LanguageSwitcher, useLanguage } from "./lib/i18n.jsx";
 import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
 import AnalyticsDashboard from "./components/dashboards/AnalyticsDashboard.jsx";
 import AnalysisHub from "./components/dashboards/AnalysisHub.jsx";
 import "./App.css";
 import "./reflink-theme-professional.css";
-import "./admin-dashboard-modern.css";
+import "./reflink-branding.css";
+import "./reflink-human-centered-ux.css";
+import "./reflink-dashboard-refinement.css";
+import "./reflink-referral-detail-ux.css";
+import "./reflink-investigation-results-ux.css";
 
 function formatPatientAge(ageInMonths) {
   const months = Number(ageInMonths);
@@ -54,6 +60,22 @@ function formatReferralDateTime(value) {
     : date.toLocaleString();
 }
 
+
+const REFLINK_ROLE_LABELS = {
+  phc_staff: "PHC Staff",
+  receiving_staff: "Receiving Facility",
+  administrator: "Administrator",
+};
+
+function getApplicationRole(role) {
+  return REFLINK_ROLE_LABELS[String(role || "").trim().toLowerCase()] || null;
+}
+
+function isTransientAuthError(error) {
+  const message = String(error?.message || error?.details || error || "");
+  const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+  return offline || /failed to fetch|network|offline|timeout|timed out|503|502|504|err_internet_disconnected|load failed/i.test(message);
+}
 
 function parseJsonArray(value) {
   if (Array.isArray(value)) return value;
@@ -172,48 +194,131 @@ function formatClinicalLabel(value) {
 
 
 function getInvestigationResultConfig(investigation = "") {
-  const name = String(investigation).toLowerCase();
+  const name = String(investigation || "").toLowerCase();
 
-  if (name.includes("haemoglobin") || name.includes("hemoglobin") || name.includes("pcv")) {
+  if (
+    name.includes("blood group") ||
+    name.includes("blood grouping") ||
+    name.includes("abo/rh") ||
+    name.includes("rh typing")
+  ) {
     return {
-      type: "quantitative",
-      label: "Measurement",
-      statuses: ["pending", "within_range", "low", "high", "critical", "invalid"],
-      units: name.includes("pcv") ? ["%"] : ["g/dL", "g/L"],
+      type: "blood_group",
+      label: "Blood group (ABO/Rh)",
+      statuses: ["pending", "result_recorded", "invalid", "not_performed"],
+      defaultUnit: "",
     };
   }
 
-  const quantitativeTerms = [
-    "white blood cell", "wbc", "platelet", "urea", "creatinine",
-    "glucose", "temperature", "blood pressure", "pulse rate",
-    "respiratory rate", "oxygen saturation", "spo2", "sodium", "potassium",
-    "chloride", "bicarbonate", "albumin", "bilirubin", "ast", "alt",
-    "alkaline phosphatase", "electrolytes", "specific gravity", "ph", "titer"
+  if (name.includes("blood pressure") || name === "bp") {
+    return {
+      type: "blood_pressure",
+      label: "Blood pressure",
+      statuses: ["pending", "within_range", "low", "high", "critical", "invalid", "not_performed"],
+      defaultUnit: "mmHg",
+    };
+  }
+
+  if (name.includes("electrolyte")) {
+    return {
+      type: "electrolytes",
+      label: "Electrolyte panel",
+      statuses: ["pending", "within_range", "abnormal", "critical", "invalid", "not_performed"],
+      defaultUnit: "mmol/L",
+    };
+  }
+
+  if (name.includes("full blood count") || name === "fbc" || name.includes("complete blood count")) {
+    return {
+      type: "fbc_panel",
+      label: "Full blood count panel",
+      statuses: ["pending", "within_range", "abnormal", "low", "high", "critical", "invalid", "not_performed"],
+      defaultUnit: "",
+    };
+  }
+
+  if (name.includes("haemoglobin") || name.includes("hemoglobin")) {
+    return {
+      type: "quantitative",
+      label: "Haemoglobin measurement",
+      statuses: ["pending", "within_range", "low", "high", "critical", "invalid", "not_performed"],
+      defaultUnit: "g/dL",
+    };
+  }
+
+  if (name.includes("pcv") || name.includes("packed cell volume")) {
+    return {
+      type: "quantitative",
+      label: "Packed cell volume",
+      statuses: ["pending", "within_range", "low", "high", "critical", "invalid", "not_performed"],
+      defaultUnit: "%",
+    };
+  }
+
+  const quantitativeConfig = [
+    { terms: ["white blood cell", "wbc"], unit: "10^9/L" },
+    { terms: ["platelet"], unit: "10^9/L" },
+    { terms: ["urea"], unit: "mmol/L" },
+    { terms: ["creatinine"], unit: "µmol/L" },
+    { terms: ["temperature"], unit: "°C" },
+    { terms: ["pulse rate", "heart rate"], unit: "bpm" },
+    { terms: ["respiratory rate"], unit: "breaths/min" },
+    { terms: ["oxygen saturation", "spo2", "spO₂".toLowerCase()], unit: "%" },
+    { terms: ["blood glucose", "serum glucose", "glucose"], unit: "mmol/L" },
+    { terms: ["sodium", "potassium", "chloride", "bicarbonate"], unit: "mmol/L" },
+    { terms: ["specific gravity"], unit: "" },
+    { terms: ["ph"], unit: "" },
+    { terms: ["albumin"], unit: "g/L" },
+    { terms: ["bilirubin"], unit: "µmol/L" },
+    { terms: ["ast", "alt", "alkaline phosphatase"], unit: "U/L" },
+    { terms: ["titer"], unit: "" },
   ];
-  if (quantitativeTerms.some((term) => name.includes(term))) {
+
+  const quantitativeMatch = quantitativeConfig.find(({ terms }) =>
+    terms.some((term) => name.includes(term))
+  );
+  if (quantitativeMatch) {
     return {
       type: "quantitative",
       label: "Measured value",
-      statuses: ["pending", "within_range", "low", "high", "critical", "invalid"],
-      units: ["", "%", "g/dL", "mmol/L", "mg/dL", "µmol/L", "10^9/L", "bpm", "°C", "mmHg", "%"]
+      statuses: ["pending", "within_range", "low", "high", "critical", "invalid", "not_performed"],
+      defaultUnit: quantitativeMatch.unit,
     };
   }
 
   if (name.includes("urinalysis") || name.includes("urine analysis")) {
     return {
       type: "panel",
-      label: "Panel result",
+      label: "Urinalysis panel",
       statuses: ["pending", "normal", "abnormal", "inconclusive", "not_performed"],
-      units: []
+      defaultUnit: "",
     };
   }
 
-  if (name.includes("culture") || name.includes("microbiology") || name.includes("sputum") || name.includes("stool microscopy")) {
+  if (name.includes("blood culture") || name.includes("urine microscopy/culture") || name.includes("culture") || name.includes("microbiology") || name.includes("sputum") || name.includes("stool microscopy")) {
     return {
       type: "microbiology",
       label: "Microbiology result",
-      statuses: ["pending", "growth_detected", "no_growth", "detected", "not_detected", "contaminated", "inconclusive"],
-      units: []
+      statuses: ["pending", "growth_detected", "no_growth", "detected", "not_detected", "contaminated", "inconclusive", "not_performed"],
+      defaultUnit: "",
+    };
+  }
+
+  if (name.includes("cross-match") || name.includes("crossmatch")) {
+    return {
+      type: "qualitative",
+      label: "Cross-match result",
+      statuses: ["pending", "compatible", "incompatible", "inconclusive", "invalid", "not_performed"],
+      defaultUnit: "",
+    };
+  }
+
+  if (name.includes("hiv") || name.includes("hepatitis")) {
+    return {
+      type: "qualitative",
+      label: "Screening result",
+      statuses: ["pending", "reactive", "non_reactive", "indeterminate", "invalid", "not_performed"],
+      defaultUnit: "",
     };
   }
 
@@ -221,20 +326,23 @@ function getInvestigationResultConfig(investigation = "") {
     return {
       type: "imaging",
       label: "Imaging report",
-      statuses: ["pending", "no_significant_abnormality", "abnormal_finding", "inconclusive"],
-      units: []
+      statuses: ["pending", "no_significant_abnormality", "abnormal_finding", "inconclusive", "not_performed"],
+      defaultUnit: "",
     };
   }
 
   return {
     type: "qualitative",
-    label: "Result",
+    label: "Qualitative result",
     statuses: ["pending", "positive", "negative", "reactive", "non_reactive", "indeterminate", "invalid", "not_performed"],
-    units: []
+    defaultUnit: "",
   };
 }
 
 const INVESTIGATION_STATUS_LABELS = {
+  result_recorded: "Result Recorded",
+  compatible: "Compatible",
+  incompatible: "Incompatible",
   pending: "Pending / Not Yet Available",
   within_range: "Within Reference Range",
   low: "Below Reference Range",
@@ -263,6 +371,152 @@ function getInvestigationResultLabel(status) {
   return INVESTIGATION_STATUS_LABELS[status] || formatClinicalLabel(status || "pending");
 }
 
+function getInvestigationResultSummary(item) {
+  if (!item) return "";
+  const config = getInvestigationResultConfig(item.investigation);
+
+  if (config.type === "blood_group") {
+    return item.result_value || "";
+  }
+
+  if (config.type === "blood_pressure") {
+    if (item.systolic || item.diastolic) {
+      return `${item.systolic || "—"}/${item.diastolic || "—"} mmHg`;
+    }
+    return item.result_value || "";
+  }
+
+  if (config.type === "electrolytes") {
+    const components = [
+      ["Na⁺", item.sodium],
+      ["K⁺", item.potassium],
+      ["Cl⁻", item.chloride],
+      ["HCO₃⁻", item.bicarbonate],
+    ].filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
+      .map(([label, value]) => `${label}: ${value} mmol/L`);
+    return components.join(" · ") || item.result_value || "";
+  }
+
+  if (config.type === "fbc_panel") {
+    const components = [
+      ["Hb", item.haemoglobin, "g/dL"],
+      ["PCV", item.pcv, "%"],
+      ["WBC", item.wbc, "10^9/L"],
+      ["Platelets", item.platelets, "10^9/L"],
+    ].filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
+      .map(([label, value, unit]) => `${label}: ${value} ${unit}`);
+    if (item.result_value) components.push(String(item.result_value));
+    return components.join(" · ");
+  }
+
+  if (!item.result_value) return "";
+  return [String(item.result_value), item.result_unit || config.defaultUnit || ""].filter(Boolean).join(" ");
+}
+
+function parseNumericReferenceRange(referenceRange) {
+  const match = String(referenceRange || "")
+    .replace(/,/g, ".")
+    .match(/^\s*(-?\d+(?:\.\d+)?)\s*(?:-|–|—|\bto\b)\s*(-?\d+(?:\.\d+)?)/i);
+
+  if (!match) return null;
+
+  const lower = Number(match[1]);
+  const upper = Number(match[2]);
+  if (!Number.isFinite(lower) || !Number.isFinite(upper) || lower > upper) return null;
+  return { lower, upper };
+}
+
+const NUMERIC_RESULT_CLASSIFICATION_STATUSES = new Set([
+  "within_range",
+  "low",
+  "high",
+  "critical",
+]);
+
+function getInvestigationValidationMessage(item) {
+  if (!item) return "";
+
+  const config = getInvestigationResultConfig(item.investigation);
+  const status = String(item.result_status || "pending");
+
+  if (config.type === "blood_pressure") {
+    const systolicRaw = String(item.systolic ?? "").trim();
+    const diastolicRaw = String(item.diastolic ?? "").trim();
+
+    const classified =
+      NUMERIC_RESULT_CLASSIFICATION_STATUSES.has(status);
+
+    if (!systolicRaw && !diastolicRaw && !classified) return "";
+
+    if (!systolicRaw || !diastolicRaw) {
+      return "Enter both systolic and diastolic values before classifying the blood-pressure result.";
+    }
+
+    const systolic = Number(systolicRaw.replace(/,/g, "."));
+    const diastolic = Number(diastolicRaw.replace(/,/g, "."));
+
+    if (
+      !Number.isFinite(systolic) ||
+      !Number.isFinite(diastolic) ||
+      systolic <= 0 ||
+      diastolic <= 0
+    ) {
+      return "Both blood-pressure measurements must be positive numbers.";
+    }
+
+    if (systolic <= diastolic) {
+      return "Verify the entries: systolic pressure must be greater than diastolic pressure.";
+    }
+
+    return "";
+  }
+
+  if (config.type !== "quantitative") return "";
+
+  if (!NUMERIC_RESULT_CLASSIFICATION_STATUSES.has(status)) {
+    return "";
+  }
+
+  const rawValue = String(item.result_value ?? "").trim();
+
+  if (!rawValue) {
+    return "Measurement not recorded. Enter the numerical result before selecting this classification.";
+  }
+
+  const value = Number(rawValue.replace(/,/g, "."));
+
+  if (!Number.isFinite(value)) {
+    return "Enter a valid numerical measurement before classifying this result.";
+  }
+
+  // A critical result requires a recorded measurement.
+  // REFLINK does not automatically determine critical thresholds.
+  if (status === "critical") return "";
+
+  const bounds = parseNumericReferenceRange(item.reference_range);
+
+  if (!bounds) {
+    return "Reference range required. Enter the range supplied by the performing laboratory and verify the selected status.";
+  }
+
+  if (
+    status === "within_range" &&
+    (value < bounds.lower || value > bounds.upper)
+  ) {
+    return `Status mismatch: ${value} is outside the entered reference range ${bounds.lower}–${bounds.upper}.`;
+  }
+
+  if (status === "low" && value >= bounds.lower) {
+    return `Status mismatch: ${value} is not below the entered reference range ${bounds.lower}–${bounds.upper}.`;
+  }
+
+  if (status === "high" && value <= bounds.upper) {
+    return `Status mismatch: ${value} is not above the entered reference range ${bounds.lower}–${bounds.upper}.`;
+  }
+
+  return "";
+}
+
 function getInvestigationResultClass(status) {
   if (["positive", "reactive", "growth_detected", "abnormal", "abnormal_finding", "high", "low", "critical"].includes(status)) return "investigation-result-positive";
   if (["negative", "non_reactive", "no_growth", "not_detected", "normal", "within_range", "no_significant_abnormality"].includes(status)) return "investigation-result-negative";
@@ -273,12 +527,27 @@ function normalizeInvestigationRecord(item) {
   if (typeof item === "string") {
     return { category: "", investigation: item, result_status: "pending", result_value: "", result_unit: "", reference_range: "", interpretation: "", result_notes: "", result_file_path: "", result_file_name: "", result_file_type: "", result_file_size: null };
   }
+  const investigation = item?.investigation || item?.name || "Investigation";
+  const config = getInvestigationResultConfig(investigation);
+  const storedValue = item?.result_value || "";
+  let storedStatus = item?.result_status || "pending";
+
+  // Old builds incorrectly represented ABO/Rh typing as positive/negative.
+  // Treat those legacy records as needing a real group value instead of displaying a false result.
+  if (config.type === "blood_group") {
+    if (storedValue && storedStatus !== "result_recorded" && storedStatus !== "invalid" && storedStatus !== "not_performed") {
+      storedStatus = "result_recorded";
+    } else if (!storedValue && ["positive", "negative"].includes(storedStatus)) {
+      storedStatus = "pending";
+    }
+  }
+
   return {
     ...item,
     category: item?.category || "",
-    investigation: item?.investigation || item?.name || "Investigation",
-    result_status: item?.result_status || "pending",
-    result_value: item?.result_value || "",
+    investigation,
+    result_status: storedStatus,
+    result_value: storedValue,
     result_unit: item?.result_unit || "",
     reference_range: item?.reference_range || "",
     interpretation: item?.interpretation || "",
@@ -291,42 +560,153 @@ function normalizeInvestigationRecord(item) {
 }
 
 function InvestigationResultCards({ investigations, editable = false, onResultChange, onFileUpload }) {
-  if (!investigations.length) return <div className="empty-selection-state">No investigation was recorded.</div>;
+  if (!investigations.length) {
+    return <div className="empty-selection-state">No investigation was recorded.</div>;
+  }
+
   const normalized = investigations.map(normalizeInvestigationRecord);
+
   return (
     <div className="investigation-result-list">
       {normalized.map((item, index) => {
         const config = getInvestigationResultConfig(item.investigation);
+        const resultSummary = getInvestigationResultSummary(item);
+
         return (
           <div className="investigation-result-card" key={`${item.category}-${item.investigation}-${index}`}>
             <div className="investigation-result-main">
               <span className="investigation-checkmark">✓</span>
-              <div className="investigation-result-name"><strong>{item.investigation}</strong>{item.category && <small>{item.category}</small>}</div>
+              <div className="investigation-result-name">
+                <strong>{item.investigation}</strong>
+                {item.category && <small>{item.category}</small>}
+              </div>
             </div>
+
             <div className="investigation-result-control">
               <span>{config.label}</span>
               {editable ? (
-                <select value={item.result_status} onChange={(e) => onResultChange?.(index, { result_status: e.target.value })} aria-label={`Result for ${item.investigation}`}>
-                  {config.statuses.map((status) => <option value={status} key={status}>{getInvestigationResultLabel(status)}</option>)}
+                <select
+                  value={item.result_status}
+                  onChange={(e) => onResultChange?.(index, { result_status: e.target.value })}
+                  aria-label={`Result status for ${item.investigation}`}
+                >
+                  {config.statuses.map((status) => (
+                    <option value={status} key={status}>{getInvestigationResultLabel(status)}</option>
+                  ))}
                 </select>
-              ) : <span className={`investigation-result-badge ${getInvestigationResultClass(item.result_status)}`}>{getInvestigationResultLabel(item.result_status)}</span>}
+              ) : (
+                <span className={`investigation-result-badge ${getInvestigationResultClass(item.result_status)}`}>
+                  {getInvestigationResultLabel(item.result_status)}
+                </span>
+              )}
             </div>
-            {editable && (
-              <div className="investigation-result-detail-grid">
-                {config.type === "quantitative" && <>
-                  <label><span>Value</span><input value={item.result_value} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder="e.g. 32" /></label>
-                  <label><span>Unit</span><input value={item.result_unit} onChange={(e) => onResultChange?.(index, { result_unit: e.target.value })} placeholder="% / g/dL" /></label>
-                  <label><span>Reference range</span><input value={item.reference_range} onChange={(e) => onResultChange?.(index, { reference_range: e.target.value })} placeholder="Use performing laboratory range" /></label>
-                </>}
-                {config.type === "panel" && <label className="investigation-result-notes"><span>Panel findings</span><textarea value={item.result_value} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder="Record pH, protein, glucose, blood, nitrite, leukocytes, specific gravity and other findings." rows={3} /></label>}
-                {(config.type === "qualitative" || config.type === "microbiology" || config.type === "imaging") && <label className="investigation-result-notes"><span>Result / report detail</span><textarea value={item.result_value} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder={config.type === "imaging" ? "Enter report findings and impression." : "Enter organism, finding or additional result detail."} rows={3} /></label>}
-                <label className="investigation-result-notes"><span>Clinical/laboratory note</span><textarea value={item.result_notes} onChange={(e) => onResultChange?.(index, { result_notes: e.target.value })} placeholder="Optional note" rows={2} /></label>
+
+            {getInvestigationValidationMessage(item) && (
+              <div
+                className="investigation-validation-warning"
+                role="status"
+                style={{
+                  marginTop: "0.5rem",
+                  padding: "0.65rem 0.75rem",
+                  border: "1px solid #f59e0b",
+                  borderRadius: "0.5rem",
+                  background: "#fffbeb",
+                  color: "#92400e",
+                  fontSize: "0.875rem",
+                  lineHeight: 1.45,
+                }}
+              >
+                <strong>Verification required: </strong>
+                {getInvestigationValidationMessage(item)}
               </div>
             )}
-            {!editable && item.result_value && <div className="investigation-result-value"><span>Result detail</span><strong>{item.result_value}</strong>{item.result_unit && <small>{item.result_unit}</small>}{item.reference_range && <small>Reference: {item.reference_range}</small>}</div>}
+
+            {editable && (
+              <div className="investigation-result-detail-grid">
+                {config.type === "blood_group" && (
+                  <label>
+                    <span>Blood group (ABO/Rh)</span>
+                    <select
+                      value={item.result_value || ""}
+                      onChange={(e) => onResultChange?.(index, {
+                        result_value: e.target.value,
+                        result_status: e.target.value ? "result_recorded" : "pending",
+                      })}
+                    >
+                      <option value="">Select blood group</option>
+                      {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map((group) => (
+                        <option value={group} key={group}>{group}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {config.type === "blood_pressure" && (
+                  <>
+                    <label><span>Systolic (mmHg)</span><input inputMode="decimal" value={item.systolic || ""} onChange={(e) => onResultChange?.(index, { systolic: e.target.value })} placeholder="e.g. 120" /></label>
+                    <label><span>Diastolic (mmHg)</span><input inputMode="decimal" value={item.diastolic || ""} onChange={(e) => onResultChange?.(index, { diastolic: e.target.value })} placeholder="e.g. 80" /></label>
+                  </>
+                )}
+
+                {config.type === "electrolytes" && (
+                  <>
+                    <label><span>Sodium Na⁺ (mmol/L)</span><input inputMode="decimal" value={item.sodium || ""} onChange={(e) => onResultChange?.(index, { sodium: e.target.value })} placeholder="Sodium" /></label>
+                    <label><span>Potassium K⁺ (mmol/L)</span><input inputMode="decimal" value={item.potassium || ""} onChange={(e) => onResultChange?.(index, { potassium: e.target.value })} placeholder="Potassium" /></label>
+                    <label><span>Chloride Cl⁻ (mmol/L)</span><input inputMode="decimal" value={item.chloride || ""} onChange={(e) => onResultChange?.(index, { chloride: e.target.value })} placeholder="Chloride" /></label>
+                    <label><span>Bicarbonate HCO₃⁻ (mmol/L)</span><input inputMode="decimal" value={item.bicarbonate || ""} onChange={(e) => onResultChange?.(index, { bicarbonate: e.target.value })} placeholder="Bicarbonate" /></label>
+                  </>
+                )}
+
+                {config.type === "fbc_panel" && (
+                  <>
+                    <label><span>Haemoglobin (g/dL)</span><input inputMode="decimal" value={item.haemoglobin || ""} onChange={(e) => onResultChange?.(index, { haemoglobin: e.target.value })} placeholder="Hb" /></label>
+                    <label><span>PCV (%)</span><input inputMode="decimal" value={item.pcv || ""} onChange={(e) => onResultChange?.(index, { pcv: e.target.value })} placeholder="PCV" /></label>
+                    <label><span>WBC (10^9/L)</span><input inputMode="decimal" value={item.wbc || ""} onChange={(e) => onResultChange?.(index, { wbc: e.target.value })} placeholder="White blood cells" /></label>
+                    <label><span>Platelets (10^9/L)</span><input inputMode="decimal" value={item.platelets || ""} onChange={(e) => onResultChange?.(index, { platelets: e.target.value })} placeholder="Platelet count" /></label>
+                    <label className="investigation-result-notes"><span>Additional FBC report details</span><textarea value={item.result_value || ""} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder="Differential count or laboratory report comments" rows={2} /></label>
+                  </>
+                )}
+
+                {config.type === "quantitative" && (
+                  <>
+                    <label><span>Measured value</span><input inputMode="decimal" value={item.result_value || ""} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder="Enter measured value" /></label>
+                    <label><span>Unit</span><input value={item.result_unit || config.defaultUnit || ""} onChange={(e) => onResultChange?.(index, { result_unit: e.target.value })} placeholder={config.defaultUnit || "Unit"} /></label>
+                    <label><span>Laboratory reference range</span><input value={item.reference_range || ""} onChange={(e) => onResultChange?.(index, { reference_range: e.target.value })} placeholder="Use performing laboratory range" /></label>
+                  </>
+                )}
+
+                {config.type === "panel" && (
+                  <label className="investigation-result-notes"><span>Panel findings</span><textarea value={item.result_value || ""} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder="Record pH, protein, glucose, blood, nitrite, leukocytes, specific gravity and other findings." rows={3} /></label>
+                )}
+
+                {(config.type === "qualitative" || config.type === "microbiology" || config.type === "imaging") && (
+                  <label className="investigation-result-notes"><span>Result / report detail</span><textarea value={item.result_value || ""} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder={config.type === "imaging" ? "Enter report findings and impression." : "Enter additional result details, organism or finding."} rows={3} /></label>
+                )}
+
+                <label className="investigation-result-notes"><span>Clinical/laboratory note</span><textarea value={item.result_notes || ""} onChange={(e) => onResultChange?.(index, { result_notes: e.target.value })} placeholder="Optional note" rows={2} /></label>
+              </div>
+            )}
+
+            {!editable && (resultSummary || item.reference_range || item.result_notes) && (
+              <div className="investigation-result-value">
+                <span>{config.type === "blood_group" ? "Blood group" : "Recorded result"}</span>
+                {resultSummary && <strong>{resultSummary}</strong>}
+                {item.reference_range && <small>Reference range: {item.reference_range}</small>}
+                {item.result_notes && <small>Note: {item.result_notes}</small>}
+              </div>
+            )}
+
             <div className="investigation-file-row">
-              <div><span>Original result</span><strong>{item.result_file_name || "No result document attached"}</strong>{item.result_file_size ? <small>{Math.round(item.result_file_size / 1024)} KB</small> : null}</div>
-              {editable && <label className="upload-result-button">📎 {item.result_file_name ? "Replace result" : "Upload result"}<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv" onChange={(e) => onFileUpload?.(index, e.target.files?.[0] || null)} /></label>}
+              <div>
+                <span>Original result</span>
+                <strong>{item.result_file_name || "No result document attached"}</strong>
+                {item.result_file_size ? <small>{Math.round(item.result_file_size / 1024)} KB</small> : null}
+              </div>
+              {editable && (
+                <label className="upload-result-button">📎 {item.result_file_name ? "Replace result" : "Upload result"}
+                  <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv" onChange={(e) => onFileUpload?.(index, e.target.files?.[0] || null)} />
+                </label>
+              )}
             </div>
           </div>
         );
@@ -346,692 +726,277 @@ function PrintReferralSheet({
 
   const hasReceivingUpdate = Boolean(
     referral?.assessment_findings ||
-      referral?.final_diagnosis ||
-      referral?.diagnosis_category ||
-      referral?.diagnosis_status ||
-      referral?.treatment_provided ||
-      referral?.procedures_performed ||
-      referral?.clinical_feedback ||
-      referral?.disposition
+    referral?.final_diagnosis ||
+    referral?.diagnosis_category ||
+    referral?.diagnosis_status ||
+    referral?.treatment_provided ||
+    referral?.procedures_performed ||
+    referral?.clinical_feedback ||
+    referral?.disposition
   );
-
-  const referralId =
-    referral?.referral_number || "DRAFT REFERRAL";
-
-  const patientIdentifier =
-    referral?.patient_identifier || "Not recorded";
-
-  const referringFacility =
-    referral?.referring_facility?.name ||
-    referral?.referring_facility_name ||
-    "Not recorded";
-
-  const receivingFacility =
-    referral?.receiving_facility?.name ||
-    referral?.receiving_facility_name ||
-    "Not recorded";
 
   return (
     <div className="printable-referral-sheet">
-
-      {/* =====================================================
-          DOCUMENT HEADER
-      ===================================================== */}
       <header className="print-document-header">
-
-        <div className="print-brand-block">
-          <div className="print-brand-mark">
-            <span>R</span>
-          </div>
-
-          <div>
-            <div className="print-brand">REFLINK</div>
-
-            <div className="print-brand-subtitle">
-              DIGITAL REFERRAL & CARE CONTINUITY SYSTEM
-            </div>
-
-            <h1>Patient Referral Form</h1>
-
-            <p>
-              Secure inter-facility referral • {copyLabel}
-            </p>
-          </div>
+        <div>
+          <img className="print-brand-logo" src="/logo.png" alt="REFLINK — Digital Referral & Care-Continuity Platform" />
+          <h1>Patient Referral Form</h1>
+          <p>Digital referral • {copyLabel}</p>
         </div>
 
         <div className="print-referral-meta">
           <span>REFLINK ID</span>
-
-          <strong>{referralId}</strong>
-
-          <small>
-            Created:{" "}
-            {formatReferralDateTime(referral?.created_at)}
-          </small>
+          <strong>{referral?.referral_number || "DRAFT REFERRAL"}</strong>
+          <small>{formatReferralDateTime(referral?.created_at)}</small>
         </div>
-
       </header>
 
-
-      {/* =====================================================
-          STATUS BAR
-      ===================================================== */}
-      <section className="print-status-bar">
-
-        <div>
-          <span>REFERRAL STATUS</span>
-          <strong>
-            {getStatusLabel(referral?.status)}
-          </strong>
-        </div>
-
-        <div>
-          <span>URGENCY</span>
-          <strong>
-            {formatClinicalLabel(referral?.urgency)}
-          </strong>
-        </div>
-
-        <div>
-          <span>DOCUMENT TYPE</span>
-          <strong>{copyLabel}</strong>
-        </div>
-
-      </section>
-
-
-      {/* =====================================================
-          PATIENT INFORMATION
-      ===================================================== */}
-      <section className="print-section">
-
-        <div className="print-section-title">
-          <span>01</span>
-          <h2>Patient Information</h2>
-        </div>
-
-        <div className="print-grid print-patient-grid">
-
+      <section className="print-section print-identity-section">
+        <div className="print-identity-grid">
           <div>
-            <span>Patient Identifier</span>
-            <strong>{patientIdentifier}</strong>
+            <span>Patient / Identifier</span>
+            <strong>{referral?.patient_identifier || "Not recorded"}</strong>
           </div>
-
           <div>
             <span>Age</span>
-            <strong>
-              {formatPatientAge(
-                referral?.patient_age_months
-              )}
-            </strong>
+            <strong>{formatPatientAge(referral?.patient_age_months)}</strong>
           </div>
-
           <div>
             <span>Sex</span>
-            <strong>
-              {formatClinicalLabel(
-                referral?.patient_sex
-              )}
-            </strong>
+            <strong>{formatClinicalLabel(referral?.patient_sex)}</strong>
           </div>
-
           <div>
-            <span>Patient Phone</span>
-            <strong>
-              {referral?.patient_phone ||
-                "Not recorded"}
-            </strong>
+            <span>Urgency</span>
+            <strong>{formatClinicalLabel(referral?.urgency)}</strong>
           </div>
-
-          <div className="print-grid-span-2">
-            <span>Patient Address</span>
-            <strong>
-              {referral?.patient_address ||
-                "Not recorded"}
-            </strong>
-          </div>
-
         </div>
-
       </section>
 
-
-      {/* =====================================================
-          NEXT OF KIN
-      ===================================================== */}
-      {(referral?.relative_name ||
-        referral?.relative_phone ||
-        referral?.relative_relationship) && (
-
-        <section className="print-section">
-
-          <div className="print-section-title">
-            <span>02</span>
-            <h2>Next of Kin / Emergency Contact</h2>
-          </div>
-
-          <div className="print-grid">
-
-            <div>
-              <span>Name</span>
-              <strong>
-                {referral?.relative_name ||
-                  "Not recorded"}
-              </strong>
-            </div>
-
-            <div>
-              <span>Relationship</span>
-              <strong>
-                {referral?.relative_relationship ||
-                  "Not recorded"}
-              </strong>
-            </div>
-
-            <div>
-              <span>Phone</span>
-              <strong>
-                {referral?.relative_phone ||
-                  "Not recorded"}
-              </strong>
-            </div>
-
-          </div>
-
-        </section>
-      )}
-
-
-      {/* =====================================================
-          REFERRAL PATHWAY
-      ===================================================== */}
       <section className="print-section">
-
-        <div className="print-section-title">
-          <span>03</span>
-          <h2>Referral Pathway</h2>
-        </div>
-
-        <div className="referral-pathway">
-
-          <div className="facility-card">
-            <span>FROM — REFERRING FACILITY</span>
-
-            <strong>{referringFacility}</strong>
-
-            {referral?.referring_facility?.lga && (
-              <small>
-                {referral.referring_facility.lga}
-                {referral.referring_facility.state
-                  ? `, ${referral.referring_facility.state}`
-                  : ""}
-              </small>
-            )}
+        <h2>Referral Information</h2>
+        <div className="print-grid">
+          <div>
+            <span>Referring Facility</span>
+            <strong>
+              {referral?.referring_facility?.name ||
+                referral?.referring_facility_name ||
+                "Not recorded"}
+            </strong>
           </div>
-
-          <div className="pathway-arrow">
-            →
+          <div>
+            <span>Receiving Facility</span>
+            <strong>
+              {referral?.receiving_facility?.name ||
+                referral?.receiving_facility_name ||
+                "Not recorded"}
+            </strong>
           </div>
-
-          <div className="facility-card">
-            <span>TO — RECEIVING FACILITY</span>
-
-            <strong>{receivingFacility}</strong>
-
-            {referral?.receiving_facility?.lga && (
-              <small>
-                {referral.receiving_facility.lga}
-                {referral.receiving_facility.state
-                  ? `, ${referral.receiving_facility.state}`
-                  : ""}
-              </small>
-            )}
+          <div>
+            <span>Status</span>
+            <strong>{getStatusLabel(referral?.status)}</strong>
           </div>
-
-        </div>
-
-        <div className="print-grid referral-date-grid">
-
           <div>
             <span>Referral Date</span>
-            <strong>
-              {formatReferralDateTime(
-                referral?.created_at
-              )}
-            </strong>
+            <strong>{formatReferralDateTime(referral?.created_at)}</strong>
           </div>
-
-          <div>
-            <span>Referral Number</span>
-            <strong>{referralId}</strong>
-          </div>
-
         </div>
-
       </section>
 
-
-      {/* =====================================================
-          CLINICAL PRESENTATION
-      ===================================================== */}
       <section className="print-section">
-
-        <div className="print-section-title">
-          <span>04</span>
-          <h2>Clinical Presentation</h2>
-        </div>
-
+        <h2>Clinical Summary</h2>
         <div className="print-narrative-grid">
-
-          <div className="print-narrative-card">
+          <div>
             <span>Chief Complaint</span>
-            <p>
-              {referral?.chief_complaint ||
-                "Not recorded"}
-            </p>
+            <p>{referral?.chief_complaint || "Not recorded"}</p>
           </div>
-
-          <div className="print-narrative-card">
+          <div>
             <span>Clinical Summary</span>
-            <p>
-              {referral?.clinical_summary ||
-                "Not recorded"}
-            </p>
+            <p>{referral?.clinical_summary || "Not recorded"}</p>
           </div>
-
-          <div className="print-narrative-card">
+          <div>
             <span>Physical Findings</span>
-            <p>
-              {referral?.physical_findings ||
-                "Not recorded"}
-            </p>
+            <p>{referral?.physical_findings || "Not recorded"}</p>
           </div>
-
-          <div className="print-narrative-card">
+          <div>
+            <span>Treatment Given at Referring Facility</span>
+            <p>{referral?.treatment_given || "Not recorded"}</p>
+          </div>
+          <div>
             <span>Reason for Referral</span>
-            <p>
-              {referral?.referral_reason ||
-                "Not recorded"}
-            </p>
+            <p>{referral?.referral_reason || "Not recorded"}</p>
           </div>
-
         </div>
-
       </section>
 
-
-      {/* =====================================================
-          TREATMENT GIVEN
-      ===================================================== */}
       <section className="print-section">
-
-        <div className="print-section-title">
-          <span>05</span>
-          <h2>Treatment Given Before Referral</h2>
-        </div>
-
-        <div className="print-narrative-card">
-          <span>Treatment / Interventions</span>
-
-          <p>
-            {referral?.treatment_given ||
-              "No treatment documented."}
-          </p>
-        </div>
-
-      </section>
-
-
-      {/* =====================================================
-          DIAGNOSIS
-      ===================================================== */}
-      <section className="print-section">
-
-        <div className="print-section-title">
-          <span>06</span>
-          <h2>Diagnosis</h2>
-        </div>
-
+        <h2>Diagnosis</h2>
         {diagnoses.length ? (
-
           <table className="print-table">
-
             <thead>
               <tr>
                 <th>#</th>
                 <th>Status</th>
                 <th>Category</th>
-                <th>Diagnosis / Clinical Impression</th>
+                <th>Diagnosis</th>
               </tr>
             </thead>
-
             <tbody>
-
               {diagnoses.map((item, index) => (
-
-                <tr
-                  key={`${item?.diagnosis || index}-${index}`}
-                >
-
+                <tr key={`${item?.diagnosis || index}-${index}`}>
                   <td>{index + 1}</td>
-
-                  <td>
-                    {formatClinicalLabel(
-                      item?.status
-                    )}
-                  </td>
-
-                  <td>
-                    {item?.category ||
-                      "Not recorded"}
-                  </td>
-
-                  <td>
-                    {item?.diagnosis ||
-                      item?.name ||
-                      "Not recorded"}
-                  </td>
-
+                  <td>{formatClinicalLabel(item?.status)}</td>
+                  <td>{item?.category || "Not recorded"}</td>
+                  <td>{item?.diagnosis || item?.name || "Not recorded"}</td>
                 </tr>
-
               ))}
-
             </tbody>
-
           </table>
-
         ) : (
-
-          <div className="print-empty-state">
-            No diagnosis recorded.
-          </div>
-
+          <p>None recorded.</p>
         )}
-
       </section>
 
-
-      {/* =====================================================
-          INVESTIGATIONS
-      ===================================================== */}
       <section className="print-section">
-
-        <div className="print-section-title">
-          <span>07</span>
-          <h2>Investigations & Results</h2>
-        </div>
-
+        <h2>Investigations & Results</h2>
         {investigations.length ? (
-
           <table className="print-table">
-
             <thead>
               <tr>
                 <th>#</th>
                 <th>Category</th>
                 <th>Investigation</th>
-                <th>Result / Status</th>
+                <th>Result</th>
               </tr>
             </thead>
-
             <tbody>
-
               {investigations.map((item, index) => (
-
-                <tr
-                  key={`${item.category}-${item.investigation}-${index}`}
-                >
-
+                <tr key={`${item.category}-${item.investigation}-${index}`}>
                   <td>{index + 1}</td>
-
+                  <td>{item.category || "Not recorded"}</td>
+                  <td>{item.investigation}</td>
                   <td>
-                    {item.category ||
-                      "Other"}
+                    <strong>{getInvestigationResultLabel(item.result_status)}</strong>
+                    {getInvestigationResultSummary(item) && <div>{getInvestigationResultSummary(item)}</div>}
+                    {item.reference_range && <small>Reference range: {item.reference_range}</small>}
+                    {item.result_notes && <small>Note: {item.result_notes}</small>}
                   </td>
-
-                  <td>
-                    {item.investigation}
-                  </td>
-
-                  <td>
-                    {getInvestigationResultLabel(
-                      item.result_status
-                    )}
-                  </td>
-
                 </tr>
-
               ))}
-
             </tbody>
-
           </table>
-
         ) : (
-
-          <div className="print-empty-state">
-            No investigations recorded.
-          </div>
-
+          <p>None recorded.</p>
         )}
-
       </section>
 
-
-      {/* =====================================================
-          RECEIVING FACILITY UPDATE
-      ===================================================== */}
       {hasReceivingUpdate && (
-
-        <section className="print-section receiving-update-section">
-
-          <div className="print-section-title">
-            <span>08</span>
-            <h2>Receiving Facility Update</h2>
-          </div>
-
+        <section className="print-section">
+          <h2>Receiving Facility Update</h2>
           <div className="print-narrative-grid">
-
             {referral?.assessment_findings && (
-              <div className="print-narrative-card">
+              <div>
                 <span>Assessment Findings</span>
-                <p>
-                  {referral.assessment_findings}
-                </p>
+                <p>{referral.assessment_findings}</p>
               </div>
             )}
-
             {referral?.final_diagnosis && (
-              <div className="print-narrative-card">
-                <span>Final Diagnosis / Clinical Impression</span>
-                <p>
-                  {referral.final_diagnosis}
-                </p>
+              <div>
+                <span>Final Diagnosis</span>
+                <p>{referral.final_diagnosis}</p>
               </div>
             )}
 
             {referral?.diagnosis_status && (
               <div>
                 <span>Diagnosis Status</span>
-                <strong>
-                  {formatClinicalLabel(
-                    referral.diagnosis_status
-                  )}
-                </strong>
+                <p>{formatClinicalLabel(referral.diagnosis_status)}</p>
               </div>
             )}
 
             {referral?.diagnosis_category && (
               <div>
                 <span>Diagnosis Category</span>
-                <strong>
-                  {referral.diagnosis_category}
-                </strong>
+                <p>{referral.diagnosis_category}</p>
               </div>
             )}
 
             {referral?.treatment_provided && (
-              <div className="print-narrative-card">
+              <div>
                 <span>Treatment Provided</span>
-                <p>
-                  {referral.treatment_provided}
-                </p>
+                <p>{referral.treatment_provided}</p>
               </div>
             )}
-
             {referral?.procedures_performed && (
-              <div className="print-narrative-card">
+              <div>
                 <span>Procedures Performed</span>
-                <p>
-                  {referral.procedures_performed}
-                </p>
+                <p>{referral.procedures_performed}</p>
               </div>
             )}
-
             {referral?.clinical_feedback && (
-              <div className="print-narrative-card">
+              <div>
                 <span>Clinical Feedback</span>
-                <p>
-                  {referral.clinical_feedback}
-                </p>
+                <p>{referral.clinical_feedback}</p>
               </div>
             )}
-
             {referral?.disposition && (
               <div>
                 <span>Disposition</span>
-                <strong>
-                  {formatClinicalLabel(
-                    referral.disposition
-                  )}
-                </strong>
+                <p>{formatClinicalLabel(referral.disposition)}</p>
               </div>
             )}
-
           </div>
-
         </section>
-
       )}
 
-
-      {/* =====================================================
-          REFERRAL CONTINUITY
-      ===================================================== */}
-      <section className="print-section">
-
-        <div className="print-section-title">
-          <span>09</span>
-          <h2>Referral Continuity</h2>
-        </div>
-
-        <div className="print-continuity">
-
-          <div>
-            <span>01</span>
-            <strong>Sent</strong>
-          </div>
-
-          <div className="continuity-line" />
-
-          <div>
-            <span>02</span>
-            <strong>Acknowledged</strong>
-          </div>
-
-          <div className="continuity-line" />
-
-          <div>
-            <span>03</span>
-            <strong>Patient Arrived</strong>
-          </div>
-
-          <div className="continuity-line" />
-
-          <div>
-            <span>04</span>
-            <strong>Assessment</strong>
-          </div>
-
-          <div className="continuity-line" />
-
-          <div>
-            <span>05</span>
-            <strong>Outcome</strong>
-          </div>
-
-        </div>
-
-      </section>
-
-
-      {/* =====================================================
-          SIGNATURES
-      ===================================================== */}
       <section className="print-signature-section">
-
-        <div className="signature-block">
+        <div>
           <span>Referring Health Worker</span>
           <div className="signature-line" />
           <small>Signature / Date</small>
         </div>
-
-        <div className="signature-block">
+        <div>
           <span>Receiving Health Worker</span>
           <div className="signature-line" />
           <small>Signature / Date</small>
         </div>
-
-        <div className="signature-block stamp-signature">
+        <div>
           <span>Facility Stamp</span>
           <div className="stamp-box" />
           <small>Official facility stamp</small>
         </div>
-
       </section>
 
-
-      {/* =====================================================
-          DOCUMENT FOOTER
-      ===================================================== */}
       <footer className="print-document-footer">
-
-        <div>
-          <strong>REFLINK</strong>
-          <span>
-            Digital referral for continuity of care
-          </span>
-        </div>
-
-        <div>
-          <span>REFLINK ID:</span>
-          <strong>{referralId}</strong>
-        </div>
-
-        <p>
-          Keep this paper copy with the patient
-          referral record. Confidential clinical
-          information — handle appropriately.
-        </p>
-
+        REFLINK • Keep this paper copy with the patient referral record.
       </footer>
-
     </div>
   );
 }
 
-function printReferralForm() {
-  window.print();
+async function printReferralForm(referral, copyLabel = "REFERRAL COPY", onCount = null) {
+  let printNumber = null;
+  if (referral?.id) {
+    try {
+      const { data, error } = await supabase.rpc("log_referral_print", {
+        p_referral_id: referral.id,
+        p_copy_label: copyLabel,
+      });
+      if (!error) printNumber = Number(data);
+    } catch (error) {
+      console.warn("REFLINK print history unavailable", error);
+    }
+  }
+  if (typeof onCount === "function") onCount(printNumber);
+  window.setTimeout(() => window.print(), 80);
+  return printNumber;
 }
 
 function ReferralSourceDetails({ referral, editableInvestigationResults = false, onInvestigationResultChange }) {
   const diagnoses = getDiagnosisRecords(referral);
   const investigations = getInvestigationRecords(referral);
-
   const rawCategories = parseJsonArray(
     referral?.investigation_categories
   );
-
   const investigationCategories = rawCategories.length
     ? rawCategories
         .map((item) =>
@@ -1048,7 +1013,8 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
 
   const groupedInvestigations = investigations.reduce(
     (groups, item) => {
-      const category = item?.category || "Other Investigations";
+      const category =
+        item?.category || "Other Investigations";
 
       if (!groups[category]) {
         groups[category] = [];
@@ -1060,13 +1026,20 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
         (typeof item === "string" ? item : "");
 
       if (investigation) {
-        groups[category].push(investigation);
+        // Preserve saved result status, values, units and notes.
+        // Legacy string entries remain supported.
+        groups[category].push(
+          typeof item === "string"
+            ? { category, investigation }
+            : item
+        );
       }
 
       return groups;
     },
     {}
   );
+
 
   return (
     <section className="referral-source-details">
@@ -1331,7 +1304,11 @@ function ReferralTimeline({ referral }) {
     },
     {
       key: "assessment",
-      label: "Assessment Completed",
+      label: referral.assessment_completed_at
+  ? "Assessment Completed"
+  : referral.status === "under_assessment"
+    ? "Assessment in Progress"
+    : "Assessment",
       timestamp: referral.assessment_completed_at,
     },
     {
@@ -1379,7 +1356,15 @@ function ReferralTimeline({ referral }) {
               </span>
               <div className="timeline-content">
                 <strong>{step.label}</strong>
-                <span>{completed ? formatReferralDateTime(step.timestamp) : "Awaiting update"}</span>
+                <span>
+  {completed
+    ? formatReferralDateTime(step.timestamp)
+    : current &&
+        step.key === "assessment" &&
+        referral.status === "under_assessment"
+      ? "In progress"
+      : "Awaiting update"}
+</span>
               </div>
             </div>
           );
@@ -1393,7 +1378,78 @@ function ReferralTimeline({ referral }) {
    MAIN APP
    ========================================================= */
 
+const REFLINK_LOGO = "/logo.png";
+const REFLINK_MARK = "/reflink-mark.png";
+
+const CHIEF_COMPLAINT_OPTIONS = [
+  "Fever", "Difficulty breathing", "Severe pain", "Bleeding",
+  "Convulsion", "Altered consciousness", "Pregnancy/labour complication",
+  "Injury/trauma", "Dehydration", "Severe weakness", "Childhood illness",
+  "Other",
+];
+
+const PHYSICAL_FINDING_OPTIONS = [
+  "Pale", "Febrile", "Dehydrated", "Unconscious", "Respiratory distress",
+  "Hypotension", "Hypertension", "Low oxygen saturation", "Active bleeding",
+  "Convulsion", "Severe pain", "Oedema", "Jaundice", "Other",
+];
+
+const TREATMENT_OPTIONS = [
+  "IV fluids", "Antibiotics", "Antimalarial", "Analgesia", "Oxygen",
+  "Blood transfusion", "Anticonvulsant", "Wound care", "Referral stabilization",
+  "None", "Other",
+];
+
+function OfflineStatusBadge() {
+  const [online, setOnline] = useState(navigator.onLine);
+  const [queued, setQueued] = useState(0);
+  useEffect(() => {
+    const refresh = async () => setQueued(await getQueueCount());
+    const onOnline = () => { setOnline(true); refresh(); };
+    const onOffline = () => setOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    refresh();
+    const timer = window.setInterval(refresh, 5000);
+    return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); window.clearInterval(timer); };
+  }, []);
+  return (
+    <span className={`reflink-connectivity-badge ${online ? "is-online" : "is-offline"}`} aria-live="polite">
+      <span className="reflink-connectivity-dot" />
+      {online ? "Online" : "Offline"}{queued > 0 ? ` • ${queued} waiting` : ""}
+    </span>
+  );
+}
+
+async function requestReferralSms(referralId, type) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+    const response = await fetch("/api/referral-sms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ referralId, type }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) console.warn("REFLINK SMS notification:", result?.error || response.statusText);
+  } catch (error) {
+    console.warn("REFLINK SMS notification unavailable", error);
+  }
+}
+
+function urgencyMeta(urgency) {
+  const value = String(urgency || "routine").toLowerCase();
+  if (value === "emergency") return { label: "Emergency", className: "urgency-emergency", sla: "Acknowledgement target: 15 minutes" };
+  if (value === "urgent") return { label: "Urgent", className: "urgency-urgent", sla: "Acknowledgement target: 2 hours" };
+  return { label: "Routine", className: "urgency-routine", sla: "Acknowledgement target: 24 hours" };
+}
+
+function isAckOverdue(referral) {
+  return referral?.status === "sent" && referral?.ack_due_at && new Date(referral.ack_due_at).getTime() < Date.now();
+}
+
 function App() {
+  const { t } = useLanguage();
   const [screen, setScreen] = useState("home");
   const [role, setRole] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -1417,6 +1473,23 @@ function App() {
   const [passwordError, setPasswordError] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [offlineSyncMessage, setOfflineSyncMessage] = useState("");
+
+  useEffect(() => {
+    const sync = async () => {
+      if (!navigator.onLine) return;
+      try {
+        const result = await syncQueuedReferrals(supabase);
+        if (result.synced > 0) setOfflineSyncMessage(`${result.synced} offline referral${result.synced === 1 ? "" : "s"} synced successfully.`);
+      } catch (error) {
+        console.warn("REFLINK offline sync", error);
+      }
+    };
+    sync();
+    window.addEventListener("online", sync);
+    const timer = window.setInterval(sync, 15000);
+    return () => { window.removeEventListener("online", sync); window.clearInterval(timer); };
+  }, []);
 
   /* =========================================================
    LOGIN / AUTHENTICATION
@@ -1461,38 +1534,34 @@ const handleSignIn = async () => {
       .single();
 
     if (profileError || !userProfile) {
-      console.error(
-        "Profile loading error:",
-        profileError
-      );
+      console.warn("REFLINK profile query after sign-in failed", profileError?.message || "No profile returned");
+
+      if (isTransientAuthError(profileError)) {
+        try {
+          const cachedProfile = await getCachedValue(`profile:${user.id}`, null);
+          const cachedRole = getApplicationRole(cachedProfile?.role);
+          if (cachedProfile && cachedRole && String(cachedProfile.id) === String(user.id)) {
+            setProfile({ ...cachedProfile, auth_user_id: user.id });
+            setRole(cachedRole);
+            setDashboardView("overview");
+            setDashboardFilter("all");
+            setOfflineSyncMessage("Connection to Supabase is temporarily unavailable. Your saved workspace is open; live data may not load until connectivity returns.");
+            setScreen(cachedProfile.must_change_password ? "change-password" : "dashboard");
+            return;
+          }
+        } catch (cacheError) {
+          console.warn("REFLINK cached sign-in profile unavailable", cacheError);
+        }
+      }
 
       setLoginError(
-        "Login successful, but your REFLINK profile could not be loaded."
+        "Your credentials were accepted, but REFLINK could not verify your profile. Check your connection and retry. Your session has not been forcibly signed out."
       );
-
-      await supabase.auth.signOut();
       return;
     }
 
     // 3. Normalize role
-    const normalizedRole =
-      String(userProfile.role || "")
-        .trim()
-        .toLowerCase();
-
-    let applicationRole = null;
-
-    if (normalizedRole === "phc_staff") {
-      applicationRole = "PHC Staff";
-    } else if (
-      normalizedRole === "receiving_staff"
-    ) {
-      applicationRole = "Receiving Facility";
-    } else if (
-      normalizedRole === "administrator"
-    ) {
-      applicationRole = "Administrator";
-    }
+    const applicationRole = getApplicationRole(userProfile.role);
 
     // 4. Reject unsupported roles
     if (!applicationRole) {
@@ -1505,7 +1574,6 @@ const handleSignIn = async () => {
         `Your REFLINK account has an unsupported role: "${userProfile.role}". Please contact the system administrator.`
       );
 
-      await supabase.auth.signOut();
       return;
     }
 
@@ -1514,6 +1582,7 @@ const handleSignIn = async () => {
       ...userProfile,
       auth_user_id: user.id,
     });
+    try { await cacheValue(`profile:${user.id}`, { ...userProfile, auth_user_id: user.id }); } catch (cacheError) { console.warn("REFLINK profile cache skipped", cacheError); }
 
     setRole(applicationRole);
 
@@ -1553,42 +1622,170 @@ const handleSignIn = async () => {
   }
 };
 
-  /* =========================================================
-     TEST SUPABASE CONNECTION
-     ========================================================= */
-
   useEffect(() => {
-    const testSupabase = async () => {
-      const { data, error } = await supabase
-        .from("facilities")
-        .select("*")
-        .limit(1);
+    let active = true;
+    let restoreSequence = 0;
+    let currentSessionUser = null;
+    let initialSessionHandled = false;
 
-      console.log("Supabase data:", data);
-      console.log("Supabase error:", error);
+    const applyWorkspaceProfile = async (user, profileRow, fromCache = false) => {
+      if (!active) return;
+
+      const applicationRole = getApplicationRole(profileRow?.role);
+      if (!profileRow || !applicationRole || String(profileRow.id) !== String(user.id)) {
+        setLoginError("Your REFLINK profile could not be verified. Please contact the system administrator.");
+        setScreen("login");
+        return;
+      }
+
+      const restoredProfile = { ...profileRow, auth_user_id: user.id };
+      setProfile(restoredProfile);
+      setRole(applicationRole);
+      setDashboardView("overview");
+      setDashboardFilter("all");
+      setLoginError("");
+      setScreen(profileRow.must_change_password ? "change-password" : "dashboard");
+
+      if (fromCache) {
+        setOfflineSyncMessage("Connection to Supabase is temporarily unavailable. Your saved workspace is open; live data may not load until connectivity returns.");
+      } else {
+        setOfflineSyncMessage("");
+        try {
+          await cacheValue(`profile:${user.id}`, restoredProfile);
+        } catch (cacheError) {
+          console.warn("REFLINK profile cache skipped", cacheError);
+        }
+      }
     };
 
-    testSupabase();
-  }, []);
+    const restoreUserProfile = async (user) => {
+      if (!user?.id) return;
+      currentSessionUser = user;
+      const requestId = ++restoreSequence;
+      let userProfile = null;
+      let profileError = null;
 
+      try {
+        const result = await supabase
+          .from("profiles")
+          .select("id, full_name, role, facility_id, must_change_password")
+          .eq("id", user.id)
+          .single();
+        userProfile = result.data;
+        profileError = result.error;
+      } catch (error) {
+        profileError = error;
+      }
 
-  useEffect(() => {
+      if (!active || requestId !== restoreSequence) return;
+
+      if (profileError || !userProfile) {
+        console.warn("REFLINK profile restore query failed", profileError?.message || "No profile returned");
+
+        if (isTransientAuthError(profileError)) {
+          try {
+            const cachedProfile = await getCachedValue(`profile:${user.id}`, null);
+            if (!active || requestId !== restoreSequence) return;
+            if (cachedProfile && getApplicationRole(cachedProfile.role) && String(cachedProfile.id) === String(user.id)) {
+              await applyWorkspaceProfile(user, cachedProfile, true);
+              return;
+            }
+          } catch (cacheError) {
+            console.warn("REFLINK cached profile restore failed", cacheError);
+          }
+
+          if (!active || requestId !== restoreSequence) return;
+          setLoginError("Your session is saved, but REFLINK cannot reach your profile right now. Reconnect to retry automatically; you have not been signed out.");
+          setOfflineSyncMessage("Waiting for a connection to verify your REFLINK profile.");
+          // Do not call signOut and do not force a login redirect on a temporary network failure.
+          return;
+        }
+
+        setLoginError("Your signed-in account could not be matched to an active REFLINK profile. Please contact the system administrator.");
+        setScreen("login");
+        return;
+      }
+
+      await applyWorkspaceProfile(user, userProfile, false);
+    };
+
+    const restoreSession = async () => {
+      const startingSequence = restoreSequence;
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        if (!active || startingSequence !== restoreSequence) return;
+        if (data?.session?.user && !initialSessionHandled) {
+          initialSessionHandled = true;
+          currentSessionUser = data.session.user;
+          await restoreUserProfile(data.session.user);
+        }
+      } catch (error) {
+        if (!active || startingSequence !== restoreSequence) return;
+        console.warn("REFLINK session restore could not complete", error?.message || error);
+        if (isTransientAuthError(error)) {
+          setOfflineSyncMessage("Supabase is temporarily unreachable. Reconnect to restore your workspace; REFLINK has not signed you out.");
+          return;
+        }
+        setLoginError("Unable to restore the saved session. Please sign in again if the session has expired.");
+        setScreen("login");
+      }
+    };
+
+    restoreSession();
+
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+
       if (event === "PASSWORD_RECOVERY") {
         setPasswordError("");
         setPasswordMessage("");
-        setPasswordForm({
-          currentPassword: "",
-          newPassword: "",
-          confirmPassword: "",
-        });
+        setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
         setScreen("change-password");
+        return;
+      }
+
+      if (event === "INITIAL_SESSION" && session?.user && !initialSessionHandled) {
+        initialSessionHandled = true;
+        currentSessionUser = session.user;
+        // Defer profile lookup outside the auth callback to avoid blocking Supabase's auth lock.
+        window.setTimeout(() => {
+          if (active) void restoreUserProfile(session.user);
+        }, 0);
+      }
+
+      if (event === "SIGNED_IN" && session?.user) {
+        currentSessionUser = session.user;
+      }
+
+      if (event === "SIGNED_OUT") {
+        restoreSequence += 1;
+        currentSessionUser = null;
+        setProfile(null);
+        setRole(null);
+        setDashboardView("overview");
+        setDashboardFilter("all");
+        setOfflineSyncMessage("");
+        setScreen("home");
       }
     });
 
+    const handleOnline = () => {
+      if (currentSessionUser?.id) {
+        void restoreUserProfile(currentSessionUser);
+      } else {
+        void restoreSession();
+      }
+    };
+
+    window.addEventListener("online", handleOnline);
+
     return () => {
+      active = false;
+      restoreSequence += 1;
+      window.removeEventListener("online", handleOnline);
       subscription?.unsubscribe();
     };
   }, []);
@@ -1740,6 +1937,13 @@ const handleSignIn = async () => {
   return (
     <div className="app">
 
+      <OfflineStatusBadge />
+      {offlineSyncMessage && (
+        <div className="success-message reflink-offline-sync-banner">
+          {offlineSyncMessage}
+        </div>
+      )}
+
       {/* =====================================================
           HOME PAGE
           ===================================================== */}
@@ -1748,15 +1952,16 @@ const handleSignIn = async () => {
   <>
     <header className="topbar">
       <div className="brand">
-        <div className="brand-mark">R</div>
+        <img className="brand-logo-image" src={REFLINK_MARK} alt="REFLINK logo" />
 
-        <div>
+        <div className="brand-copy">
           <h1>REFLINK</h1>
-          <p>Connected Referral Care</p>
+          <p>Closed-Loop Digital Referral System</p>
         </div>
       </div>
 
       <nav className="home-nav">
+        <LanguageSwitcher />
         <button
           type="button"
           onClick={() =>
@@ -1765,7 +1970,7 @@ const handleSignIn = async () => {
               ?.scrollIntoView({ behavior: "smooth" })
           }
         >
-          How It Works
+          {t("howItWorks")}
         </button>
 
         <button
@@ -1776,7 +1981,7 @@ const handleSignIn = async () => {
               ?.scrollIntoView({ behavior: "smooth" })
           }
         >
-          Platform
+          {t("platform")}
         </button>
 
         <button
@@ -1797,13 +2002,11 @@ const handleSignIn = async () => {
         <div className="hero-content">
 
           <span className="eyebrow">
-            DIGITAL HEALTH • CLOSED-LOOP REFERRAL
+            {t("closedLoop")}
           </span>
 
           <h2>
-            Every Referral Connected.
-            <br />
-            <span>Every Patient Followed.</span>
+            {t("hero")}
           </h2>
 
           <p className="hero-text">
@@ -1819,7 +2022,7 @@ const handleSignIn = async () => {
               className="primary-button hero-primary"
               onClick={openLogin}
             >
-              Access REFLINK
+              {t("access")}
               <span>→</span>
             </button>
 
@@ -2210,7 +2413,7 @@ const handleSignIn = async () => {
       <div className="footer-brand">
 
         <div className="brand">
-          <div className="brand-mark">R</div>
+          <img className="footer-brand-mark-image" src={REFLINK_MARK} alt="REFLINK logo" />
 
           <div>
             <h1>REFLINK</h1>
@@ -2266,9 +2469,11 @@ const handleSignIn = async () => {
 
           <div className="login-card">
 
-            <div className="login-logo">
-              R
-            </div>
+            <img
+  className="login-logo-image"
+  src="/logo.png"
+  alt="REFLINK — Digital Referral & Care-Continuity Platform"
+/>
 
             <h2>
               Sign in to REFLINK
@@ -2349,7 +2554,7 @@ const handleSignIn = async () => {
       {screen === "change-password" && (
         <div className="login-page password-page">
           <div className="login-card password-card">
-            <div className="login-logo">R</div>
+            <img className="login-logo-image" src={REFLINK_LOGO} alt="REFLINK — Digital Referral & Care-Continuity Platform" />
 
             <span className="eyebrow">
               ACCOUNT SECURITY
@@ -2452,9 +2657,11 @@ const handleSignIn = async () => {
 
             <div className="brand">
 
-              <div className="brand-mark">
-                R
-              </div>
+              <img
+  className="brand-mark-image"
+  src="/reflink-mark.png"
+  alt="REFLINK logo"
+/>
 
               <div>
                 <h1>REFLINK</h1>
@@ -2557,9 +2764,7 @@ const handleSignIn = async () => {
 
             <div className="brand">
 
-              <div className="brand-mark">
-                R
-              </div>
+              <img className="brand-mark-image" src={REFLINK_MARK} alt="REFLINK logo" />
 
               <div>
                 <h1>REFLINK</h1>
@@ -2780,22 +2985,68 @@ const INVESTIGATION_CATEGORIES = {
 };
 function InvestigationResultEditor({ item, onChange, onFileChange }) {
   const config = getInvestigationResultConfig(item?.investigation);
+  const layoutClass = ["quantitative", "blood_pressure", "electrolytes", "fbc_panel"].includes(config.type)
+    ? "is-quantitative"
+    : "is-textual";
+
   return (
-    <div className="referral-investigation-result-editor">
-      <select value={item.result_status || "pending"} onChange={(e) => onChange({ result_status: e.target.value })}>
+    <div className={`referral-investigation-result-editor ${layoutClass}`}>
+      <select value={item.result_status || "pending"} onChange={(e) => onChange({ result_status: e.target.value })} aria-label={`Result status for ${item.investigation}`}>
         {config.statuses.map((status) => <option key={status} value={status}>{getInvestigationResultLabel(status)}</option>)}
       </select>
-      {config.type === "quantitative" ? <>
-        <input value={item.result_value || ""} onChange={(e) => onChange({ result_value: e.target.value })} placeholder="Result value" />
-        <input value={item.result_unit || ""} onChange={(e) => onChange({ result_unit: e.target.value })} placeholder="Unit" />
-        <input value={item.reference_range || ""} onChange={(e) => onChange({ reference_range: e.target.value })} placeholder="Lab reference range" />
-      </> : <textarea value={item.result_value || ""} onChange={(e) => onChange({ result_value: e.target.value })} placeholder={config.type === "panel" ? "Structured panel findings" : "Result/report detail"} rows={2} />}
+
+      {config.type === "blood_group" && (
+        <select value={item.result_value || ""} aria-label="Blood group ABO Rh" onChange={(e) => onChange({ result_value: e.target.value, result_status: e.target.value ? "result_recorded" : "pending" })}>
+          <option value="">Select blood group</option>
+          {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map((group) => <option key={group} value={group}>{group}</option>)}
+        </select>
+      )}
+
+      {config.type === "blood_pressure" && (
+        <>
+          <input inputMode="decimal" value={item.systolic || ""} onChange={(e) => onChange({ systolic: e.target.value })} placeholder="Systolic (mmHg)" aria-label="Systolic blood pressure" />
+          <input inputMode="decimal" value={item.diastolic || ""} onChange={(e) => onChange({ diastolic: e.target.value })} placeholder="Diastolic (mmHg)" aria-label="Diastolic blood pressure" />
+        </>
+      )}
+
+      {config.type === "electrolytes" && (
+        <>
+          <input inputMode="decimal" value={item.sodium || ""} onChange={(e) => onChange({ sodium: e.target.value })} placeholder="Sodium Na⁺ (mmol/L)" aria-label="Sodium" />
+          <input inputMode="decimal" value={item.potassium || ""} onChange={(e) => onChange({ potassium: e.target.value })} placeholder="Potassium K⁺ (mmol/L)" aria-label="Potassium" />
+          <input inputMode="decimal" value={item.chloride || ""} onChange={(e) => onChange({ chloride: e.target.value })} placeholder="Chloride Cl⁻ (mmol/L)" aria-label="Chloride" />
+          <input inputMode="decimal" value={item.bicarbonate || ""} onChange={(e) => onChange({ bicarbonate: e.target.value })} placeholder="Bicarbonate HCO₃⁻ (mmol/L)" aria-label="Bicarbonate" />
+        </>
+      )}
+
+      {config.type === "fbc_panel" && (
+        <>
+          <input inputMode="decimal" value={item.haemoglobin || ""} onChange={(e) => onChange({ haemoglobin: e.target.value })} placeholder="Haemoglobin (g/dL)" aria-label="Haemoglobin" />
+          <input inputMode="decimal" value={item.pcv || ""} onChange={(e) => onChange({ pcv: e.target.value })} placeholder="PCV (%)" aria-label="PCV" />
+          <input inputMode="decimal" value={item.wbc || ""} onChange={(e) => onChange({ wbc: e.target.value })} placeholder="WBC (10^9/L)" aria-label="White blood cell count" />
+          <input inputMode="decimal" value={item.platelets || ""} onChange={(e) => onChange({ platelets: e.target.value })} placeholder="Platelets (10^9/L)" aria-label="Platelet count" />
+          <textarea value={item.result_value || ""} onChange={(e) => onChange({ result_value: e.target.value })} placeholder="Additional FBC report details" rows={2} aria-label="Additional FBC report details" />
+        </>
+      )}
+
+      {config.type === "quantitative" && (
+        <>
+          <input inputMode="decimal" value={item.result_value || ""} onChange={(e) => onChange({ result_value: e.target.value })} placeholder="Measured value" aria-label={`Measured value for ${item.investigation}`} />
+          <input value={item.result_unit || config.defaultUnit || ""} onChange={(e) => onChange({ result_unit: e.target.value })} placeholder={config.defaultUnit || "Unit"} aria-label={`Unit for ${item.investigation}`} />
+          <input value={item.reference_range || ""} onChange={(e) => onChange({ reference_range: e.target.value })} placeholder="Laboratory reference range" aria-label={`Reference range for ${item.investigation}`} />
+        </>
+      )}
+
+      {config.type === "panel" && <textarea value={item.result_value || ""} onChange={(e) => onChange({ result_value: e.target.value })} placeholder="Panel findings, e.g. pH, protein, glucose, blood, nitrite and leukocytes" rows={2} aria-label={`Panel findings for ${item.investigation}`} />}
+
+      {(config.type === "qualitative" || config.type === "microbiology" || config.type === "imaging") && <textarea value={item.result_value || ""} onChange={(e) => onChange({ result_value: e.target.value })} placeholder={config.type === "imaging" ? "Imaging report details" : "Additional result details"} rows={2} aria-label={`Result details for ${item.investigation}`} />}
+
       <label className="upload-result-button compact-upload">📎 Upload<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv" onChange={(e) => onFileChange(e.target.files?.[0] || null)} /></label>
     </div>
   );
 }
 
 function NewReferralForm({ onBack }) {
+  const { t } = useLanguage();
 
   const [form, setForm] = useState({
   patient_identifier: "",
@@ -2814,8 +3065,12 @@ function NewReferralForm({ onBack }) {
 
   // CLINICAL INFORMATION
   chief_complaint: "",
+  chief_complaint_category: "",
+  chief_complaint_other: "",
   clinical_summary: "",
   physical_findings: "",
+  physical_findings_structured: [],
+  physical_findings_other: "",
 
   // DIAGNOSIS
 diagnosis_status: "",
@@ -2826,8 +3081,10 @@ provisional_diagnosis: "",
   investigation_category: "",
   investigations: "",
 
-  // KEEPING TREATMENT AS CURRENT FREE-TEXT FIELD
+  // STRUCTURED TREATMENT WITH OPTIONAL OTHER
   treatment_given: "",
+  treatment_given_structured: [],
+  treatment_given_other: "",
 
   // REFERRAL
   referral_reason: "",
@@ -2869,26 +3126,20 @@ provisional_diagnosis: "",
       .eq("is_active", true)
       .order("name");
 
-    console.log(
-      "FACILITIES FROM SUPABASE:",
-      data
-    );
-
-    console.log(
-      "FACILITIES ERROR:",
-      error
-    );
-
     if (error) {
-      setError(
-        "Unable to load receiving facilities."
-      );
-
+      const cachedFacilities = await getCachedValue("facilities", []);
+      if (Array.isArray(cachedFacilities) && cachedFacilities.length) {
+        setFacilities(cachedFacilities);
+        setError("You are offline. Using your last saved facility list.");
+        return;
+      }
+      setError("Unable to load receiving facilities.");
       console.error(error);
       return;
     }
 
     setFacilities(data || []);
+    try { await cacheValue("facilities", data || []); } catch (cacheError) { console.warn("REFLINK facility cache skipped", cacheError); }
   };
 
   const handleChange = (e) => {
@@ -2992,7 +3243,7 @@ provisional_diagnosis: "",
           investigation,
           result_status: "pending",
           result_value: "",
-          result_unit: "",
+          result_unit: getInvestigationResultConfig(investigation).defaultUnit || "",
           reference_range: "",
           interpretation: "",
           result_notes: "",
@@ -3063,6 +3314,48 @@ provisional_diagnosis: "",
     return `RF-${year}-${randomPart}`;
   };
 
+  const toggleStructuredValue = (field, value) => {
+    setForm((previous) => {
+      const current = Array.isArray(previous[field]) ? previous[field] : [];
+      return { ...previous, [field]: current.includes(value) ? current.filter((item) => item !== value) : [...current, value] };
+    });
+  };
+
+  const validateReferralEntry = () => {
+    if (!form.patient_identifier.trim()) return "Patient identifier is required.";
+    if (form.patient_age_months === "") return "Patient age is required.";
+    if (!form.patient_sex) return "Patient sex is required.";
+    if (!form.chief_complaint_category && !form.chief_complaint.trim()) return "Chief complaint is required.";
+    if (!form.urgency) return "Referral urgency is required.";
+    if (!form.receiving_facility_id) return "Receiving facility is required.";
+    if (form.urgency === "emergency" && !form.physical_findings.trim() && form.physical_findings_structured.length === 0) return "Emergency referrals require clinical findings.";
+    return "";
+  };
+
+  const buildStructuredText = (items, other, fallback = "") => {
+    const values = [...(Array.isArray(items) ? items : [])];
+    if (other?.trim()) values.push(`Other: ${other.trim()}`);
+    return values.join(", ") || fallback || null;
+  };
+
+  const notifyReferralBySms = async (referralId, type = "referral_sent") => {
+    try {
+      if (type === "referral_sent" && form.urgency === "routine") return;
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session?.access_token) return;
+      const response = await fetch("/api/referral-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ referralId, type }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) console.warn("REFLINK SMS notification:", result?.error || response.statusText);
+    } catch (smsError) {
+      console.warn("REFLINK SMS notification unavailable", smsError);
+    }
+  };
+
   const handleSubmit = async (e) => {
 
     e.preventDefault();
@@ -3070,9 +3363,77 @@ provisional_diagnosis: "",
     setError("");
     setSavedReferralInfo(null);
     setMessage("");
+    const validationError = validateReferralEntry();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    if (diagnosisEntries.length === 0) {
+      const proceed = window.confirm("No diagnosis category has been selected. This will reduce referral analytics quality. Continue?");
+      if (!proceed) return;
+    }
     setLoading(true);
 
     try {
+      const createdAt = new Date().toISOString();
+      const offlineClientId = createClientId();
+      const structuredChiefComplaint = form.chief_complaint_category === "Other"
+        ? (form.chief_complaint_other.trim() || "Other")
+        : (form.chief_complaint_category || form.chief_complaint.trim());
+      const structuredPhysicalFindings = Array.isArray(form.physical_findings_structured) ? form.physical_findings_structured : [];
+      const structuredTreatment = Array.isArray(form.treatment_given_structured) ? form.treatment_given_structured : [];
+
+      if (!navigator.onLine) {
+        const { data: { session } } = await supabase.auth.getSession();
+        const cachedProfile = session?.user?.id ? await getCachedValue(`profile:${session.user.id}`, null) : null;
+        if (!cachedProfile?.facility_id || !session?.user?.id) {
+          throw new Error("You are offline and your signed-in facility profile is not available on this device yet. Connect once to initialize offline mode.");
+        }
+        const offlinePayload = {
+          referral_number: generateReferralNumber(),
+          offline_client_id: offlineClientId,
+          sync_source: "offline",
+          is_test: import.meta.env.DEV || import.meta.env.VITE_REFLINK_TEST_MODE === "true",
+          created_at: createdAt,
+          patient_identifier: form.patient_identifier.trim(),
+          patient_age_months: normalizePatientAgeToMonths(form.patient_age_months, form.patient_age_unit),
+          patient_sex: form.patient_sex,
+          patient_phone: form.patient_phone?.trim() || null,
+          patient_address: form.patient_address?.trim() || null,
+          relative_name: form.relative_name?.trim() || null,
+          relative_relationship: form.relative_relationship || null,
+          relative_phone: form.relative_phone?.trim() || null,
+          chief_complaint: structuredChiefComplaint,
+          chief_complaint_category: form.chief_complaint_category || null,
+          chief_complaint_other: form.chief_complaint_other?.trim() || null,
+          clinical_summary: form.clinical_summary || null,
+          physical_findings: buildStructuredText(structuredPhysicalFindings, form.physical_findings_other, form.physical_findings),
+          physical_findings_structured: structuredPhysicalFindings,
+          diagnosis_records: diagnosisEntries,
+          diagnosis_status: [...new Set(diagnosisEntries.map((item) => item.status))].join(", ") || null,
+          diagnosis_category: [...new Set(diagnosisEntries.map((item) => item.category))].join(", ") || null,
+          diagnosis_category_other: diagnosisDraft.category === "Other" ? diagnosisDraft.diagnosis : null,
+          provisional_diagnosis: diagnosisEntries.map((item) => `${item.status}: ${item.diagnosis}`).join(" • ") || null,
+          investigation_categories: selectedInvestigationCategories,
+          investigation_records: selectedInvestigations.map(({ result_file, ...item }) => item),
+          investigations: selectedInvestigations.map((item) => `${item.investigation} (${item.category})`).join(" • ") || null,
+          treatment_given: buildStructuredText(structuredTreatment, form.treatment_given_other, form.treatment_given),
+          treatment_given_structured: structuredTreatment,
+          referral_reason: form.referral_reason || null,
+          urgency: form.urgency,
+          referring_facility_id: cachedProfile.facility_id,
+          receiving_facility_id: form.receiving_facility_id,
+          referring_user_id: session.user.id,
+          status: "sent",
+        };
+        await queueReferral(offlinePayload);
+        setMessage(`Saved offline. Referral ${offlinePayload.referral_number} will be sent automatically when connected.`);
+        setSavedReferralInfo({ referralNumber: offlinePayload.referral_number, patientIdentifier: form.patient_identifier });
+        setLoading(false);
+        return;
+      }
+
+      try { await syncQueuedReferrals(supabase); } catch (syncError) { console.warn("REFLINK pre-submit offline sync", syncError); }
 
       const {
         data: {
@@ -3115,7 +3476,53 @@ provisional_diagnosis: "",
 
       const referralNumber =
         generateReferralNumber();
+// REFLINK V2: Verify the destination against live Supabase data.
+const cachedDestination = facilities.find(
+  (facility) =>
+    String(facility.id) === String(form.receiving_facility_id)
+);
 
+if (!form.receiving_facility_id) {
+  throw new Error("Please select a receiving facility.");
+}
+
+const {
+  data: verifiedDestination,
+  error: destinationCheckError,
+} = await supabase
+  .from("facilities")
+  .select("id, name, is_active")
+  .eq("id", form.receiving_facility_id)
+  .maybeSingle();
+
+if (destinationCheckError) {
+  throw new Error(
+    `Could not verify the receiving facility: ${destinationCheckError.message}`
+  );
+}
+
+if (!verifiedDestination || verifiedDestination.is_active === false) {
+  throw new Error(
+    "The selected receiving facility is unavailable. Refresh the page and select a facility again."
+  );
+}
+
+if (
+  !cachedDestination ||
+  cachedDestination.name.trim() !== verifiedDestination.name.trim()
+) {
+  throw new Error(
+    `Receiving facility mismatch. The local selection is "${cachedDestination?.name ?? "Unknown"}", but Supabase identifies it as "${verifiedDestination.name}". Refresh the page and select the correct facility. No referral was submitted.`
+  );
+}
+
+const confirmDestination = window.confirm(
+  `Please confirm the receiving facility:\n\n${verifiedDestination.name}\n\nUrgency: ${form.urgency.toUpperCase()}\n\nContinue with referral submission?`
+);
+
+if (!confirmDestination) {
+  return;
+}
       const referralPayload = {
   referral_number:
     referralNumber,
@@ -3132,7 +3539,11 @@ provisional_diagnosis: "",
   patient_sex:
     form.patient_sex ||
     null,
-    
+
+  created_at: createdAt,
+  offline_client_id: offlineClientId,
+  sync_source: "online",
+  is_test: import.meta.env.DEV || import.meta.env.VITE_REFLINK_TEST_MODE === "true",
 
   // NEW PATIENT CONTACT INFORMATION
   patient_phone:
@@ -3157,16 +3568,23 @@ provisional_diagnosis: "",
     null,
 
   chief_complaint:
-    form.chief_complaint ||
+    structuredChiefComplaint ||
     null,
+
+  chief_complaint_category:
+    form.chief_complaint_category || null,
+
+  chief_complaint_other:
+    form.chief_complaint_other?.trim() || null,
 
   clinical_summary:
     form.clinical_summary ||
     null,
 
   physical_findings:
-    form.physical_findings ||
-    null,
+    buildStructuredText(structuredPhysicalFindings, form.physical_findings_other, form.physical_findings) || null,
+
+  physical_findings_structured: structuredPhysicalFindings,
 
   // MULTIPLE DIAGNOSES
   diagnosis_records:
@@ -3180,6 +3598,11 @@ provisional_diagnosis: "",
   diagnosis_category:
     [...new Set(diagnosisEntries.map((item) => item.category))]
       .join(", ") || null,
+
+  diagnosis_category_other:
+    diagnosisEntries.some((item) => item.category === "Other")
+      ? diagnosisEntries.find((item) => item.category === "Other")?.diagnosis || null
+      : null,
 
   provisional_diagnosis:
     diagnosisEntries
@@ -3206,8 +3629,9 @@ provisional_diagnosis: "",
 
   // KEEP THIS AS IT CURRENTLY WORKS
   treatment_given:
-    form.treatment_given ||
-    null,
+    buildStructuredText(structuredTreatment, form.treatment_given_other, form.treatment_given) || null,
+
+  treatment_given_structured: structuredTreatment,
 
         referral_reason:
           form.referral_reason ||
@@ -3230,21 +3654,6 @@ provisional_diagnosis: "",
           "sent",
       };
 
-      console.log(
-        "AUTH USER:",
-        user.id
-      );
-
-      console.log(
-        "PROFILE:",
-        profile
-      );
-
-      console.log(
-        "REFERRAL PAYLOAD:",
-        referralPayload
-      );
-
       const {
         data: insertedReferral,
         error: referralError,
@@ -3261,6 +3670,10 @@ provisional_diagnosis: "",
         );
 
         throw referralError;
+      }
+
+      if (insertedReferral?.id && ["emergency", "urgent"].includes(form.urgency)) {
+        void notifyReferralBySms(insertedReferral.id, "referral_sent");
       }
 
       let savedInvestigationRecords = selectedInvestigations.map(({ result_file, ...item }) => item);
@@ -3293,6 +3706,7 @@ provisional_diagnosis: "",
 
       const savedReferral = {
         ...referralPayload,
+        id: insertedReferral?.id,
         investigation_records: savedInvestigationRecords,
         referral_number: referralNumber,
         created_at: new Date().toISOString(),
@@ -3301,6 +3715,7 @@ provisional_diagnosis: "",
       };
 
       setSavedReferralInfo({
+        referralId: insertedReferral?.id || null,
         referralNumber,
         patientIdentifier: form.patient_identifier,
       });
@@ -3324,8 +3739,12 @@ provisional_diagnosis: "",
   relative_phone: "",
 
   chief_complaint: "",
+  chief_complaint_category: "",
+  chief_complaint_other: "",
   clinical_summary: "",
   physical_findings: "",
+  physical_findings_structured: [],
+  physical_findings_other: "",
 
   diagnosis_status: "",
   diagnosis_category: "",
@@ -3334,6 +3753,8 @@ provisional_diagnosis: "",
   investigation_category: "",
   investigations: "",
   treatment_given: "",
+  treatment_given_structured: [],
+  treatment_given_other: "",
 
   referral_reason: "",
   urgency: "routine",
@@ -3380,7 +3801,7 @@ provisional_diagnosis: "",
           </span>
 
           <h2>
-            New Referral
+            {t("newReferral")}
           </h2>
 
           <p>
@@ -3403,7 +3824,7 @@ provisional_diagnosis: "",
             className="back-button"
             onClick={onBack}
           >
-            ← Back
+            ← {t("back")}
           </button>
         </div>
 
@@ -3426,9 +3847,7 @@ provisional_diagnosis: "",
             <button
               type="button"
               className="secondary-button"
-              onClick={() => {
-                window.setTimeout(() => window.print(), 80);
-              }}
+              onClick={() => printReferralForm(printDraft, "REFERRING FACILITY COPY", (count) => setPrintDraft((previous) => ({ ...previous, print_count: count })))}
             >
               🖨 Print Saved Form
             </button>
@@ -3442,10 +3861,13 @@ provisional_diagnosis: "",
         </div>
       )}
 
-      <form onSubmit={handleSubmit}>
+      <form
+  className="new-referral-form"
+  onSubmit={handleSubmit}
+>
 
         <h3>
-          Patient Information
+          {t("patientInformation")}
         </h3>
 
         <label>
@@ -3460,176 +3882,232 @@ provisional_diagnosis: "",
           required
         />
 
-        <div className="form-grid">
+        <div className="patient-information-grid">
 
-          <div>
-
-            <label>Patient Age</label>
-            <div className="age-input-row">
-              <input
-                type="number"
-                name="patient_age_months"
-                value={form.patient_age_months}
-                onChange={handleChange}
-                min="0"
-                step="1"
-                placeholder={form.patient_age_unit === "months" ? "e.g. 8" : "e.g. 22"}
-                aria-label="Patient age value"
-              />
-              <select
-                name="patient_age_unit"
-                value={form.patient_age_unit}
-                onChange={handleChange}
-                aria-label="Patient age unit"
-              >
-                <option value="months">Months</option>
-                <option value="years">Years</option>
-              </select>
-            </div>
-            <div className="form-help-text">
-              Use months for infants and young children; use years for older children and adults.
-              REFLINK stores the normalized value in months for consistent analytics.
-            </div>
-            <div className="form-help-text age-normalized-preview">
-              {form.patient_age_months !== ""
-                ? `Recorded as: ${formatPatientAge(normalizePatientAgeToMonths(form.patient_age_months, form.patient_age_unit))}`
-                : "Recorded age will appear here."}
-            </div>
-            <div className="form-group">
-  <label htmlFor="patient_phone">
-    Patient Phone Number
-  </label>
-
-  <input
-    id="patient_phone"
-    type="tel"
-    name="patient_phone"
-    value={form.patient_phone}
-    onChange={handleChange}
-    placeholder="e.g. 08012345678"
-  />
-</div>
-
-<div className="form-group">
-  <label htmlFor="patient_address">
-    Patient Address
-  </label>
-
-  <textarea
-    id="patient_address"
-    name="patient_address"
-    value={form.patient_address}
-    onChange={handleChange}
-    rows={2}
-    placeholder="Enter patient's address"
-  />
-</div>
-
-<div className="form-section">
-  <h4>Relative / Caregiver Information</h4>
-
+  {/* Patient Age */}
   <div className="form-group">
-    <label htmlFor="relative_name">
-      Relative / Caregiver Name
+    <label htmlFor="patient_age_months">
+      Patient Age
     </label>
 
-    <input
-      id="relative_name"
-      type="text"
-      name="relative_name"
-      value={form.relative_name}
-      onChange={handleChange}
-      placeholder="Enter name"
-    />
+    <div className="age-input-row">
+      <input
+        id="patient_age_months"
+        type="number"
+        name="patient_age_months"
+        value={form.patient_age_months}
+        onChange={handleChange}
+        min="0"
+        step="1"
+        placeholder={
+          form.patient_age_unit === "months"
+            ? "e.g. 8"
+            : "e.g. 22"
+        }
+        aria-label="Patient age value"
+      />
+
+      <select
+        name="patient_age_unit"
+        value={form.patient_age_unit}
+        onChange={handleChange}
+        aria-label="Patient age unit"
+      >
+        <option value="months">Months</option>
+        <option value="years">Years</option>
+      </select>
+    </div>
+
+    <div className="form-help-text">
+      Use months for infants and young children; use years for older
+      children and adults. REFLINK stores the normalized value in
+      months for consistent analytics.
+    </div>
+
+    <div className="form-help-text age-normalized-preview">
+      {form.patient_age_months !== ""
+        ? `Recorded as: ${formatPatientAge(
+            normalizePatientAgeToMonths(
+              form.patient_age_months,
+              form.patient_age_unit
+            )
+          )}`
+        : "Recorded age will appear here."}
+    </div>
   </div>
 
+
+  {/* Sex */}
   <div className="form-group">
-    <label htmlFor="relative_relationship">
-      Relationship to Patient
+    <label htmlFor="patient_sex">
+      Sex
     </label>
 
     <select
-      id="relative_relationship"
-      name="relative_relationship"
-      value={form.relative_relationship}
+      id="patient_sex"
+      name="patient_sex"
+      value={form.patient_sex}
       onChange={handleChange}
     >
-      <option value="">Select relationship</option>
-      <option value="parent">Parent</option>
-      <option value="spouse">Spouse</option>
-      <option value="child">Child</option>
-      <option value="sibling">Sibling</option>
-      <option value="guardian">Guardian</option>
-      <option value="other">Other</option>
+      <option value="">
+        Select sex
+      </option>
+
+      <option value="male">
+        Male
+      </option>
+
+      <option value="female">
+        Female
+      </option>
+
+      <option value="other">
+        Other
+      </option>
     </select>
   </div>
 
+
+  {/* Patient Phone */}
   <div className="form-group">
-    <label htmlFor="relative_phone">
-      Relative / Caregiver Phone Number
+    <label htmlFor="patient_phone">
+      Patient Phone Number
     </label>
 
     <input
-      id="relative_phone"
+      id="patient_phone"
       type="tel"
-      name="relative_phone"
-      value={form.relative_phone}
+      name="patient_phone"
+      value={form.patient_phone}
       onChange={handleChange}
       placeholder="e.g. 08012345678"
     />
   </div>
+
+
+  {/* Patient Address */}
+  <div className="form-group">
+    <label htmlFor="patient_address">
+      Patient Address
+    </label>
+
+    <textarea
+      id="patient_address"
+      name="patient_address"
+      value={form.patient_address}
+      onChange={handleChange}
+      rows={2}
+      placeholder="Enter patient's address"
+    />
+  </div>
+
 </div>
 
-          </div>
 
-          <div>
+{/* Relative / Caregiver Information */}
+<div className="form-section caregiver-section">
 
-            <label>
-              Sex
-            </label>
+  <h4>
+    Relative / Caregiver Information
+  </h4>
 
-            <select
-              name="patient_sex"
-              value={form.patient_sex}
-              onChange={handleChange}
-            >
+  <div className="caregiver-grid">
 
-              <option value="">
-                Select sex
-              </option>
+    <div className="form-group">
+      <label htmlFor="relative_name">
+        Relative / Caregiver Name
+      </label>
 
-              <option value="male">
-                Male
-              </option>
+      <input
+        id="relative_name"
+        type="text"
+        name="relative_name"
+        value={form.relative_name}
+        onChange={handleChange}
+        placeholder="Enter name"
+      />
+    </div>
 
-              <option value="female">
-                Female
-              </option>
 
-              <option value="other">
-                Other
-              </option>
+    <div className="form-group">
+      <label htmlFor="relative_relationship">
+        Relationship to Patient
+      </label>
 
-            </select>
+      <select
+        id="relative_relationship"
+        name="relative_relationship"
+        value={form.relative_relationship}
+        onChange={handleChange}
+      >
+        <option value="">
+          Select relationship
+        </option>
 
-          </div>
+        <option value="parent">
+          Parent
+        </option>
 
-        </div>
+        <option value="spouse">
+          Spouse
+        </option>
+
+        <option value="child">
+          Child
+        </option>
+
+        <option value="sibling">
+          Sibling
+        </option>
+
+        <option value="guardian">
+          Guardian
+        </option>
+
+        <option value="other">
+          Other
+        </option>
+      </select>
+    </div>
+
+
+    <div className="form-group">
+      <label htmlFor="relative_phone">
+        Relative / Caregiver Phone Number
+      </label>
+
+      <input
+        id="relative_phone"
+        type="tel"
+        name="relative_phone"
+        value={form.relative_phone}
+        onChange={handleChange}
+        placeholder="e.g. 08012345678"
+      />
+    </div>
+
+  </div>
+
+</div>
 
         <h3>
-          Clinical Information
+          {t("clinicalInformation")}
         </h3>
 
         <label>
-          Chief Complaint
+          Chief Complaint *
         </label>
-
-        <textarea
-          name="chief_complaint"
-          value={form.chief_complaint}
-          onChange={handleChange}
-          placeholder="Main presenting complaint"
-        />
+        <select
+          value={form.chief_complaint_category}
+          onChange={(e) => setForm((previous) => ({ ...previous, chief_complaint_category: e.target.value, chief_complaint: e.target.value === "Other" ? previous.chief_complaint_other : e.target.value }))}
+          required
+        >
+          <option value="">Select chief complaint</option>
+          {CHIEF_COMPLAINT_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+        {form.chief_complaint_category === "Other" && (
+          <input name="chief_complaint_other" value={form.chief_complaint_other} onChange={(e) => setForm((previous) => ({ ...previous, chief_complaint_other: e.target.value, chief_complaint: e.target.value }))} placeholder="Describe the chief complaint" required />
+        )}
 
         <label>
           Clinical Summary
@@ -3643,15 +4121,20 @@ provisional_diagnosis: "",
         />
 
         <label>
-          Physical Findings
+          Physical Findings {form.urgency === "emergency" ? "*" : ""}
         </label>
-
-        <textarea
-          name="physical_findings"
-          value={form.physical_findings}
-          onChange={handleChange}
-          placeholder="Relevant examination findings"
-        />
+        <div className="checkbox-grid reflink-clinical-checks">
+          {PHYSICAL_FINDING_OPTIONS.map((item) => (
+            <label key={item} className={`selection-checkbox ${form.physical_findings_structured.includes(item) ? "is-selected" : ""}`}>
+              <input type="checkbox" checked={form.physical_findings_structured.includes(item)} onChange={() => toggleStructuredValue("physical_findings_structured", item)} />
+              <span>{item}</span>
+            </label>
+          ))}
+        </div>
+        {form.physical_findings_structured.includes("Other") && (
+          <input name="physical_findings_other" value={form.physical_findings_other} onChange={handleChange} placeholder="Other physical finding" />
+        )}
+        <textarea name="physical_findings" value={form.physical_findings} onChange={handleChange} placeholder="Additional clinical findings / narrative context" />
 
       <div className="form-section clinical-selection-section">
         <div className="section-heading-inline">
@@ -3918,16 +4401,21 @@ provisional_diagnosis: "",
         <label>
           Treatment Given
         </label>
-
-        <textarea
-          name="treatment_given"
-          value={form.treatment_given}
-          onChange={handleChange}
-          placeholder="Treatment already provided"
-        />
+        <div className="checkbox-grid reflink-clinical-checks">
+          {TREATMENT_OPTIONS.map((item) => (
+            <label key={item} className={`selection-checkbox ${form.treatment_given_structured.includes(item) ? "is-selected" : ""}`}>
+              <input type="checkbox" checked={form.treatment_given_structured.includes(item)} onChange={() => toggleStructuredValue("treatment_given_structured", item)} />
+              <span>{item}</span>
+            </label>
+          ))}
+        </div>
+        {form.treatment_given_structured.includes("Other") && (
+          <input name="treatment_given_other" value={form.treatment_given_other} onChange={handleChange} placeholder="Other treatment/intervention" />
+        )}
+        <textarea name="treatment_given" value={form.treatment_given} onChange={handleChange} placeholder="Additional treatment details / dose / timing" />
 
         <h3>
-          Referral Information
+          {t("referralInformation")}
         </h3>
 
         <label>
@@ -3951,20 +4439,13 @@ provisional_diagnosis: "",
           onChange={handleChange}
           required
         >
-
-          <option value="routine">
-            Routine
-          </option>
-
-          <option value="urgent">
-            Urgent
-          </option>
-
-          <option value="emergency">
-            Emergency
-          </option>
-
+          <option value="routine">Routine — acknowledgement target 24 hours</option>
+          <option value="urgent">Urgent — acknowledgement target 2 hours</option>
+          <option value="emergency">Emergency — acknowledgement target 15 minutes</option>
         </select>
+        <div className={`reflink-urgency-help ${urgencyMeta(form.urgency).className}`}>
+          <strong>{urgencyMeta(form.urgency).label}</strong> · {urgencyMeta(form.urgency).sla}. Emergency and urgent referrals trigger SMS + dashboard notifications when configured.
+        </div>
 
         <label>
           Receiving Facility *
@@ -4001,7 +4482,7 @@ provisional_diagnosis: "",
         >
           {loading
             ? "Creating Referral..."
-            : "Create Referral"}
+            : t("createReferral")}
         </button>
 
       </form>
@@ -4128,6 +4609,7 @@ function PHCStaffDashboard({ onNewReferral }) {
           treatment_given,
           referral_reason,
           urgency,
+          ack_due_at,
           status,
           created_at,
 
@@ -4155,7 +4637,8 @@ function PHCStaffDashboard({ onNewReferral }) {
           discharged_at,
 
           referring_facility_id,
-          receiving_facility_id
+          receiving_facility_id,
+          counter_referral:counter_referrals(*)
         `)
         .eq(
           "referring_facility_id",
@@ -4326,6 +4809,18 @@ function PHCStaffDashboard({ onNewReferral }) {
         referral.status === "discharged"
     ).length;
 
+  const completedReferrals = referrals.filter((referral) => referral.status === "completed").length;
+  const monthStart = new Date();
+  monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+  const referralsThisMonth = referrals.filter((referral) => new Date(referral.created_at).getTime() >= monthStart.getTime()).length;
+  const ackTimes = referrals
+    .filter((referral) => referral.acknowledged_at && referral.created_at)
+    .map((referral) => (new Date(referral.acknowledged_at).getTime() - new Date(referral.created_at).getTime()) / 60000)
+    .filter((minutes) => Number.isFinite(minutes) && minutes >= 0)
+    .sort((a,b) => a-b);
+  const medianAckMinutes = ackTimes.length ? ackTimes[Math.floor((ackTimes.length - 1) / 2)] : null;
+  const overdueAcknowledgements = referrals.filter(isAckOverdue).length;
+
   /* =========================================================
      FILTERED REFERRALS
      ========================================================= */
@@ -4372,6 +4867,7 @@ function PHCStaffDashboard({ onNewReferral }) {
 
   const openReferral = (referral) => {
     setSelectedReferral(referral);
+    void supabase.rpc("log_referral_read", { p_referral_id: referral.id });
   };
 
   /* =========================================================
@@ -4561,6 +5057,23 @@ function PHCStaffDashboard({ onNewReferral }) {
           </strong>
         </button>
 
+        {/* THIS MONTH */}
+
+        <div className="stat-card">
+          <span>Referrals This Month</span>
+          <strong>{referralsThisMonth}</strong>
+        </div>
+
+        <div className="stat-card">
+          <span>Median Time to Acknowledge</span>
+          <strong>{medianAckMinutes === null ? "—" : `${medianAckMinutes < 60 ? Math.round(medianAckMinutes) + " min" : (medianAckMinutes / 60).toFixed(1) + " h"}`}</strong>
+        </div>
+
+        <div className={`stat-card ${overdueAcknowledgements > 0 ? "stat-card-alert" : ""}`}>
+          <span>Awaiting Beyond Target</span>
+          <strong>{overdueAcknowledgements}</strong>
+        </div>
+
         {/* DISCHARGED */}
 
         <button
@@ -4719,6 +5232,11 @@ function PHCStaffDashboard({ onNewReferral }) {
                           referral.urgency || "Not specified"
                         )}
                       </p>
+                      {referral.status === "sent" && referral.ack_due_at && (
+                        <small className={isAckOverdue(referral) ? "urgency-overdue" : ""}>
+                          {isAckOverdue(referral) ? "ACK OVERDUE" : `Ack target: ${new Date(referral.ack_due_at).toLocaleString()}`}
+                        </small>
+                      )}
 
                       <small>
                         Created:{" "}
@@ -4810,7 +5328,7 @@ function PHCStaffDashboard({ onNewReferral }) {
               <button
                 type="button"
                 className="secondary-button print-referral-button"
-                onClick={printReferralForm}
+                onClick={() => printReferralForm(selectedReferral, "REFERRING FACILITY COPY", (count) => setSelectedReferral((previous) => ({ ...previous, print_count: count })))}
               >
                 🖨 Print Patient Referral Form
               </button>
@@ -4880,6 +5398,16 @@ function PHCStaffDashboard({ onNewReferral }) {
             </div>
 
             <ReferralTimeline referral={selectedReferral} />
+
+            {selectedReferral.counter_referral && (
+              <div className="dashboard-card counter-referral-card">
+                <span className="eyebrow">COUNTER-REFERRAL FEEDBACK</span>
+                <h3>Receiving Facility Outcome</h3>
+                <p><strong>Final diagnosis:</strong> {selectedReferral.counter_referral.final_diagnosis}</p>
+                <p><strong>Outcome:</strong> {formatClinicalLabel(selectedReferral.counter_referral.outcome)}</p>
+                <p><strong>Follow-up:</strong> {selectedReferral.counter_referral.follow_up_instructions || "Not recorded"}</p>
+              </div>
+            )}
 
             <hr />
 
@@ -5115,6 +5643,8 @@ function PHCStaffDashboard({ onNewReferral }) {
 
 function ReceivingDashboard() {
 
+  const investigationSaveQueueRef = useRef(Promise.resolve());
+
   const [referrals, setReferrals] =
     useState([]);
 
@@ -5207,68 +5737,67 @@ function ReceivingDashboard() {
     finally { setActionLoading(null); }
   };
 
-  const handleInvestigationResultChange = async (
-    index,
-    patch
-  ) => {
+  const handleInvestigationResultChange = async (index, patch) => {
     if (!selectedReferral) return;
 
-    const currentInvestigations = getInvestigationRecords(
-      selectedReferral
-    ).map(normalizeInvestigationRecord);
-
-    const updatedInvestigations = currentInvestigations.map(
-      (item, itemIndex) =>
-        itemIndex === index
-          ? {
-              ...item,
-              ...patch,
-            }
-          : item
+    const referralAtChange = selectedReferral;
+    const currentInvestigations = getInvestigationRecords(referralAtChange).map(normalizeInvestigationRecord);
+    const updatedInvestigations = currentInvestigations.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, ...patch } : item
     );
+    const statusWasChanged =
+  Object.prototype.hasOwnProperty.call(patch, "result_status");
 
+if (
+  statusWasChanged &&
+  NUMERIC_RESULT_CLASSIFICATION_STATUSES.has(
+    String(patch.result_status || "")
+  )
+) {
+  const validationMessage =
+    getInvestigationValidationMessage(updatedInvestigations[index]);
+
+  if (validationMessage) {
+    setError(validationMessage);
+    return;
+  }
+}
     const updatedReferral = {
-      ...selectedReferral,
+      ...referralAtChange,
       investigation_records: updatedInvestigations,
     };
 
     setSelectedReferral(updatedReferral);
-    setReferrals((previous) =>
-      previous.map((item) =>
-        item.id === selectedReferral.id
-          ? updatedReferral
-          : item
-      )
-    );
+    setReferrals((previous) => previous.map((item) =>
+      item.id === referralAtChange.id ? updatedReferral : item
+    ));
 
-    setActionLoading(
-      `${selectedReferral.id}-investigation-${index}`
-    );
+    const loadingKey = `${referralAtChange.id}-investigation-${index}`;
+    setActionLoading(loadingKey);
+
+    // Serialize full-array JSONB writes so rapid typing cannot finish out of order.
+    const saveTask = investigationSaveQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const { error } = await supabase
+          .from("referrals")
+          .update({ investigation_records: updatedInvestigations })
+          .eq("id", referralAtChange.id);
+        if (error) throw error;
+      });
+    investigationSaveQueueRef.current = saveTask;
 
     try {
-      const { error } = await supabase
-        .from("referrals")
-        .update({
-          investigation_records: updatedInvestigations,
-        })
-        .eq("id", selectedReferral.id);
-
-      if (error) throw error;
-
+      await saveTask;
       setMessage(
-        `${updatedInvestigations[index].investigation} result updated to ${getInvestigationResultLabel(resultStatus)}.`
+        `${updatedInvestigations[index].investigation} result saved: ${getInvestigationResultLabel(updatedInvestigations[index].result_status)}.`
       );
+      setError("");
     } catch (err) {
-      console.error(
-        "INVESTIGATION RESULT UPDATE ERROR:",
-        err
-      );
-      setError(
-        err.message ||
-          "Unable to update investigation result."
-      );
+      console.error("INVESTIGATION RESULT UPDATE ERROR:", err);
+      setError(err.message || "Unable to save the investigation result. Check connectivity and retry.");
     } finally {
-      setActionLoading(null);
+      setActionLoading((current) => current === loadingKey ? null : current);
     }
   };
 
@@ -5460,6 +5989,7 @@ function ReceivingDashboard() {
 
             referring_facility_id,
             receiving_facility_id,
+            counter_referral:counter_referrals(*) ,
 
             referring_facility:facilities!referrals_referring_facility_id_fkey (
               id,
@@ -5559,6 +6089,7 @@ function ReceivingDashboard() {
 
   const openReferralDetails = (referral) => {
     setSelectedReferral(referral);
+    void supabase.rpc("log_referral_read", { p_referral_id: referral.id });
 
     setAssessmentForm({
       assessment_findings:
@@ -5917,6 +6448,7 @@ function ReceivingDashboard() {
         setMessage(
           `Referral ${data.referral_number} acknowledged successfully.`
         );
+        void requestReferralSms(data.id, "referral_acknowledged");
 
         await loadIncomingReferrals();
 
@@ -6372,7 +6904,7 @@ const handleStartAssessment = async (referralId) => {
     referrals.filter(
       (referral) =>
         referral.status !== "completed" &&
-        referral.status !== "discharged"
+        (referral.status !== "discharged" || !referral.counter_referral)
     );
 
   /* =======================================================
@@ -6552,6 +7084,11 @@ const handleStartAssessment = async (referralId) => {
                         Urgency:{" "}
                         {String(referral.urgency || "Not specified")}
                       </span>
+                      {referral.status === "sent" && referral.ack_due_at && (
+                        <small className={isAckOverdue(referral) ? "urgency-overdue" : ""}>
+                          {isAckOverdue(referral) ? "Acknowledgement target missed" : `Acknowledgement target: ${new Date(referral.ack_due_at).toLocaleString()}`}
+                        </small>
+                      )}
 
                       <small>
                         Received:{" "}
@@ -7064,7 +7601,7 @@ const handleStartAssessment = async (referralId) => {
               <button
                 type="button"
                 className="secondary-button print-referral-button"
-                onClick={printReferralForm}
+                onClick={() => printReferralForm(selectedReferral, "RECEIVING FACILITY COPY", (count) => setSelectedReferral((previous) => ({ ...previous, print_count: count })))}
               >
                 🖨 Print Patient Referral Form
               </button>
@@ -7118,8 +7655,6 @@ const handleStartAssessment = async (referralId) => {
                 handleInvestigationResultChange
               }
             />
-
-            <ReferralTimeline referral={selectedReferral} />
 
             <hr />
 
@@ -7367,6 +7902,16 @@ const handleStartAssessment = async (referralId) => {
                   <strong> Under Assessment</strong>.
                 </p>
               </div>
+            )}
+
+            {selectedReferral.status === "discharged" && (
+              <CounterReferralForm
+                referral={selectedReferral}
+                onCompleted={(updatedReferral) => {
+                  setSelectedReferral(updatedReferral);
+                  loadIncomingReferrals();
+                }}
+              />
             )}
 
             <button

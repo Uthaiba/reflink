@@ -1,0 +1,12 @@
+{
+  "name": "REFLINK — Closed-Loop Digital Referral System",
+  "short_name": "REFLINK",
+  "description": "Every Referral Connected. Every Patient Followed.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f6f4",
+  "theme_color": "#063a2c",
+  "icons": [
+    { "src": "/logo-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

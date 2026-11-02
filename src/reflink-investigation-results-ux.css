@@ -1,0 +1,319 @@
+/* REFLINK — Investigation results UX refinement
+   Scope: referral details / investigations only.
+   Intentionally uses flat rows, calm borders, readable values, and semantic result colors.
+   Does not change referral logic or stored clinical data.
+*/
+
+.referral-source-details .clinical-detail-section {
+  margin-top: 16px !important;
+  padding: 18px !important;
+  background: #fff !important;
+  border: 1px solid var(--ref-border-light, #e3e9e6) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+.referral-source-details .clinical-detail-section > h4,
+.referral-source-details .selection-display-header h4 {
+  margin: 0 !important;
+  color: var(--ref-text-dark, #183a32) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  line-height: 1.4 !important;
+}
+
+.referral-source-details .selection-display-header {
+  align-items: flex-start !important;
+  gap: 12px !important;
+  margin-bottom: 12px !important;
+}
+
+.referral-source-details .selection-display-header p {
+  margin: 4px 0 0 !important;
+  color: var(--ref-text-muted, #63736d) !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+.referral-source-details .selection-count-badge {
+  flex: 0 0 auto !important;
+  padding: 4px 8px !important;
+  border-radius: 5px !important;
+  background: #eef5f2 !important;
+  border: 1px solid #dce9e3 !important;
+  color: #245c4e !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+/* Investigation categories: keep the selected values, remove decorative tile treatment. */
+.referral-source-details .selected-category-boxes {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+}
+
+.referral-source-details .selected-category-box {
+  min-height: 34px !important;
+  padding: 7px 10px !important;
+  border: 1px solid #d7e6df !important;
+  border-radius: 6px !important;
+  background: #f8fbf9 !important;
+  color: #245c4e !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+}
+
+/* Category groups become simple sections; results themselves are flat rows. */
+.referral-source-details .selected-investigation-groups {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 18px !important;
+}
+
+.referral-source-details .selected-investigation-group {
+  overflow: visible !important;
+  border: 0 !important;
+  border-top: 1px solid var(--ref-border-light, #e3e9e6) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.referral-source-details .selected-investigation-group-header {
+  min-height: 38px !important;
+  padding: 9px 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--ref-border-light, #e3e9e6) !important;
+  background: #fff !important;
+  color: var(--ref-text-dark, #183a32) !important;
+}
+
+.referral-source-details .selected-investigation-group-header strong {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+.referral-source-details .selected-investigation-group-header span {
+  min-width: 22px !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  background: #f1f4f2 !important;
+  color: #465750 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+.referral-source-details .investigation-result-list {
+  gap: 0 !important;
+}
+
+.referral-source-details .investigation-result-card {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: start !important;
+  gap: 10px 16px !important;
+  padding: 14px 2px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--ref-border-light, #e3e9e6) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.referral-source-details .investigation-result-card:last-child {
+  border-bottom: 0 !important;
+}
+
+.referral-source-details .investigation-result-main {
+  align-items: flex-start !important;
+  gap: 10px !important;
+}
+
+.referral-source-details .investigation-checkmark {
+  flex: 0 0 18px !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin-top: 1px !important;
+  border-radius: 50% !important;
+  font-size: 11px !important;
+}
+
+.referral-source-details .investigation-result-name strong {
+  color: var(--ref-text-dark, #183a32) !important;
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+  font-weight: 650 !important;
+}
+
+.referral-source-details .investigation-result-name small {
+  margin-top: 2px !important;
+  color: var(--ref-text-muted, #63736d) !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+}
+
+.referral-source-details .investigation-result-control {
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 9px !important;
+  min-width: 0 !important;
+}
+
+.referral-source-details .investigation-result-control > span:first-child {
+  color: #66746e !important;
+  font-size: 10px !important;
+  font-weight: 650 !important;
+  letter-spacing: .025em !important;
+}
+
+.referral-source-details .investigation-result-badge {
+  min-width: 96px !important;
+  max-width: 180px !important;
+  padding: 5px 8px !important;
+  border-radius: 5px !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  line-height: 1.35 !important;
+  white-space: normal !important;
+}
+
+/* Prominent actual measurement / report detail, without another floating card. */
+.referral-source-details .investigation-result-value {
+  grid-column: 1 / -1 !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: baseline !important;
+  gap: 5px 10px !important;
+  margin: 2px 0 0 28px !important;
+  padding: 8px 11px !important;
+  border: 0 !important;
+  border-left: 3px solid #9abdb0 !important;
+  border-radius: 0 5px 5px 0 !important;
+  background: #f7faf8 !important;
+}
+
+.referral-source-details .investigation-result-value span {
+  flex: 0 0 100% !important;
+  color: #5f6e67 !important;
+  font-size: 10px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.referral-source-details .investigation-result-value strong {
+  display: inline !important;
+  margin: 0 !important;
+  color: var(--ref-text-dark, #183a32) !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  font-weight: 650 !important;
+  overflow-wrap: anywhere !important;
+}
+
+.referral-source-details .investigation-result-value small {
+  color: #5f6e67 !important;
+  font-size: 11px !important;
+  line-height: 1.5 !important;
+}
+
+.referral-source-details .investigation-file-row {
+  grid-column: 1 / -1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  margin: 0 0 0 28px !important;
+  padding: 8px 0 0 !important;
+  border-top: 1px solid #edf1ee !important;
+}
+
+.referral-source-details .investigation-file-row > div:first-child > span {
+  color: #65736d !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.referral-source-details .investigation-file-row strong {
+  display: block !important;
+  color: #34483f !important;
+  font-size: 11px !important;
+  line-height: 1.5 !important;
+  font-weight: 500 !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+}
+
+.referral-source-details .investigation-file-row small {
+  color: #65736d !important;
+  font-size: 11px !important;
+}
+
+/* Editable receiving-facility controls remain full-width and easy to operate. */
+.referral-source-details .investigation-result-detail-grid {
+  grid-column: 1 / -1 !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  margin: 4px 0 2px 28px !important;
+  padding: 12px !important;
+  border-left: 2px solid #d7e6df !important;
+  background: #fafcfb !important;
+}
+
+.referral-source-details .investigation-result-detail-grid label > span,
+.referral-source-details .investigation-result-notes > span {
+  color: #5c6b64 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.referral-source-details .investigation-result-detail-grid input,
+.referral-source-details .investigation-result-detail-grid select,
+.referral-source-details .investigation-result-detail-grid textarea {
+  min-height: 40px !important;
+  font-size: 13px !important;
+}
+
+.referral-source-details .investigation-result-notes {
+  grid-column: 1 / -1 !important;
+}
+
+@media (max-width: 760px) {
+  .referral-source-details .clinical-detail-section {
+    padding: 14px !important;
+  }
+
+  .referral-source-details .investigation-result-card {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .referral-source-details .investigation-result-control {
+    justify-content: flex-start !important;
+    margin-left: 28px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .referral-source-details .investigation-result-detail-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    margin-left: 0 !important;
+  }
+
+  .referral-source-details .investigation-result-value,
+  .referral-source-details .investigation-file-row {
+    margin-left: 0 !important;
+  }
+}
+
+@media print {
+  .referral-source-details .clinical-detail-section,
+  .referral-source-details .selected-investigation-group,
+  .referral-source-details .investigation-result-card {
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+}
