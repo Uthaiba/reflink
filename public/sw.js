@@ -1,4 +1,4 @@
-const CACHE_NAME = "reflink-shell-v2";
+const CACHE_NAME = "reflink-shell-v3";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/logo.png", "/reflink-mark.png"];
 
 self.addEventListener("install", (event) => {
