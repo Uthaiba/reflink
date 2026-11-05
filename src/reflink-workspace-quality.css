@@ -522,3 +522,43 @@
 @media (prefers-reduced-motion: reduce) {
   .assessment-completion-track > span { transition: none; }
 }
+
+
+/* Closed-loop counter-referral submission guidance. */
+.counter-referral-completion {
+  margin: 14px 0;
+  padding: 13px 15px;
+  border: 1px solid var(--reflink-workspace-line, #dfe8e2);
+  border-radius: 9px;
+  background: #f8fbf9;
+}
+.counter-referral-completion > strong {
+  display: block;
+  color: var(--reflink-workspace-ink, #173b35);
+  font-size: 12px;
+}
+.counter-referral-completion ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.counter-referral-completion li {
+  color: var(--reflink-workspace-muted, #526760);
+  font-size: 11px;
+}
+.counter-referral-completion li.is-complete {
+  color: #17664f;
+  font-weight: 650;
+}
+.counter-referral-finality-note {
+  margin: 12px 0 16px;
+  padding: 11px 13px;
+  border-left: 3px solid #b7791f;
+  background: #fffaf0;
+  color: #694b1c;
+  font-size: 12px;
+  line-height: 1.55;
+}
