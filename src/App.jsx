@@ -4512,6 +4512,8 @@ function PHCStaffDashboard({ onNewReferral }) {
   const [activeFilter, setActiveFilter] =
     useState("all");
 
+  const [searchQuery, setSearchQuery] = useState("");
+
   /* =========================================================
      LOAD MY REFERRALS
      ========================================================= */
@@ -4808,14 +4810,25 @@ loadMyReferrals();
      FILTERED REFERRALS
      ========================================================= */
 
-  const filteredReferrals =
-    activeFilter === "all"
-      ? referrals
-      : referrals.filter(
-          (referral) =>
-            referral.status ===
-            activeFilter
-        );
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+  const filteredReferrals = referrals.filter((referral) => {
+    const matchesStatus = activeFilter === "all" || referral.status === activeFilter;
+    if (!matchesStatus) return false;
+    if (!normalizedSearch) return true;
+
+    const searchableValues = [
+      referral.referral_number,
+      referral.patient_identifier,
+      referral.chief_complaint,
+      referral.provisional_diagnosis,
+      formatDiagnosisRecords(referral.diagnosis_records),
+      referral.urgency,
+      getStatusLabel(referral.status),
+    ];
+    return searchableValues.some((value) =>
+      String(value || "").toLocaleLowerCase().includes(normalizedSearch)
+    );
+  });
 
   /* =========================================================
      FILTER LABEL
@@ -5106,6 +5119,17 @@ loadMyReferrals();
 
           <div className="dashboard-card-header-actions">
 
+            <label className="referral-search-field">
+              <span className="sr-only">Search your referrals</span>
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search referral ID, patient or complaint"
+                aria-label="Search your referrals by referral ID, patient identifier, complaint or diagnosis"
+              />
+            </label>
+
             <strong>
               {
                 filteredReferrals.length
@@ -5146,10 +5170,11 @@ loadMyReferrals();
           filteredReferrals.length ===
             0 && (
             <p>
-              {activeFilter ===
-              "all"
-                ? "No referrals found."
-                : "No referrals found for this filter."}
+              {normalizedSearch
+                ? "No referrals match your search. Try another term or clear the search."
+                : activeFilter === "all"
+                  ? "No referrals found."
+                  : "No referrals found for this filter."}
             </p>
           )}
 
