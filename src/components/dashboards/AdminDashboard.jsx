@@ -7,8 +7,6 @@ import { supabase } from "../../lib/supabase.js";
 
 function AdminDashboard({
   profile,
-  AnalyticsDashboard,
-  AnalysisHub,
   formatPatientAge,
   getStatusLabel,
 }) {
@@ -2906,28 +2904,32 @@ function AdminAggregateReports() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const loadReport = async () => {
-    setLoading(true);
-    setError("");
-    setResult(null);
-    try {
-      const { data, error: reportError } = await supabase.rpc("get_admin_referral_volume", {
-        p_start_date: startDate,
-        p_end_date: endDate,
-      });
-      if (reportError) throw reportError;
-      setResult(Array.isArray(data) ? data[0] || null : data || null);
-    } catch {
-      setError("Aggregate reporting is not yet available in this environment. The reviewed database migration must be applied and tested before this report can run.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    let active = true;
+    const loadReport = async () => {
+      setLoading(true);
+      setError("");
+      setResult(null);
+      try {
+        const { data, error: reportError } = await supabase.rpc("get_admin_referral_volume", {
+          p_start_date: startDate,
+          p_end_date: endDate,
+        });
+        if (reportError) throw reportError;
+        if (active) setResult(Array.isArray(data) ? data[0] || null : data || null);
+      } catch {
+        if (active) {
+          setError("Aggregate reporting is not yet available in this environment. The reviewed database migration must be applied and tested before this report can run.");
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
     loadReport();
-  }, []);
+    return () => { active = false; };
+  }, [startDate, endDate, refreshKey]);
 
   return (
     <section className="dashboard-card" aria-labelledby="admin-aggregate-heading">
@@ -2943,7 +2945,7 @@ function AdminAggregateReports() {
           To
           <input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} />
         </label>
-        <button type="button" className="primary-button" onClick={loadReport} disabled={loading || !startDate || !endDate || startDate > endDate}>
+        <button type="button" className="primary-button" onClick={() => setRefreshKey((current) => current + 1)} disabled={loading || !startDate || !endDate || startDate > endDate}>
           {loading ? "Loading..." : "Refresh report"}
         </button>
       </div>
