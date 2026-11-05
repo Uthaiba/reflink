@@ -4,6 +4,7 @@ import App from "./App.jsx";
 import "./App.css";
 import "./reflink-theme-professional.css";
 import "./admin-dashboard-modern.css";
+import "./admin-workspace.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
