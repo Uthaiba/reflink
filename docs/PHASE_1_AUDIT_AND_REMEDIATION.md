@@ -32,8 +32,9 @@ The production application logged referral datasets and realtime referral payloa
 Change made on this branch: removed four patient-payload/status console.log statements from src/App.jsx. Error logging remains for review; future error messages must not serialize sensitive records.
 
 ### P0 — Administrator access and aggregate analytics
-The live RLS catalog did not show an administrator SELECT policy on referrals. Dashboard and analysis modules perform direct referral queries. The inspected analytics RPC had no EXECUTE grant to authenticated or anon.
-Required: design an explicitly authorised server-side reporting interface returning aggregate-only data. Separately define, justify and audit any administrator access to individual clinical records. Do not add a blanket administrator policy just to make dashboard counts appear.
+The live RLS catalog did not show an administrator SELECT policy on referrals. The original administrator dashboard and analysis modules queried patient-level referral rows.
+Change made on this branch: administrator home, referral and analytics views now avoid patient-level referral queries and display an aggregate-only reporting workspace. A proposed migration adds an administrator-gated aggregate RPC with small-cell suppression. No administrator SELECT policy on referrals is added.
+Not yet functional against production: the aggregate RPC migration is not applied to the connected project. The preview should display a clear unavailable state until a staging migration is tested and approved.
 
 ### P0 — Counter-referral component reference
 The production App.jsx renders CounterReferralForm when a referral is discharged, but the tracked production source inventory did not contain a definition or import for that component. The database guard trigger requires a counter-referral before completion.
@@ -55,8 +56,9 @@ Required: move toward field-level change metadata and a carefully justified rete
 The Vercel SMS route checks the authenticated user and facility/role context. Rate limiting, idempotency, delivery callbacks and durable retry handling need further work. The presence of an SLA notification type does not prove a scheduled escalation process exists.
 
 ### P1 — Role model and deployment drift
-The deployed Supabase user-provisioning Edge Function differs from the committed function source and permits roles not allowed by the live profile constraint. A legacy users table and UserManagement.jsx path coexist with Auth/profiles.
-Required: establish Auth/profiles as the single identity model; reconcile function source and deployed code; retire legacy user writes only after dependency review.
+The deployed Supabase user-provisioning Edge Function differs from the earlier committed root-level function source and permits roles not allowed by the live profile constraint. A legacy users table and UserManagement.jsx path coexist with Auth/profiles.
+Change made on this branch: added a canonical supabase/functions/create-user/index.ts implementation that allows only the three database-supported roles, requires active facility assignments for facility staff and validates the administrator caller. Marked the old root-level function source as historical/non-deployable.
+Not deployed: the live create-user Edge Function has not been replaced. Deploy only after reviewing and testing this source in a non-production Supabase project.
 
 ### P2 — PWA manifest linkage
 The release already included public/manifest.webmanifest, but index.html did not link it.
@@ -74,13 +76,19 @@ Advisor findings are prompts for review, not proof of exploitation. Index remova
 ## Changes made on this branch
 1. Removed four patient-data console logging statements from src/App.jsx.
 2. Linked the existing PWA manifest in index.html and added theme-colour metadata.
-3. Added this audit record.
+3. Implemented the missing counter-referral form; a proposed migration adds an atomic, role/facility-verified RPC for final submission.
+4. Replaced administrator patient-level referral queries and records views with aggregate-only reporting UI.
+5. Added a proposed administrator aggregate reporting RPC with Africa/Lagos date boundaries and small-cell suppression.
+6. Added a canonical user-provisioning Edge Function source limited to database-supported roles; not deployed.
+7. Added CI build/lint workflow, test matrix and migration governance documentation.
+8. Added this audit record.
 No production database schema, RLS policy, patient record, storage object, secret, Edge Function or Vercel production setting was modified.
 
 ## Validation status
 - Source changes were applied to a new branch created from the exact v2.0 production commit.
-- Vercel preview build for commit 3ac2ccd9842b48a85ef686017c0fe017da9b5c4b completed with READY status.
-- Automated lint, unit, integration, RLS and browser workflow tests have not yet been run.
+- Vercel preview build for application commit 3ac2ccd9842b48a85ef686017c0fe017da9b5c4b completed with READY status. Later dashboard and migration commits require a fresh preview build.
+- GitHub Actions build/lint workflow has been added; execution result is pending.
+- Automated integration, RLS, counter-referral concurrency, accessibility and browser workflow tests have not yet been run.
 - No claim of production readiness or legal compliance is made.
 - The new branch must be reviewed and its Vercel preview validated before merge.
 
