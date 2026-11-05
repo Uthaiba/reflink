@@ -8009,7 +8009,7 @@ function CounterReferralForm({ referral, onCompleted }) {
         onCompleted({
           ...referral,
           status: completion.referral_status,
-          completed_at: new Date().toISOString(),
+          completed_at: completion.completed_at,
           counter_referral: counterReferralPayload,
         });
       }
