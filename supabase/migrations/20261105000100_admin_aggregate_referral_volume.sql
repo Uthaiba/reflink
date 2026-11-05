@@ -45,6 +45,8 @@ begin
   end if;
 
   if p_referral_id is null
+     or p_final_diagnosis is null
+     or p_outcome is null
      or nullif(pg_catalog.btrim(p_final_diagnosis), '') is null
      or p_outcome not in ('recovered', 'improved', 'referred_further', 'died', 'other')
      or (p_outcome = 'referred_further' and nullif(pg_catalog.btrim(p_referred_further_to), '') is null)
