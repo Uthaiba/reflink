@@ -2680,8 +2680,32 @@ function AdminAggregateReports() {
     return `${values.year}-${values.month}-${values.day}`;
   };
   const todayValue = toLagosDateInput(new Date());
-  const [startDate, setStartDate] = useState(`${todayValue.slice(0, 7)}-01`);
+  const getLagosMonthStart = (date) => `${toLagosDateInput(date).slice(0, 7)}-01`;
+  const shiftLagosDate = (value, days) => {
+    const [year, month, day] = value.split("-").map(Number);
+    const shifted = new Date(Date.UTC(year, month - 1, day + days, 12));
+    return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
+  };
+  const [startDate, setStartDate] = useState(getLagosMonthStart(new Date()));
   const [endDate, setEndDate] = useState(todayValue);
+  const applyReportingPreset = (preset) => {
+    const today = toLagosDateInput(new Date());
+    if (preset === "month") {
+      setStartDate(getLagosMonthStart(new Date()));
+      setEndDate(today);
+      return;
+    }
+    if (preset === "previous-month") {
+      const [year, month] = today.split("-").map(Number);
+      const previousMonth = new Date(Date.UTC(year, month - 2, 1, 12));
+      const previousEnd = new Date(Date.UTC(year, month - 1, 0, 12));
+      setStartDate(`${previousEnd.getUTCFullYear()}-${String(previousEnd.getUTCMonth() + 1).padStart(2, "0")}-01`);
+      setEndDate(`${previousEnd.getUTCFullYear()}-${String(previousEnd.getUTCMonth() + 1).padStart(2, "0")}-${String(previousEnd.getUTCDate()).padStart(2, "0")}`);
+      return;
+    }
+    setStartDate(shiftLagosDate(today, preset === "90-days" ? -89 : -29));
+    setEndDate(today);
+  };
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -2717,6 +2741,12 @@ function AdminAggregateReports() {
       <span className="eyebrow">PRIVACY-PRESERVING REPORTING</span>
       <h3 id="admin-aggregate-heading">Referral service activity</h3>
       <p>Aggregate referral volume only. No patient names, identifiers, diagnoses or individual referral records are returned.</p>
+      <div className="aggregate-report-presets" role="group" aria-label="Reporting period shortcuts">
+        <button type="button" className={startDate === getLagosMonthStart(new Date()) && endDate === todayValue ? "is-active" : ""} onClick={() => applyReportingPreset("month")}>This month</button>
+        <button type="button" onClick={() => applyReportingPreset("previous-month")}>Previous month</button>
+        <button type="button" onClick={() => applyReportingPreset("30-days")}>Last 30 days</button>
+        <button type="button" onClick={() => applyReportingPreset("90-days")}>Last 90 days</button>
+      </div>
       <div className="dashboard-actions">
         <label>
           From
