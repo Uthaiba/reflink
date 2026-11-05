@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase.js";
-import "../../admin-workspace.css";
 
 /* =======================================================
    ADMIN DASHBOARD
