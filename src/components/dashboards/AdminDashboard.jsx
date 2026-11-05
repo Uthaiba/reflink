@@ -198,109 +198,11 @@ function AdminDashboard({
      LOAD REFERRALS
      ======================================================= */
 
+  // Administrators receive aggregate reporting only. Patient-level referral rows
+  // remain restricted to the PHC and receiving-facility workflows.
   const loadReferrals = async () => {
-    setReferralsLoading(true);
-    setError("");
-
-    try {
-      const {
-        data,
-        error: referralsError,
-      } = await supabase
-        .from("referrals")
-        .select(`
-          id,
-          referral_number,
-          patient_identifier,
-          is_test,
-          patient_age_months,
-          patient_sex,
-          patient_phone,
-          patient_address,
-          relative_name,
-          relative_relationship,
-          relative_phone,
-          diagnosis_status,
-          diagnosis_category,
-          diagnosis_records,
-          investigation_categories,
-          investigation_records,
-          chief_complaint,
-          clinical_summary,
-          physical_findings,
-          provisional_diagnosis,
-          investigations,
-          treatment_given,
-          referral_reason,
-          urgency,
-          referring_facility_id,
-          receiving_facility_id,
-          referring_user_id,
-          status,
-          created_at,
-          acknowledged_at,
-          patient_arrived_at,
-          completed_at,
-          assessment_findings,
-          final_diagnosis,
-          treatment_provided,
-          procedures_performed,
-          clinical_feedback,
-          disposition,
-          assessment_completed_at,
-          discharged_at,
-          admission_at,
-          ward_unit,
-          admission_diagnosis,
-          clinical_progress,
-          inpatient_treatment,
-          discharge_diagnosis,
-          condition_at_discharge,
-          discharge_medications,
-          follow_up_plan,
-
-          referring_facility:facilities!referrals_referring_facility_id_fkey (
-            id,
-            name,
-            facility_type,
-            state,
-            lga,
-            is_active
-          ),
-
-          receiving_facility:facilities!referrals_receiving_facility_id_fkey (
-            id,
-            name,
-            facility_type,
-            state,
-            lga,
-            is_active
-          )
-        `)
-        .order("created_at", {
-          ascending: false,
-        });
-
-      if (referralsError) {
-        throw referralsError;
-      }
-
-      setReferrals(data || []);
-    } catch (err) {
-      console.error(
-        "REFERRALS ERROR:",
-        err
-      );
-
-      setError(
-        err?.message ||
-          "Unable to load referrals."
-      );
-
-      setReferrals([]);
-    } finally {
-      setReferralsLoading(false);
-    }
+    setReferrals([]);
+    setReferralsLoading(false);
   };
 
   /* =======================================================
@@ -1895,6 +1797,22 @@ function AdminDashboard({
      REFERRAL NETWORK VIEW
      ======================================================= */
 
+  if (view === "referrals" || view === "active-referrals") {
+    return (
+      <>
+        <div className="dashboard-actions">
+          <button type="button" className="secondary-button" onClick={() => setView("home")}>← Back to Administration</button>
+        </div>
+        <div className="dashboard-card">
+          <span className="eyebrow">CLINICAL RECORD PRIVACY</span>
+          <h3>Patient-level referral records are not available in the administrator workspace</h3>
+          <p>REFLINK restricts identifiable clinical referral records to the authorised referring and receiving care teams. Use the aggregate reporting workspace for network-level activity. If an administrator needs an individual record for a legitimate clinical or governance purpose, that access requires a separately approved, purpose-limited and audited workflow.</p>
+          <button type="button" className="primary-button" onClick={() => setView("analytics")}>Open aggregate reporting</button>
+        </div>
+      </>
+    );
+  }
+
   if (
     view ===
     "referrals"
@@ -2278,7 +2196,7 @@ function AdminDashboard({
             ← Back to Administration
           </button>
         </div>
-        <AnalysisHub />
+        <AdminAggregateReports />
       </>
     );
   }
@@ -2307,7 +2225,7 @@ function AdminDashboard({
           </button>
         </div>
 
-        <AnalyticsDashboard />
+        <AdminAggregateReports />
       </>
     );
   }
@@ -2533,6 +2451,37 @@ function AdminDashboard({
           )}
         </div>
       </>
+    );
+  }
+
+  if (view === "home") {
+    return (
+      <div className="admin-modern-shell">
+        <main className="admin-modern-main">
+          <header className="admin-modern-heading">
+            <div>
+              <span className="eyebrow">REFLINK / ADMINISTRATION</span>
+              <h2>Good evening, {profile?.full_name?.split(" ")[0] || "Administrator"}</h2>
+              <p>Network administration and privacy-preserving service activity reporting.</p>
+            </div>
+            <button type="button" className="primary-button admin-primary-action" onClick={() => setView("facilities")}>+ Manage facilities</button>
+          </header>
+          <div className="admin-kpi-grid">
+            <div className="admin-kpi-card kpi-teal"><span>Facilities</span><strong>{facilities.length.toLocaleString()}</strong><small>Configured network facilities</small></div>
+            <div className="admin-kpi-card kpi-amber"><span>System users</span><strong>{users.length.toLocaleString()}</strong><small>Configured accounts and roles</small></div>
+          </div>
+          <AdminAggregateReports />
+          <div className="dashboard-card">
+            <span className="eyebrow">ACCESS MODEL</span>
+            <h3>Clinical records stay with care teams</h3>
+            <p>Administrator reporting is aggregate-only. Individual referral records remain available through authorised PHC and receiving-facility workflows, subject to database access policies.</p>
+            <div className="dashboard-actions">
+              <button type="button" className="secondary-button" onClick={() => setView("facilities")}>Manage facilities</button>
+              <button type="button" className="secondary-button" onClick={() => setView("users")}>Manage users</button>
+            </div>
+          </div>
+        </main>
+      </div>
     );
   }
 
@@ -2943,4 +2892,80 @@ function AdminDashboard({
   );
 
 }
+function AdminAggregateReports() {
+  const today = new Date();
+  const toDateInput = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const [startDate, setStartDate] = useState(toDateInput(monthStart));
+  const [endDate, setEndDate] = useState(toDateInput(today));
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const loadReport = async () => {
+    setLoading(true);
+    setError("");
+    setResult(null);
+    try {
+      const { data, error: reportError } = await supabase.rpc("get_admin_referral_volume", {
+        p_start_date: startDate,
+        p_end_date: endDate,
+      });
+      if (reportError) throw reportError;
+      setResult(Array.isArray(data) ? data[0] || null : data || null);
+    } catch {
+      setError("Aggregate reporting is not yet available in this environment. The reviewed database migration must be applied and tested before this report can run.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadReport();
+  }, []);
+
+  return (
+    <section className="dashboard-card" aria-labelledby="admin-aggregate-heading">
+      <span className="eyebrow">PRIVACY-PRESERVING REPORTING</span>
+      <h3 id="admin-aggregate-heading">Referral service activity</h3>
+      <p>Aggregate referral volume only. No patient names, identifiers, diagnoses or individual referral records are returned.</p>
+      <div className="dashboard-actions">
+        <label>
+          From
+          <input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} />
+        </label>
+        <label>
+          To
+          <input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} />
+        </label>
+        <button type="button" className="primary-button" onClick={loadReport} disabled={loading || !startDate || !endDate || startDate > endDate}>
+          {loading ? "Loading..." : "Refresh report"}
+        </button>
+      </div>
+      {error && <p className="error-message" role="status">{error}</p>}
+      {result && (
+        <div className="stats-grid">
+          <div className="stat-card">
+            <span>Referral episodes</span>
+            <strong>{result.small_cell_suppressed ? "Suppressed" : Number(result.referral_count || 0).toLocaleString()}</strong>
+            <small>{result.small_cell_suppressed ? "Counts from 1–4 are hidden to reduce disclosure risk." : "Recorded service activity; not population incidence or prevalence."}</small>
+          </div>
+          <div className="stat-card">
+            <span>Reporting period</span>
+            <strong>{startDate} – {endDate}</strong>
+            <small>Africa/Lagos reporting dates</small>
+          </div>
+        </div>
+      )}
+      {!result && !error && !loading && <p>No aggregate result is available for this reporting period.</p>}
+      <small className="admin-method-note">Test referrals are excluded. Counts between 1 and 4 are suppressed. Interpret activity alongside facility coverage, data completeness and reporting delays.</small>
+    </section>
+  );
+}
+
 export default AdminDashboard;
