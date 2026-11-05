@@ -76,7 +76,7 @@ Advisor findings are prompts for review, not proof of exploitation. Index remova
 ## Changes made on this branch
 1. Removed four patient-data console logging statements from src/App.jsx.
 2. Linked the existing PWA manifest in index.html and added theme-colour metadata.
-3. Implemented the missing counter-referral form; a proposed migration adds an atomic, role/facility-verified RPC for final submission.
+3. Implemented the counter-referral form and connected it to a proposed atomic, role/facility-verified RPC; the client no longer performs separate insert and status-update requests.
 4. Replaced administrator patient-level referral queries and records views with aggregate-only reporting UI.
 5. Added a proposed administrator aggregate reporting RPC with Africa/Lagos date boundaries and small-cell suppression.
 6. Added a canonical user-provisioning Edge Function source limited to database-supported roles; not deployed.
