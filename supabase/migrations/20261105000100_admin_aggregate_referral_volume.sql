@@ -14,7 +14,8 @@ create or replace function public.submit_counter_referral(
 returns table (
   counter_referral_id uuid,
   referral_status text,
-  already_recorded boolean
+  already_recorded boolean,
+  completed_at timestamptz
 )
 language plpgsql
 security definer
@@ -30,6 +31,7 @@ declare
   v_existing_user_id uuid;
   v_counter_referral_id uuid;
   v_already_recorded boolean := false;
+  v_completed_at timestamptz;
 begin
   if v_user_id is null then
     raise exception 'Authentication required.' using errcode = '42501';
@@ -80,7 +82,10 @@ begin
 
   if v_status = 'completed' then
     if v_existing_id is not null and v_existing_user_id = v_user_id then
-      return query select v_existing_id, 'completed'::text, true;
+      select r.completed_at into v_completed_at
+        from public.referrals r
+       where r.id = p_referral_id;
+      return query select v_existing_id, 'completed'::text, true, v_completed_at;
       return;
     end if;
     raise exception 'This referral has already been completed.' using errcode = '55000';
@@ -91,11 +96,7 @@ begin
   end if;
 
   if v_existing_id is not null then
-    if v_existing_user_id is distinct from v_user_id then
-      raise exception 'A counter-referral already exists for this episode.' using errcode = '23505';
-    end if;
-    v_counter_referral_id := v_existing_id;
-    v_already_recorded := true;
+    raise exception 'A counter-referral already exists for this discharged episode. Reconcile it through the authorised clinical workflow before completion.' using errcode = '23505';
   else
     insert into public.counter_referrals (
       referral_id,
@@ -125,9 +126,10 @@ begin
   update public.referrals
      set status = 'completed',
          completed_at = coalesce(completed_at, pg_catalog.now())
-   where id = p_referral_id;
+   where id = p_referral_id
+   returning completed_at into v_completed_at;
 
-  return query select v_counter_referral_id, 'completed'::text, v_already_recorded;
+  return query select v_counter_referral_id, 'completed'::text, v_already_recorded, v_completed_at;
 end;
 $function$;
 
