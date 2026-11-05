@@ -125,7 +125,7 @@ The following changes were added after the initial audit:
 - Tightened `public/sw.js`: same-origin `/api/` requests, requests with Authorization headers and requests explicitly marked no-store bypass service-worker caching. Only the app navigation shell and known static assets / Vite assets are cacheable; unknown dynamic GET endpoints are network-only.
 - Static asset path detection was preserved and corrected to match file extensions, avoiding accidental fallback of asset requests to the app shell.
 
-These changes are source-level hardening, not proof of device-level PHI encryption or complete offline privacy. Existing IndexedDB referral queue/cache contents still need a separately designed encryption, key lifecycle, retention and device/session threat model. Existing service-worker caches from older releases should be cleared/retired through a controlled version transition and verified on real devices.
+These changes are source-level hardening, not proof of device-level PHI encryption or complete offline privacy. Existing IndexedDB referral queue/cache contents still need a separately designed encryption, key lifecycle, retention and device/session threat model. The service-worker cache was rotated from v2 to v3 so activation retires the older `reflink-shell-v2` cache. Verify this cache retirement on real devices during acceptance testing.
 
 ### Validation status for this additional pass
 
