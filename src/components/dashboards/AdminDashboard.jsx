@@ -2771,13 +2771,20 @@ function AdminAggregateReports() {
       suppressed: result.completion_count_suppressed,
       note: "Valid referral-completion timestamps recorded.",
     },
+    {
+      key: "chronology",
+      label: "Timestamp quality flags",
+      value: result.chronology_anomaly_count,
+      suppressed: result.chronology_anomaly_suppressed,
+      note: "Referrals with at least one event timestamp before creation.",
+    },
   ] : [];
 
   return (
     <section className="dashboard-card" aria-labelledby="admin-aggregate-heading">
       <span className="eyebrow">PRIVACY-PRESERVING REPORTING</span>
       <h3 id="admin-aggregate-heading">Referral service activity</h3>
-      <p>Aggregate referral volume only. No patient names, identifiers, diagnoses or individual referral records are returned.</p>
+      <p>Aggregate referral workflow indicators and a timestamp-quality signal. No patient names, identifiers, diagnoses or individual referral records are returned.</p>
       <div className="aggregate-report-presets" role="group" aria-label="Reporting period shortcuts">
         <button type="button" className={startDate === getLagosMonthStart(new Date()) && endDate === todayValue ? "is-active" : ""} onClick={() => applyReportingPreset("month")}>This month</button>
         <button type="button" onClick={() => applyReportingPreset("previous-month")}>Previous month</button>
@@ -2811,12 +2818,12 @@ function AdminAggregateReports() {
           </div>
           <div className="admin-rphi-period-note">
             <strong>Reporting cohort: {startDate} – {endDate}</strong>
-            <span>All indicators use referrals created in this period. Event counts require a recorded timestamp on or after referral creation. A missing event timestamp is not automatically a failure; these are operational counts, not validated performance rates.</span>
+            <span>Workflow indicators use referrals created in this period. A timestamp-quality flag identifies referrals with at least one event timestamp earlier than creation; those invalid timestamps are excluded from the corresponding event count. Missing timestamps are not automatically failures. These are operational counts, not validated performance rates.</span>
           </div>
         </>
       )}
       {!result && !error && !loading && <p>No aggregate result is available for this reporting period.</p>}
-      <small className="admin-method-note">Test referrals are excluded. Counts from 1 to 4 are suppressed independently. These aggregate indicators do not establish population incidence, prevalence, clinical quality or referral failure rates. Validate definitions and observation windows with clinical and public-health leads before using them for performance decisions.</small>
+      <small className="admin-method-note">Test referrals are excluded. Counts from 1 to 4 are suppressed independently. Timestamp flags are data-quality signals, not clinical outcomes. These aggregate indicators do not establish population incidence, prevalence, clinical quality or referral failure rates. Validate definitions and observation windows with clinical and public-health leads before using them for performance decisions.</small>
     </section>
   );
 }
