@@ -96,9 +96,12 @@ This primary suppression rule is not sufficient by itself. Before adding filters
 1. Complementary suppression where a total and visible subgroups could reveal a suppressed cell by subtraction.
 2. Minimum cohort sizes for cross-tabulations and geographic drill-down.
 3. Query-rate and repeated-filter controls to limit differencing attacks.
-4. Stable reporting periods and controlled dimension sets.
-5. Export review and audit metadata.
-6. A policy for zero counts, missing values, unavailable data and not-yet-observed cohorts.
+4. Facility distributions are limited to exactly one complete calendar month; arbitrary and overlapping periods are not accepted by the facility aggregation RPC.
+5. For each direction (sending and receiving), when exactly one facility has a count of 1–4, one additional visible facility group is complementarily suppressed. When two or more small groups exist, all small groups are suppressed.
+6. Facility identity, facility type and LGA/state are withheld for both primary and complementary suppressed groups.
+7. Stable reporting periods and controlled dimension sets.
+8. Export review and audit metadata.
+9. A policy for zero counts, missing values, unavailable data and not-yet-observed cohorts.
 
 Do not expose arbitrary SQL filters or user-selected combinations of facility, age, sex, diagnosis, urgency and outcome. Each additional dimension creates a disclosure risk.
 
