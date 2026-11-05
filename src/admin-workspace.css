@@ -471,3 +471,47 @@
   .admin-facility-directions { grid-template-columns: 1fr; }
   .admin-facility-intelligence-heading { flex-direction: column; }
 }
+
+
+/* Aggregate acknowledgement early-warning categories. */
+.admin-delay-alert-list {
+  display: grid;
+  gap: 0;
+  margin-top: 13px;
+  overflow: hidden;
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  background: #fff;
+}
+.admin-delay-alert-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 58px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--admin-line);
+}
+.admin-delay-alert-row:last-child { border-bottom: 0; }
+.admin-delay-alert-row > div { display: grid; min-width: 0; gap: 4px; }
+.admin-delay-alert-row strong {
+  color: var(--admin-ink);
+  font-size: 11px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.admin-delay-alert-row small {
+  color: var(--admin-muted);
+  font-size: 10px;
+}
+.admin-delay-alert-row > span {
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.admin-delay-alert-row > span.is-alert-count { color: #a33b25; }
+.admin-delay-alert-row > span.is-suppressed {
+  color: var(--admin-muted);
+  font-size: 10px;
+}

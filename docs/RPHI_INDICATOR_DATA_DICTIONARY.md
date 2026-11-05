@@ -208,3 +208,20 @@ Until sign-off and non-production tests are complete, these definitions remain a
 **Interpretation boundary:** These measures describe timestamps recorded in REFLINK. They do not establish causation, clinical appropriateness, patient safety, service quality, or a facility's performance. Missing timestamps may reflect workflow design, delayed data entry, offline synchronisation or incomplete capture; they must not automatically be classified as delays or failures.
 
 **Release requirements:** Validate facility-type mappings, timestamp semantics, late-sync behaviour, timezone boundaries and synthetic percentile calculations in a non-production database. Test primary and complementary suppression, sparse timestamp samples, null facility references and negative chronology before enabling the RPC.
+
+
+## 13. Acknowledgement delay early-warning snapshot — candidate indicator
+
+**Purpose:** Give administrators a privacy-preserving network snapshot of acknowledgement deadlines that have elapsed and acknowledgements recorded after their due time.
+
+- Uses each referral's existing `ack_due_at` value rather than recalculating or inventing a new service threshold.
+- Current overdue acknowledgement: referral remains in `sent` status and its due timestamp is earlier than the database snapshot time.
+- Late acknowledgement: a valid `acknowledged_at` timestamp is later than the stored due timestamp.
+- Existing workflow urgency targets are Emergency 15 minutes, Urgent 2 hours and Routine 24 hours; the due timestamp is authoritative for the report.
+- Excludes test referrals and due timestamps earlier than referral creation.
+- Groups are by alert category and urgency only; no facility, referral, patient or user identifiers are returned.
+- Counts of 1–4 are suppressed. If exactly one small category exists, one additional visible category is suppressed to reduce subtraction-based disclosure.
+
+**Interpretation boundary:** The report is an administrator-only aggregate snapshot. It does not notify a receiving team, identify a case for clinical action, establish preventable delay or measure clinical quality. A delay signal must be verified in the authorised clinical workflow. Late acknowledgements are historical events; current overdue acknowledgements remain in the sent workflow state.
+
+**Release requirements:** Validate urgency-to-due-time assignment in synthetic records, test sent overdue, sent not-yet-due, acknowledged before/on/after due, invalid chronology, test referral exclusion, null urgency, and all suppression branches in a non-production database. Confirm database clock/timezone semantics and verify no case-level data is returned.

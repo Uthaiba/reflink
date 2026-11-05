@@ -2733,6 +2733,9 @@ function AdminAggregateReports() {
   const [pathwayRows, setPathwayRows] = useState([]);
   const [pathwayLoading, setPathwayLoading] = useState(false);
   const [pathwayError, setPathwayError] = useState("");
+  const [delayAlerts, setDelayAlerts] = useState([]);
+  const [delayAlertsLoading, setDelayAlertsLoading] = useState(false);
+  const [delayAlertsError, setDelayAlertsError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -2888,6 +2891,31 @@ function AdminAggregateReports() {
     loadPathways();
     return () => { active = false; };
   }, [startDate, endDate, refreshKey, facilityPeriodEligible]);
+
+  useEffect(() => {
+    let active = true;
+    const loadDelayAlerts = async () => {
+      setDelayAlerts([]);
+      setDelayAlertsLoading(true);
+      setDelayAlertsError("");
+      try {
+        const { data, error: alertError } = await supabase.rpc(
+          "get_admin_acknowledgement_delay_alerts",
+        );
+        if (alertError) throw alertError;
+        if (active) setDelayAlerts(Array.isArray(data) ? data : []);
+      } catch {
+        if (active) {
+          setDelayAlerts([]);
+          setDelayAlertsError("Acknowledgement delay intelligence is not yet available. The reviewed database migration must be applied and tested before this summary can run.");
+        }
+      } finally {
+        if (active) setDelayAlertsLoading(false);
+      }
+    };
+    loadDelayAlerts();
+    return () => { active = false; };
+  }, [refreshKey]);
 
   const indicatorCards = result ? [
     {
@@ -3155,6 +3183,41 @@ function AdminAggregateReports() {
           </div>
         )}
         <small className="admin-method-note">Pathways are grouped by facility type, not individual facility. Counts of 1–4 and one additional group where required are suppressed. Interval statistics are shown only when at least five valid timestamps contribute to that pathway metric. Intervals run from referral creation to acknowledgement or recorded arrival; invalid timestamps earlier than creation are excluded. These are descriptive platform intervals, not validated clinical targets, causal explanations or facility performance rankings.</small>
+      </section>
+
+      <section className="admin-facility-intelligence" aria-labelledby="admin-delay-alerts-heading">
+        <div className="admin-facility-intelligence-heading">
+          <div>
+            <span className="eyebrow">OPERATIONAL EARLY WARNING</span>
+            <h4 id="admin-delay-alerts-heading">Acknowledgement delay alerts</h4>
+            <p>Current network snapshot of referrals that missed their existing acknowledgement target, plus referrals acknowledged after their target.</p>
+          </div>
+          <span className="admin-facility-period-tag">Live aggregate snapshot</span>
+        </div>
+        {delayAlertsLoading && <p role="status" className="admin-facility-hint">Checking acknowledgement deadlines…</p>}
+        {delayAlertsError && <p role="status" className="error-message">{delayAlertsError}</p>}
+        {!delayAlertsLoading && !delayAlertsError && delayAlerts.length === 0 && (
+          <p className="admin-facility-hint">No acknowledgement delays are currently reportable. This does not confirm that every referral has been acknowledged.</p>
+        )}
+        {!delayAlertsLoading && !delayAlertsError && delayAlerts.length > 0 && (
+          <div className="admin-delay-alert-list">
+            {delayAlerts.map((alert, index) => {
+              const suppressed = alert.small_cell_suppressed || alert.complementary_suppressed;
+              return (
+                <article className="admin-delay-alert-row" key={"delay-alert-" + index}>
+                  <div>
+                    <strong>{suppressed ? "Suppressed alert category" : alert.alert_label}</strong>
+                    <small>{suppressed ? "Category and count withheld to reduce disclosure" : "Referral episodes in current snapshot"}</small>
+                  </div>
+                  <span className={suppressed ? "is-suppressed" : "is-alert-count"}>
+                    {suppressed ? "Suppressed" : Number(alert.alert_count || 0).toLocaleString()}
+                  </span>
+                </article>
+              );
+            })}
+          </div>
+        )}
+        <small className="admin-method-note">The report uses REFLINK's existing acknowledgement targets: Emergency 15 minutes, Urgent 2 hours and Routine 24 hours, represented by each referral's stored acknowledgement due time. “Awaiting acknowledgement” means the referral remains in sent status after its due time. “Acknowledged after target” is based on the recorded acknowledgement timestamp. Counts of 1–4 and one additional category where required are suppressed. This is an administrator-only aggregate signal; it does not notify a receiving team, expose individual cases, or replace clinical escalation. Confirm delays through the authorised clinical workflow.</small>
       </section>
     </section>
   );
