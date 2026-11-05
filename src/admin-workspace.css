@@ -302,3 +302,29 @@
     animation-duration: .001ms !important;
   }
 }
+
+
+/* Quick reporting periods for the aggregate public-health view. */
+.admin-aggregate-report-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 12px 0 4px;
+}
+.admin-aggregate-report-presets button {
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid var(--admin-line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--admin-muted);
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.admin-aggregate-report-presets button:hover,
+.admin-aggregate-report-presets button.is-active {
+  border-color: #a8cdbd;
+  background: #edf7f2;
+  color: #075d4c;
+}
