@@ -8094,6 +8094,17 @@ function CounterReferralForm({ referral, onCompleted }) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
+  const counterReferralRequiredFields = [
+    { key: "final_diagnosis", label: "Final diagnosis" },
+    { key: "outcome", label: "Patient outcome" },
+    ...(form.outcome === "referred_further"
+      ? [{ key: "referred_further_to", label: "Further referral destination" }]
+      : []),
+  ];
+  const completedCounterReferralFields = counterReferralRequiredFields.filter(({ key }) =>
+    String(form[key] || "").trim().length > 0
+  ).length;
+
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
@@ -8175,7 +8186,20 @@ function CounterReferralForm({ referral, onCompleted }) {
     <section className="dashboard-card counter-referral-card" aria-labelledby="counter-referral-heading">
       <span className="eyebrow">CLOSED-LOOP REFERRAL</span>
       <h3 id="counter-referral-heading">Counter-Referral Feedback</h3>
-      <p>Record the receiving facility's final outcome and follow-up information. Submitting this form closes the referral episode.</p>
+      <p>Record the receiving facility's final outcome and follow-up information for referral <strong>{referral?.referral_number || "record"}</strong>. Submitting this form closes the referral episode and sends the documented outcome back through the referral record.</p>
+      <div className="counter-referral-completion" aria-live="polite">
+        <strong>{completedCounterReferralFields} of {counterReferralRequiredFields.length} required items completed</strong>
+        <ul>
+          {counterReferralRequiredFields.map(({ key, label }) => (
+            <li key={key} className={String(form[key] || "").trim() ? "is-complete" : ""}>
+              <span aria-hidden="true">{String(form[key] || "").trim() ? "✓" : "○"}</span> {label}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="counter-referral-finality-note" role="note">
+        Before submitting, verify the diagnosis, outcome and follow-up instructions. This action marks the referral as completed.
+      </div>
       {error && <div className="form-error" role="alert">{error}</div>}
       {message && <div className="form-success" role="status">{message}</div>}
 
