@@ -374,3 +374,100 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Facility intelligence: monthly, aggregate-only network distribution. */
+.admin-facility-intelligence {
+  margin-top: 22px;
+  padding-top: 19px;
+  border-top: 1px solid var(--admin-line);
+}
+.admin-facility-intelligence-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.admin-facility-intelligence-heading h4 {
+  margin: 5px 0 4px;
+  color: var(--admin-ink);
+  font-size: 16px;
+  font-weight: 750;
+}
+.admin-facility-intelligence-heading p,
+.admin-facility-hint {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.admin-facility-period-tag {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid var(--admin-line);
+  border-radius: 6px;
+  color: var(--admin-muted);
+  background: #f8faf9;
+  font-size: 10px;
+  font-weight: 700;
+}
+.admin-facility-directions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.admin-facility-direction h5 {
+  margin: 0 0 7px;
+  color: var(--admin-ink);
+  font-size: 12px;
+  font-weight: 750;
+}
+.admin-facility-list {
+  overflow: hidden;
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  background: #fff;
+}
+.admin-facility-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 58px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--admin-line);
+}
+.admin-facility-row:last-child { border-bottom: 0; }
+.admin-facility-row > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+.admin-facility-row strong {
+  overflow-wrap: anywhere;
+  color: var(--admin-ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+.admin-facility-row small {
+  color: var(--admin-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.admin-facility-row > span {
+  flex: 0 0 auto;
+  color: #075d4c;
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.admin-facility-row > span.is-suppressed {
+  color: var(--admin-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+@media (max-width: 760px) {
+  .admin-facility-directions { grid-template-columns: 1fr; }
+  .admin-facility-intelligence-heading { flex-direction: column; }
+}
