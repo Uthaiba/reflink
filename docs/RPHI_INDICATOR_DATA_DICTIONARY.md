@@ -190,3 +190,21 @@ Until sign-off and non-production tests are complete, these definitions remain a
 **Interpretation boundary:** This is a registry-quality and observed-platform-participation indicator, not an audited reporting-compliance measure. A facility may provide services without initiating or receiving a referral in the selected period. Do not use this classification for staff or facility performance ranking.
 
 **Release requirements:** Validate the facility active-status, LGA and state fields and referral endpoint semantics in a non-production database; test empty registry, null status, missing geography, facilities with activity in either direction, and all small-cell/complementary-suppression branches.
+
+
+## 12. Referral pathway and workflow interval intelligence — candidate indicators
+
+**Purpose:** Describe aggregate referral routing patterns and elapsed time between referral creation and acknowledgement or recorded arrival.
+
+- Cohort: non-test referrals created in exactly one complete Africa/Lagos calendar month.
+- Pathways are grouped by sending facility type and receiving facility type. Individual facility names and identifiers are never returned.
+- Counts of 1–4 are suppressed. If exactly one small pathway group exists, one additional visible group is suppressed to reduce subtraction-based disclosure.
+- Acknowledgement interval is `acknowledged_at - created_at`; arrival interval is `patient_arrived_at - created_at`.
+- Only non-negative intervals contribute. Timestamps earlier than referral creation are excluded.
+- Median and 90th percentile are descriptive distribution summaries, not service standards.
+- Each interval metric is suppressed unless at least five valid timestamps contribute to that pathway group.
+- No diagnoses, clinical narrative, outcome, patient identifier, user identity, facility name or facility ID is returned.
+
+**Interpretation boundary:** These measures describe timestamps recorded in REFLINK. They do not establish causation, clinical appropriateness, patient safety, service quality, or a facility's performance. Missing timestamps may reflect workflow design, delayed data entry, offline synchronisation or incomplete capture; they must not automatically be classified as delays or failures.
+
+**Release requirements:** Validate facility-type mappings, timestamp semantics, late-sync behaviour, timezone boundaries and synthetic percentile calculations in a non-production database. Test primary and complementary suppression, sparse timestamp samples, null facility references and negative chronology before enabling the RPC.

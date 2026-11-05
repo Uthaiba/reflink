@@ -2,6 +2,16 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase.js";
 import { isCompleteCalendarMonth } from "../../lib/rphiFacilityReporting.js";
 
+function formatRphiMinutes(value) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+    return "Not enough valid timestamps";
+  }
+  const total = Math.max(0, Math.round(Number(value)));
+  const hours = Math.floor(total / 60);
+  const minutes = total % 60;
+  return hours > 0 ? hours + "h " + minutes + "m" : total + " min";
+}
+
 /* =======================================================
    ADMIN DASHBOARD
    ======================================================= */
@@ -2720,6 +2730,9 @@ function AdminAggregateReports() {
   const [coverageRows, setCoverageRows] = useState([]);
   const [coverageLoading, setCoverageLoading] = useState(false);
   const [coverageError, setCoverageError] = useState("");
+  const [pathwayRows, setPathwayRows] = useState([]);
+  const [pathwayLoading, setPathwayLoading] = useState(false);
+  const [pathwayError, setPathwayError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -2841,6 +2854,38 @@ function AdminAggregateReports() {
       }
     };
     loadCoverage();
+    return () => { active = false; };
+  }, [startDate, endDate, refreshKey, facilityPeriodEligible]);
+
+  useEffect(() => {
+    let active = true;
+    if (!facilityPeriodEligible) {
+      setPathwayRows([]);
+      setPathwayError("");
+      setPathwayLoading(false);
+      return () => { active = false; };
+    }
+    const loadPathways = async () => {
+      setPathwayRows([]);
+      setPathwayLoading(true);
+      setPathwayError("");
+      try {
+        const { data, error: pathwayErrorResult } = await supabase.rpc(
+          "get_admin_referral_pathway_summary",
+          { p_start_date: startDate, p_end_date: endDate },
+        );
+        if (pathwayErrorResult) throw pathwayErrorResult;
+        if (active) setPathwayRows(Array.isArray(data) ? data : []);
+      } catch {
+        if (active) {
+          setPathwayRows([]);
+          setPathwayError("Referral pathway intelligence is not yet available. The reviewed database migration must be applied and tested before this report can run.");
+        }
+      } finally {
+        if (active) setPathwayLoading(false);
+      }
+    };
+    loadPathways();
     return () => { active = false; };
   }, [startDate, endDate, refreshKey, facilityPeriodEligible]);
 
@@ -3069,6 +3114,47 @@ function AdminAggregateReports() {
           </div>
         )}
         <small className="admin-method-note">This combines the current facility registry snapshot with referral activity in the selected creation cohort. “No recorded referral activity” does not prove that a facility failed to report: a facility may not have been expected to refer during the period, may serve another workflow, or may have activity recorded outside REFLINK. Geography is considered complete only when both LGA and state are populated. No facility names, IDs, users or patient records are returned.</small>
+      </section>
+
+      <section className="admin-facility-intelligence" aria-labelledby="admin-pathway-heading">
+        <div className="admin-facility-intelligence-heading">
+          <div>
+            <span className="eyebrow">REFERRAL PATHWAY INTELLIGENCE</span>
+            <h4 id="admin-pathway-heading">Referral pathways and workflow intervals</h4>
+            <p>Aggregated sending-to-receiving facility-type pathways, acknowledgement intervals and arrival intervals.</p>
+          </div>
+          <span className="admin-facility-period-tag">Complete month only</span>
+        </div>
+        {!facilityPeriodEligible && <p className="admin-facility-hint">Select one complete calendar month to view pathway patterns.</p>}
+        {pathwayLoading && <p role="status" className="admin-facility-hint">Loading referral pathway aggregates…</p>}
+        {pathwayError && <p role="status" className="error-message">{pathwayError}</p>}
+        {facilityPeriodEligible && !pathwayLoading && !pathwayError && pathwayRows.length === 0 && <p className="admin-facility-hint">No referral pathway aggregate is available for this month.</p>}
+        {facilityPeriodEligible && !pathwayLoading && !pathwayError && pathwayRows.length > 0 && (
+          <div className="admin-pathway-list">
+            {pathwayRows.map((row, index) => {
+              const suppressed = row.small_cell_suppressed || row.complementary_suppressed;
+              return (
+                <article className="admin-pathway-card" key={"pathway-" + index}>
+                  <div className="admin-pathway-route">
+                    <strong>{suppressed ? "Suppressed pathway group" : row.sending_facility_type + " → " + row.receiving_facility_type}</strong>
+                    <span>{suppressed ? "Count and pathway labels withheld" : Number(row.referral_count || 0).toLocaleString() + " referrals"}</span>
+                  </div>
+                  <div className="admin-pathway-metrics">
+                    <div>
+                      <small>Acknowledgement interval · median / P90</small>
+                      <strong>{suppressed || row.acknowledgement_interval_suppressed ? "Suppressed" : formatRphiMinutes(row.median_acknowledgement_minutes) + " / " + formatRphiMinutes(row.p90_acknowledgement_minutes)}</strong>
+                    </div>
+                    <div>
+                      <small>Arrival interval · median / P90</small>
+                      <strong>{suppressed || row.arrival_interval_suppressed ? "Suppressed" : formatRphiMinutes(row.median_arrival_minutes) + " / " + formatRphiMinutes(row.p90_arrival_minutes)}</strong>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+        <small className="admin-method-note">Pathways are grouped by facility type, not individual facility. Counts of 1–4 and one additional group where required are suppressed. Interval statistics are shown only when at least five valid timestamps contribute to that pathway metric. Intervals run from referral creation to acknowledgement or recorded arrival; invalid timestamps earlier than creation are excluded. These are descriptive platform intervals, not validated clinical targets, causal explanations or facility performance rankings.</small>
       </section>
     </section>
   );
