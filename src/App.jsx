@@ -6944,6 +6944,20 @@ const handleStartAssessment = async (referralId) => {
     referral.urgency === "emergency" && referral.status !== "completed"
   ).length;
 
+  const assessmentRequiredFields = [
+    { key: "assessment_findings", label: "Assessment findings" },
+    { key: "final_diagnosis", label: "Final diagnosis" },
+    { key: "diagnosis_status", label: "Diagnosis status" },
+    { key: "diagnosis_category", label: "Diagnosis category" },
+    { key: "disposition", label: "Clinical disposition" },
+  ];
+  const completedAssessmentFields = assessmentRequiredFields.filter(({ key }) =>
+    String(assessmentForm[key] || "").trim().length > 0
+  ).length;
+  const assessmentProgress = Math.round(
+    (completedAssessmentFields / assessmentRequiredFields.length) * 100
+  );
+
   /* =======================================================
      USER INTERFACE
      ======================================================= */
@@ -7766,6 +7780,32 @@ const handleStartAssessment = async (referralId) => {
                     documenting your receiving-facility assessment and outcome.
                   </p>
                 </div>
+
+                <section className="assessment-completion-panel" aria-label="Required assessment documentation progress">
+                  <div className="assessment-completion-heading">
+                    <strong>Required documentation</strong>
+                    <span>{completedAssessmentFields} of {assessmentRequiredFields.length} completed</span>
+                  </div>
+                  <div
+                    className="assessment-completion-track"
+                    role="progressbar"
+                    aria-label="Required assessment fields completed"
+                    aria-valuemin={0}
+                    aria-valuemax={assessmentRequiredFields.length}
+                    aria-valuenow={completedAssessmentFields}
+                  >
+                    <span style={{ width: `${assessmentProgress}%` }} />
+                  </div>
+                  <ul className="assessment-completion-list">
+                    {assessmentRequiredFields.map(({ key, label }) => (
+                      <li key={key} className={String(assessmentForm[key] || "").trim() ? "is-complete" : ""}>
+                        <span aria-hidden="true">{String(assessmentForm[key] || "").trim() ? "✓" : "○"}</span>
+                        {label}
+                      </li>
+                    ))}
+                  </ul>
+                  <small>This checklist tracks required form fields only; it does not assess clinical adequacy or replace professional judgement.</small>
+                </section>
 
                 <form
                   onSubmit={
