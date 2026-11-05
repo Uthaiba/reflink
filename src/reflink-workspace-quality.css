@@ -414,3 +414,51 @@
 @media (max-width: 640px) {
   .referral-search-field { flex-basis: 100%; max-width: none; }
 }
+
+
+/* Receiving-facility referral triage controls. */
+.receiving-referral-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: end;
+  margin: 18px 0 8px;
+  padding: 14px;
+  border: 1px solid var(--reflink-workspace-line, #dfe8e2);
+  border-radius: 10px;
+  background: #f8fbf9;
+}
+.receiving-referral-filters label { display: grid; gap: 6px; min-width: 0; }
+.receiving-referral-filters label > span {
+  color: var(--reflink-workspace-muted, #526760);
+  font-size: 11px;
+  font-weight: 700;
+}
+.receiving-referral-filters input,
+.receiving-referral-filters select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--reflink-workspace-line, #dfe8e2);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--reflink-workspace-ink, #173b35);
+  font: inherit;
+  font-size: 12px;
+}
+.receiving-referral-filters input:focus-visible,
+.receiving-referral-filters select:focus-visible {
+  outline: 3px solid rgba(8,127,108,.22);
+  outline-offset: 2px;
+  border-color: #16836c;
+}
+.receiving-filter-result {
+  grid-column: 1 / -1;
+  color: var(--reflink-workspace-muted, #526760);
+  font-size: 11px;
+}
+@media (max-width: 760px) {
+  .receiving-referral-filters { grid-template-columns: 1fr; }
+  .receiving-filter-result { grid-column: auto; }
+}
