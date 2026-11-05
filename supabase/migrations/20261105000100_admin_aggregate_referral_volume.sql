@@ -160,7 +160,9 @@ returns table (
   assessment_completed_count bigint,
   assessment_count_suppressed boolean,
   referral_completed_count bigint,
-  completion_count_suppressed boolean
+  completion_count_suppressed boolean,
+  chronology_anomaly_count bigint,
+  chronology_anomaly_suppressed boolean
 )
 language plpgsql
 security definer
@@ -172,6 +174,7 @@ declare
   v_arrival_count bigint;
   v_assessment_count bigint;
   v_completed_count bigint;
+  v_chronology_anomaly_count bigint;
 begin
   if auth.uid() is null or not public.is_administrator() then
     raise exception 'Administrator access required.'
@@ -196,13 +199,20 @@ begin
     count(*) filter (where r.acknowledged_at is not null and r.acknowledged_at >= r.created_at),
     count(*) filter (where r.patient_arrived_at is not null and r.patient_arrived_at >= r.created_at),
     count(*) filter (where r.assessment_completed_at is not null and r.assessment_completed_at >= r.created_at),
-    count(*) filter (where r.completed_at is not null and r.completed_at >= r.created_at)
+    count(*) filter (where r.completed_at is not null and r.completed_at >= r.created_at),
+    count(*) filter (where
+      (r.acknowledged_at is not null and r.acknowledged_at < r.created_at)
+      or (r.patient_arrived_at is not null and r.patient_arrived_at < r.created_at)
+      or (r.assessment_completed_at is not null and r.assessment_completed_at < r.created_at)
+      or (r.completed_at is not null and r.completed_at < r.created_at)
+    )
   into
     v_referral_count,
     v_acknowledged_count,
     v_arrival_count,
     v_assessment_count,
-    v_completed_count
+    v_completed_count,
+    v_chronology_anomaly_count
   from public.referrals r
   where r.created_at >= (p_start_date::timestamp at time zone 'Africa/Lagos')
     and r.created_at < ((p_end_date + 1)::timestamp at time zone 'Africa/Lagos')
@@ -223,6 +233,8 @@ begin
   assessment_completed_count := case when assessment_count_suppressed then null else v_assessment_count end;
   completion_count_suppressed := small_cell_suppressed or v_completed_count between 1 and 4;
   referral_completed_count := case when completion_count_suppressed then null else v_completed_count end;
+  chronology_anomaly_suppressed := v_chronology_anomaly_count between 1 and 4;
+  chronology_anomaly_count := case when chronology_anomaly_suppressed then null else v_chronology_anomaly_count end;
 
   return next;
 end;
@@ -233,4 +245,4 @@ revoke all on function public.get_admin_referral_volume(date, date) from anon;
 grant execute on function public.get_admin_referral_volume(date, date) to authenticated;
 
 comment on function public.get_admin_referral_volume(date, date) is
-'Administrator-only aggregate inception-cohort counts for referral creation, acknowledgement, arrival, assessment and completion by created_at date range (Africa/Lagos). Event timestamps earlier than creation are excluded. Each count from 1 to 4 is suppressed. Counts are operational event observations, not validated outcome rates or population incidence/prevalence.';
+'Administrator-only aggregate inception-cohort counts for referral creation, acknowledgement, arrival, assessment and completion by created_at date range (Africa/Lagos). Event timestamps earlier than creation are excluded. Each count from 1 to 4 is suppressed. A chronology anomaly counts a referral with at least one lifecycle timestamp earlier than creation. Counts are operational event observations, not validated outcome rates or population incidence/prevalence.';
