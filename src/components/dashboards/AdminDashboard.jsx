@@ -2735,6 +2735,44 @@ function AdminAggregateReports() {
     return () => { active = false; };
   }, [startDate, endDate, refreshKey]);
 
+  const indicatorCards = result ? [
+    {
+      key: "referrals",
+      label: "Referrals initiated",
+      value: result.referral_count,
+      suppressed: result.small_cell_suppressed,
+      note: "Referral episodes created in the selected period.",
+    },
+    {
+      key: "acknowledged",
+      label: "Acknowledged",
+      value: result.acknowledged_count,
+      suppressed: result.acknowledged_count_suppressed,
+      note: "Valid acknowledgement timestamps recorded.",
+    },
+    {
+      key: "arrived",
+      label: "Arrival confirmed",
+      value: result.arrival_confirmed_count,
+      suppressed: result.arrival_count_suppressed,
+      note: "Valid patient-arrival timestamps recorded.",
+    },
+    {
+      key: "assessed",
+      label: "Assessment completed",
+      value: result.assessment_completed_count,
+      suppressed: result.assessment_count_suppressed,
+      note: "Valid assessment-completion timestamps recorded.",
+    },
+    {
+      key: "completed",
+      label: "Referral completed",
+      value: result.referral_completed_count,
+      suppressed: result.completion_count_suppressed,
+      note: "Valid referral-completion timestamps recorded.",
+    },
+  ] : [];
+
   return (
     <section className="dashboard-card" aria-labelledby="admin-aggregate-heading">
       <span className="eyebrow">PRIVACY-PRESERVING REPORTING</span>
@@ -2761,21 +2799,24 @@ function AdminAggregateReports() {
       </div>
       {error && <p className="error-message" role="status">{error}</p>}
       {result && (
-        <div className="stats-grid">
-          <div className="stat-card">
-            <span>Referral episodes</span>
-            <strong>{result.small_cell_suppressed ? "Suppressed" : Number(result.referral_count || 0).toLocaleString()}</strong>
-            <small>{result.small_cell_suppressed ? "Counts from 1–4 are hidden to reduce disclosure risk." : "Recorded service activity; not population incidence or prevalence."}</small>
+        <>
+          <div className="stats-grid admin-rphi-indicator-grid">
+            {indicatorCards.map((indicator) => (
+              <article className="stat-card admin-rphi-indicator-card" key={indicator.key}>
+                <span>{indicator.label}</span>
+                <strong>{indicator.suppressed ? "Suppressed" : Number(indicator.value || 0).toLocaleString()}</strong>
+                <small>{indicator.suppressed ? "Counts from 1–4 are hidden to reduce disclosure risk." : indicator.note}</small>
+              </article>
+            ))}
           </div>
-          <div className="stat-card">
-            <span>Reporting period</span>
-            <strong>{startDate} – {endDate}</strong>
-            <small>Africa/Lagos reporting dates</small>
+          <div className="admin-rphi-period-note">
+            <strong>Reporting cohort: {startDate} – {endDate}</strong>
+            <span>All indicators use referrals created in this period. Event counts require a recorded timestamp on or after referral creation. A missing event timestamp is not automatically a failure; these are operational counts, not validated performance rates.</span>
           </div>
-        </div>
+        </>
       )}
       {!result && !error && !loading && <p>No aggregate result is available for this reporting period.</p>}
-      <small className="admin-method-note">Test referrals are excluded. Counts between 1 and 4 are suppressed. Interpret activity alongside facility coverage, data completeness and reporting delays.</small>
+      <small className="admin-method-note">Test referrals are excluded. Counts from 1 to 4 are suppressed independently. These aggregate indicators do not establish population incidence, prevalence, clinical quality or referral failure rates. Validate definitions and observation windows with clinical and public-health leads before using them for performance decisions.</small>
     </section>
   );
 }
