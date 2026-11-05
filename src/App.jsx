@@ -7972,36 +7972,30 @@ function CounterReferralForm({ referral, onCompleted }) {
 
     setSaving(true);
     try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
-        throw new Error("Your session has expired. Sign in again before submitting feedback.");
+      const { data: result, error: submitError } = await supabase.rpc(
+        "submit_counter_referral",
+        {
+          p_referral_id: referral.id,
+          p_final_diagnosis: form.final_diagnosis.trim(),
+          p_treatment_provided: form.treatment_provided.trim() || null,
+          p_outcome: form.outcome,
+          p_follow_up_instructions: form.follow_up_instructions.trim() || null,
+          p_referred_further_to: form.outcome === "referred_further"
+            ? form.referred_further_to.trim()
+            : null,
+          p_additional_notes: form.additional_notes.trim() || null,
+        }
+      );
+
+      if (submitError) throw submitError;
+      const completion = Array.isArray(result) ? result[0] : result;
+      if (!completion?.counter_referral_id || completion.referral_status !== "completed") {
+        throw new Error("REFLINK could not confirm completion. Refresh the referral status before retrying.");
       }
-
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("id, role, facility_id")
-        .eq("id", user.id)
-        .single();
-
-      if (profileError || !profile) {
-        throw new Error("Your REFLINK profile could not be verified.");
-      }
-      if (profile.role !== "receiving_staff" || profile.facility_id !== referral.receiving_facility_id) {
-        throw new Error("Only an authorised user at the receiving facility can submit this counter-referral.");
-      }
-
-      // Reconcile a previous successful insert if the client lost its response.
-      const { data: existing, error: existingError } = await supabase
-        .from("counter_referrals")
-        .select("id, referral_id")
-        .eq("referral_id", referral.id)
-        .maybeSingle();
-
-      if (existingError) throw existingError;
 
       const counterReferralPayload = {
+        id: completion.counter_referral_id,
         referral_id: referral.id,
-        receiving_user_id: user.id,
         final_diagnosis: form.final_diagnosis.trim(),
         treatment_provided: form.treatment_provided.trim() || null,
         outcome: form.outcome,
@@ -8010,35 +8004,14 @@ function CounterReferralForm({ referral, onCompleted }) {
         additional_notes: form.additional_notes.trim() || null,
       };
 
-      if (!existing) {
-        const { error: insertError } = await supabase
-          .from("counter_referrals")
-          .insert(counterReferralPayload);
-        if (insertError) throw insertError;
-      }
-
-      // The database trigger independently verifies that this record exists.
-      // A retry reconciles the existing row rather than inserting a duplicate.
-      const { data: completedReferral, error: completionError } = await supabase
-        .from("referrals")
-        .update({
-          status: "completed",
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", referral.id)
-        .eq("receiving_facility_id", profile.facility_id)
-        .eq("status", "discharged")
-        .select("id, referral_number, status, completed_at")
-        .maybeSingle();
-
-      if (completionError) throw completionError;
-      if (!completedReferral) {
-        throw new Error("The counter-referral was saved, but the referral could not be closed. Refresh the referral and retry; REFLINK will check the existing counter-referral rather than create a duplicate.");
-      }
-
       setMessage("Counter-referral submitted and referral successfully completed.");
       if (onCompleted) {
-        onCompleted({ ...referral, ...completedReferral, counter_referral: counterReferralPayload });
+        onCompleted({
+          ...referral,
+          status: completion.referral_status,
+          completed_at: new Date().toISOString(),
+          counter_referral: counterReferralPayload,
+        });
       }
     } catch (submitError) {
       setError(submitError?.message || "Unable to submit the counter-referral. Please try again.");
