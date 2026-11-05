@@ -77,6 +77,7 @@ All indicators below are candidate definitions. The product must not display the
 | RPHI-008 | Referral completion time | Median of `completed_at - created_at` for valid positive intervals | Completed referrals with both timestamps | Referral creation cohort | Report distribution and censoring; not patient waiting-time standard without policy |
 | RPHI-009 | Facility referral volume | Count of eligible referrals by approved facility role and reporting period | None | `created_at`; group by sending or receiving facility separately | Suppress small cells; never rank small facilities |
 | RPHI-010 | Required-field completeness | Count with required field populated | Records expected to contain that field | Explicit field-specific cohort | Completeness is not clinical correctness |
+| RPHI-011 | Timestamp chronology flags | Count of referrals with at least one lifecycle timestamp earlier than `created_at` | Eligible referral inception cohort | `created_at` cohort; compare acknowledgement, arrival, assessment and completion timestamps | Data-quality signal only; flagged timestamps are excluded from the corresponding lifecycle event counts |
 
 ### Cohort rules
 
@@ -104,7 +105,7 @@ Do not expose arbitrary SQL filters or user-selected combinations of facility, a
 ## 6. Data-quality checks required before publishing
 
 - Null and completeness rate for each timestamp and dimension.
-- Negative or impossible timestamp intervals (acknowledged before created, arrival before created, completed before discharge, etc.).
+- Negative or impossible timestamp intervals (acknowledged before created, arrival before created, assessment before created, completed before created, completed before discharge, etc.).
 - Duplicate referral events and duplicate counter-referrals.
 - Orphaned facility and counter-referral references.
 - Inactive facility assignments and missing facility geography.
