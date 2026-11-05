@@ -1,93 +1,71 @@
-# REFLINK Durable Notification Outbox Design
+# REFLINK Durable Notification Outbox
 
-**Status:** Architecture specification; no outbox table, worker, provider integration or production configuration has been deployed.
+**Status:** Source implementation committed for review only. The migration is not applied. No worker, provider credentials, templates, delivery schedule or live notification dispatch is configured.
 
-## Problem
+## Scope of this stage
 
-The current referral submission and offline sync flows can commit a referral while an SMS request fails or its response is lost. A browser-side fetch is not a durable delivery mechanism and must not be treated as part of the referral transaction.
+This stage establishes the database-side queue primitives required for reliable notifications. It deliberately does not send SMS or in-app messages and does not alter the referral acknowledgement targets (Emergency 15 minutes, Urgent 2 hours, Routine 24 hours).
 
-## Design goals
+## Architecture
 
-- Referral creation remains successful even when an SMS provider is unavailable.
-- Each logical notification is enqueued once within the same database transaction as the referral event.
-- Workers retry transient failures without duplicating provider messages where provider idempotency is supported.
-- Clinical details and patient identifiers are not included in SMS content.
-- Delivery state is auditable without exposing message content to broad roles.
+- The queue and attempt ledger live in a non-exposed `private` schema.
+- Browser roles (`anon` and `authenticated`) receive no schema, table or function access.
+- Only the Supabase `service_role` can enqueue, claim and settle queue work.
+- The queue stores event metadata and internal recipient/referral references only. It does not store phone numbers, message bodies, patient names, diagnoses, clinical narratives or arbitrary JSON payloads.
+- Event types, channels and versioned template keys are allowlisted.
+- A unique `event_key` makes enqueue idempotent. Reusing the key with different event metadata raises a conflict.
+- Workers claim at most 50 rows per call with `FOR UPDATE SKIP LOCKED`. A five-minute lease prevents concurrent workers from processing the same live claim.
+- Provider network calls must occur after the claim transaction has committed.
+- The worker settles only with the matching claim token. Retry delay is bounded to 1–3,600 seconds; the queue dead-letters after eight attempts.
+- Expired notifications are cancelled. A worker must independently re-check referral status, recipient role/facility assignment, contact eligibility and consent immediately before dispatch.
+- The attempt ledger records claim and outcome metadata without raw provider responses.
 
-## Proposed lifecycle
+## Database functions
 
-`pending -> processing -> sent`
+| Function | Purpose |
+|---|---|
+| `private.enqueue_notification(...)` | Service-only idempotent event enqueue |
+| `private.claim_notification_batch(batch_size)` | Bounded, leased work claim |
+| `private.finish_notification_attempt(...)` | Lease-checked success/retry/dead-letter settlement |
 
-Recoverable failure path:
+All three functions are SECURITY INVOKER. They rely on explicit schema/table/function grants to `service_role`; no SECURITY DEFINER bypass is introduced.
 
-`processing -> retry_wait -> processing`
+## Not yet implemented
 
-Terminal path:
+1. Atomic enqueue hooks from the referral lifecycle transaction. Until those are added, no referral event automatically enters the queue.
+2. A scheduled Edge Function/worker and provider adapter.
+3. Approved notification recipient rules, SMS wording, in-app templates, consent/contact validation and delivery policy.
+4. Provider sandbox credentials, idempotency support and failure-injection tests.
+5. Supervisor escalation policy and notification governance approval.
+6. Operational dashboard for queue age, delivery latency, retries and dead-letter counts.
 
-`retry_wait -> dead_letter`
+## Important delivery semantics
 
-A worker claims a bounded batch using row-level locking with `FOR UPDATE SKIP LOCKED`, assigns a lease/claim expiry, increments attempts and commits the claim before making the network request. Provider calls occur outside the database transaction. The worker records the provider message reference and outcome in a second short transaction.
+A successful provider acceptance is not proof that a recipient read or acted on a message. For SMS providers without idempotency support, a timeout after provider acceptance can still create a duplicate-send window. The worker must use provider idempotency where available and document residual risk otherwise.
 
-## Proposed data model (not a migration)
+The queue is not a clinical escalation decision engine. It must not automatically decline, redirect or close referrals. An acknowledgement reminder cannot replace direct clinical escalation for an emergency.
 
-- `id`: UUID primary key.
-- `event_key`: unique idempotency key for the originating event and notification type.
-- `event_type`: allowlisted event code, not free text.
-- `recipient_ref`: reference to a protected recipient/contact record; do not duplicate phone numbers in broad reporting tables.
-- `channel`: allowlisted channel such as SMS.
-- `template_key`: versioned approved template identifier.
-- `payload_minimal`: strictly validated non-clinical template variables only; encrypt or avoid where possible.
-- `status`: constrained lifecycle value.
-- `attempt_count`, `next_attempt_at`, `claimed_at`, `claim_token`.
-- `provider_message_id`, `last_error_code`: provider reference and normalised error code only.
-- `created_at`, `sent_at`, `expires_at`.
+## Required staging tests before migration approval
 
-Restrict table access to a private schema or service-only role. Do not grant browser clients direct access to the outbox. If an RPC is required, it should enqueue a notification from a verified business event and must not accept arbitrary recipient or message body from the client.
-
-## Retry and idempotency
-
-- Unique `event_key` prevents duplicate enqueueing.
-- Use bounded exponential backoff with jitter for transient network/provider errors.
-- Do not retry permanent invalid-recipient or policy errors indefinitely.
-- Respect provider rate limits and circuit-breaker state.
-- Use provider idempotency keys when supported; otherwise document the residual duplicate-send window between provider acceptance and local acknowledgement.
-- Expire stale notifications and dead-letter them for authorised operational review.
-- Do not automatically retry sensitive notifications after the underlying referral has been cancelled or recipient eligibility changes; re-evaluate eligibility at dispatch.
-
-## SMS content policy
-
-SMS must not contain patient name, diagnosis, clinical narrative, phone number, referral number or other unnecessary identifiers. Use a neutral message directing the recipient to the authenticated REFLINK workflow. Confirm recipient consent/contact policy and local telecom requirements before sending.
-
-## Security and operations
-
-- Service credentials live only in server-side secret storage.
-- Worker validates event state and recipient eligibility immediately before dispatch.
-- No raw payload, phone number, access token or provider credential in logs.
-- Operational metrics are aggregate counts: pending, sent, retrying, dead-lettered and delivery latency.
-- Alert on queue age, dead-letter growth and provider outage.
-- Define retention and deletion for notification metadata with the data protection officer.
-- Protect against replay, forged events, tenant crossover and unauthorised manual resend.
-
-## Acceptance tests
-
-1. Referral and outbox event commit atomically or neither commits.
-2. Duplicate event enqueue returns the existing event.
-3. Two workers cannot claim the same live lease.
-4. Expired worker lease can be reclaimed safely.
-5. Provider timeout after acceptance is handled with idempotency or documented duplicate risk.
-6. Permanent failures dead-letter; transient failures back off.
-7. Cancelled referral or invalidated recipient is not dispatched.
-8. Logs and SMS templates contain no clinical content or unnecessary identifiers.
-9. Browser roles cannot read or mutate the outbox.
-10. Provider outage does not block referral workflow.
+- Verify the migration against the actual schema baseline and Supabase role grants.
+- Confirm browser roles cannot resolve or execute any object in `private`.
+- Confirm `service_role` can enqueue and claim synthetic events.
+- Duplicate event key with identical metadata returns the same ID; mismatched metadata fails.
+- Concurrent workers cannot claim the same live lease.
+- Expired leases can be reclaimed; stale claim tokens cannot settle a newer lease.
+- Retry delays are bounded; permanent failures and attempt eight dead-letter.
+- Expired events cancel without dispatch.
+- Attempt ledger and outbox contain no phone, message body, clinical content or raw provider response.
+- Verify no provider call is made by the database functions.
+- Verify referral creation remains independent of provider availability.
 
 ## Rollout order
 
-1. Approve event catalogue, recipient rules and SMS wording with clinical and privacy owners.
-2. Design private-schema table, service role and enqueue transaction.
-3. Implement worker with bounded claims, leases, retries and metrics.
-4. Test using a sandbox SMS provider and synthetic recipients.
-5. Run security review and failure-injection tests.
-6. Pilot with opt-in facilities before wider rollout.
+1. Reconcile migration history and test this migration in a non-production database.
+2. Approve event catalogue, recipient routing, consent/contact policy and templates with clinical/privacy owners.
+3. Add transactional enqueue hooks to verified referral lifecycle events.
+4. Implement a server-side worker and sandbox provider integration.
+5. Run security, concurrency, retry, timeout and duplicate-send tests.
+6. Pilot with explicitly opted-in facilities before any production activation.
 
-No outbox is currently implemented. The existing client-side SMS attempt remains best-effort until this architecture is delivered.
+No live notification has been sent by this change.
