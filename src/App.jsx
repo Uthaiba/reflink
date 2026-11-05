@@ -7926,6 +7926,173 @@ const handleStartAssessment = async (referralId) => {
    ADMINISTRATOR-ONLY ROUTE PROTECTION
    ======================================================= */
 
+
+/* =========================================================
+   STRUCTURED COUNTER-REFERRAL
+   ========================================================= */
+function CounterReferralForm({ referral, onCompleted }) {
+  const [form, setForm] = useState({
+    final_diagnosis: referral?.discharge_diagnosis || referral?.final_diagnosis || "",
+    treatment_provided: referral?.treatment_provided || "",
+    outcome: "",
+    follow_up_instructions: referral?.follow_up_plan || "",
+    referred_further_to: "",
+    additional_notes: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+
+    if (!referral?.id) {
+      setError("The referral record could not be identified.");
+      return;
+    }
+    if (!form.final_diagnosis.trim()) {
+      setError("Final diagnosis is required.");
+      return;
+    }
+    if (!form.outcome) {
+      setError("Please select the patient's outcome.");
+      return;
+    }
+    if (form.outcome === "referred_further" && !form.referred_further_to.trim()) {
+      setError("Specify the facility or service receiving the further referral.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        throw new Error("Your session has expired. Sign in again before submitting feedback.");
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, role, facility_id")
+        .eq("id", user.id)
+        .single();
+
+      if (profileError || !profile) {
+        throw new Error("Your REFLINK profile could not be verified.");
+      }
+      if (profile.role !== "receiving_staff" || profile.facility_id !== referral.receiving_facility_id) {
+        throw new Error("Only an authorised user at the receiving facility can submit this counter-referral.");
+      }
+
+      // Reconcile a previous successful insert if the client lost its response.
+      const { data: existing, error: existingError } = await supabase
+        .from("counter_referrals")
+        .select("id, referral_id")
+        .eq("referral_id", referral.id)
+        .maybeSingle();
+
+      if (existingError) throw existingError;
+
+      const counterReferralPayload = {
+        referral_id: referral.id,
+        receiving_user_id: user.id,
+        final_diagnosis: form.final_diagnosis.trim(),
+        treatment_provided: form.treatment_provided.trim() || null,
+        outcome: form.outcome,
+        follow_up_instructions: form.follow_up_instructions.trim() || null,
+        referred_further_to: form.outcome === "referred_further" ? form.referred_further_to.trim() : null,
+        additional_notes: form.additional_notes.trim() || null,
+      };
+
+      if (!existing) {
+        const { error: insertError } = await supabase
+          .from("counter_referrals")
+          .insert(counterReferralPayload);
+        if (insertError) throw insertError;
+      }
+
+      // The database trigger independently verifies that this record exists.
+      // A retry reconciles the existing row rather than inserting a duplicate.
+      const { data: completedReferral, error: completionError } = await supabase
+        .from("referrals")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", referral.id)
+        .eq("receiving_facility_id", profile.facility_id)
+        .eq("status", "discharged")
+        .select("id, referral_number, status, completed_at")
+        .maybeSingle();
+
+      if (completionError) throw completionError;
+      if (!completedReferral) {
+        throw new Error("The counter-referral was saved, but the referral could not be closed. Refresh the referral and retry; REFLINK will check the existing counter-referral rather than create a duplicate.");
+      }
+
+      setMessage("Counter-referral submitted and referral successfully completed.");
+      if (onCompleted) {
+        onCompleted({ ...referral, ...completedReferral, counter_referral: counterReferralPayload });
+      }
+    } catch (submitError) {
+      setError(submitError?.message || "Unable to submit the counter-referral. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="dashboard-card counter-referral-card" aria-labelledby="counter-referral-heading">
+      <span className="eyebrow">CLOSED-LOOP REFERRAL</span>
+      <h3 id="counter-referral-heading">Counter-Referral Feedback</h3>
+      <p>Record the receiving facility's final outcome and follow-up information. Submitting this form closes the referral episode.</p>
+      {error && <div className="form-error" role="alert">{error}</div>}
+      {message && <div className="form-success" role="status">{message}</div>}
+
+      <form onSubmit={handleSubmit}>
+        <label htmlFor="counter-final-diagnosis">Final diagnosis *</label>
+        <textarea id="counter-final-diagnosis" name="final_diagnosis" value={form.final_diagnosis} onChange={handleChange} rows="3" maxLength="4000" required />
+
+        <label htmlFor="counter-treatment">Treatment provided</label>
+        <textarea id="counter-treatment" name="treatment_provided" value={form.treatment_provided} onChange={handleChange} rows="3" maxLength="6000" />
+
+        <label htmlFor="counter-outcome">Patient outcome *</label>
+        <select id="counter-outcome" name="outcome" value={form.outcome} onChange={handleChange} required>
+          <option value="">Select outcome</option>
+          <option value="recovered">Recovered</option>
+          <option value="improved">Improved</option>
+          <option value="referred_further">Referred for further care</option>
+          <option value="died">Died</option>
+          <option value="other">Other / outcome documented in notes</option>
+        </select>
+
+        {form.outcome === "referred_further" && (
+          <>
+            <label htmlFor="counter-referred-to">Further referral destination *</label>
+            <input id="counter-referred-to" name="referred_further_to" value={form.referred_further_to} onChange={handleChange} maxLength="500" required />
+          </>
+        )}
+
+        <label htmlFor="counter-follow-up">Follow-up instructions for referring facility</label>
+        <textarea id="counter-follow-up" name="follow_up_instructions" value={form.follow_up_instructions} onChange={handleChange} rows="3" maxLength="4000" />
+
+        <label htmlFor="counter-additional-notes">Additional clinical notes</label>
+        <textarea id="counter-additional-notes" name="additional_notes" value={form.additional_notes} onChange={handleChange} rows="3" maxLength="4000" />
+
+        <button type="submit" className="primary-button full-width" disabled={saving}>
+          {saving ? "Submitting Counter-Referral..." : "Submit Counter-Referral & Complete Referral"}
+        </button>
+      </form>
+    </section>
+  );
+}
+
 function AdministratorRoute({ children }) {
   const [checking, setChecking] = useState(true);
   const [authorized, setAuthorized] = useState(false);
