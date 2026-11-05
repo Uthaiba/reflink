@@ -31,9 +31,17 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Do not return the cached app HTML for a failed image, script, stylesheet,
-  // or other file URL. That fallback was making /logo.png display the homepage.
-  const looksLikeFile = /\.[a-z0-9]{2,10}$/i.test(url.pathname);
+  // Never cache API, authenticated or explicitly non-cacheable requests.
+  // Patient-related responses must never enter the service-worker cache.
+  if (
+    url.pathname.startsWith("/api/") ||
+    request.headers.has("authorization") ||
+    request.cache === "no-store" ||
+    request.headers.get("cache-control")?.includes("no-store")
+  ) return;
+
+  // The app shell is a navigation fallback, never a fallback for asset URLs.
+  const looksLikeFile = /\\.[a-z0-9]{2,10}$/i.test(url.pathname);
   const isAppNavigation = request.mode === "navigate" && !looksLikeFile;
 
   if (isAppNavigation) {
@@ -58,8 +66,19 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // For images and other assets, try the network first and use only that
-  // particular resource from cache if the device is offline.
+  // Cache only known static app assets. Unknown same-origin GET endpoints
+  // remain network-only so dynamic or patient-related responses are not stored.
+  const staticAssets = new Set([
+    "/manifest.webmanifest",
+    "/logo.png",
+    "/reflink-mark.png",
+    "/favicon.ico",
+  ]);
+  const isStaticAsset =
+    url.pathname.startsWith("/assets/") || staticAssets.has(url.pathname);
+  if (!isStaticAsset) return;
+
+  // Approved static assets use network-first caching for offline availability.
   event.respondWith(
     fetch(request)
       .then((response) => {
