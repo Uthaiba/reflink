@@ -38,3 +38,12 @@ The latest read-only Supabase security advisor reported:
 - Leaked-password protection is disabled. Treat this as an Auth configuration remediation item; do not change production Auth settings without a separately reviewed change and acceptance test.
 
 The advisor findings are not proof of exploitation. Remediation must preserve required referral operations and be verified with synthetic users representing each role and facility.
+
+
+## Follow-on development safeguards
+
+- Disclosure-control unit tests are implemented in `tests/rphiDisclosure.test.js` and run through `npm test` in the quality workflow.
+- `docs/OFFLINE_PHI_THREAT_MODEL.md` defines the threat model and acceptance criteria for application-layer encryption, key lifecycle, endpoint controls, queue retention and server-side re-authorisation. Current IndexedDB records remain unencrypted.
+- `docs/NOTIFICATION_OUTBOX_DESIGN.md` defines a durable server-side notification architecture. The current browser SMS request remains best-effort; no outbox schema or worker has been deployed.
+- The `is_administrator()` helper has 12 recorded policy dependency entries in the connected production catalog. Do not revoke authenticated execution until every policy and function dependency is mapped and tested.
+- The proposed aggregate RPC uses `public.is_administrator()`; its own grants, SECURITY DEFINER owner, dependency and behavior must be tested in non-production before release.
