@@ -140,7 +140,11 @@ grant execute on function public.submit_counter_referral(uuid, text, text, text,
 comment on function public.submit_counter_referral(uuid, text, text, text, text, text, text) is
 'Atomically records receiving-facility counter-referral feedback and completes a discharged referral. Enforces authenticated receiving role, assigned facility, allowed outcome, idempotent retry and row-level serialization.';
 
-create or replace function public.get_admin_referral_volume(
+-- This function's return contract is expanded with lifecycle event counts.
+-- It remains a single aggregate row and never returns patient-level fields.
+drop function if exists public.get_admin_referral_volume(date, date);
+
+create function public.get_admin_referral_volume(
   p_start_date date,
   p_end_date date
 )
@@ -148,14 +152,26 @@ returns table (
   period_start date,
   period_end date,
   referral_count bigint,
-  small_cell_suppressed boolean
+  small_cell_suppressed boolean,
+  acknowledged_count bigint,
+  acknowledged_count_suppressed boolean,
+  arrival_confirmed_count bigint,
+  arrival_count_suppressed boolean,
+  assessment_completed_count bigint,
+  assessment_count_suppressed boolean,
+  referral_completed_count bigint,
+  completion_count_suppressed boolean
 )
 language plpgsql
 security definer
 set search_path = ''
 as $function$
 declare
-  v_count bigint;
+  v_referral_count bigint;
+  v_acknowledged_count bigint;
+  v_arrival_count bigint;
+  v_assessment_count bigint;
+  v_completed_count bigint;
 begin
   if auth.uid() is null or not public.is_administrator() then
     raise exception 'Administrator access required.'
@@ -173,20 +189,40 @@ begin
       using errcode = '22023';
   end if;
 
-  select count(*)
-    into v_count
-    from public.referrals r
-   where r.created_at >= (p_start_date::timestamp at time zone 'Africa/Lagos')
-     and r.created_at < ((p_end_date + 1)::timestamp at time zone 'Africa/Lagos')
-     and coalesce(r.is_test, false) = false;
+  -- Use one created_at inception cohort for every event count.
+  -- Event timestamps earlier than creation are excluded as invalid chronology.
+  select
+    count(*),
+    count(*) filter (where r.acknowledged_at is not null and r.acknowledged_at >= r.created_at),
+    count(*) filter (where r.patient_arrived_at is not null and r.patient_arrived_at >= r.created_at),
+    count(*) filter (where r.assessment_completed_at is not null and r.assessment_completed_at >= r.created_at),
+    count(*) filter (where r.completed_at is not null and r.completed_at >= r.created_at)
+  into
+    v_referral_count,
+    v_acknowledged_count,
+    v_arrival_count,
+    v_assessment_count,
+    v_completed_count
+  from public.referrals r
+  where r.created_at >= (p_start_date::timestamp at time zone 'Africa/Lagos')
+    and r.created_at < ((p_end_date + 1)::timestamp at time zone 'Africa/Lagos')
+    and coalesce(r.is_test, false) = false;
 
   period_start := p_start_date;
   period_end := p_end_date;
-  small_cell_suppressed := v_count between 1 and 4;
-  referral_count := case
-    when small_cell_suppressed then null
-    else v_count
-  end;
+
+  -- Suppress each small numerator independently. If the entire cohort is
+  -- small, all subset counts are necessarily suppressed as well.
+  small_cell_suppressed := v_referral_count between 1 and 4;
+  referral_count := case when small_cell_suppressed then null else v_referral_count end;
+  acknowledged_count_suppressed := small_cell_suppressed or v_acknowledged_count between 1 and 4;
+  acknowledged_count := case when acknowledged_count_suppressed then null else v_acknowledged_count end;
+  arrival_count_suppressed := small_cell_suppressed or v_arrival_count between 1 and 4;
+  arrival_confirmed_count := case when arrival_count_suppressed then null else v_arrival_count end;
+  assessment_count_suppressed := small_cell_suppressed or v_assessment_count between 1 and 4;
+  assessment_completed_count := case when assessment_count_suppressed then null else v_assessment_count end;
+  completion_count_suppressed := small_cell_suppressed or v_completed_count between 1 and 4;
+  referral_completed_count := case when completion_count_suppressed then null else v_completed_count end;
 
   return next;
 end;
@@ -197,4 +233,4 @@ revoke all on function public.get_admin_referral_volume(date, date) from anon;
 grant execute on function public.get_admin_referral_volume(date, date) to authenticated;
 
 comment on function public.get_admin_referral_volume(date, date) is
-'Administrator-only aggregate referral volume by selected date range (Africa/Lagos). Returns no patient-level fields and suppresses counts from 1 to 4. This is not an incidence or prevalence estimate.';
+'Administrator-only aggregate inception-cohort counts for referral creation, acknowledgement, arrival, assessment and completion by created_at date range (Africa/Lagos). Event timestamps earlier than creation are excluded. Each count from 1 to 4 is suppressed. Counts are operational event observations, not validated outcome rates or population incidence/prevalence.';
