@@ -2750,6 +2750,7 @@ function AdminAggregateReports() {
     }
 
     const loadFacilitySummary = async () => {
+      setFacilityRows([]);
       setFacilityLoading(true);
       setFacilityError("");
       try {
@@ -2880,7 +2881,7 @@ function AdminAggregateReports() {
         {facilityPeriodEligible && !facilityLoading && !facilityError && facilityRows.length === 0 && (
           <p className="admin-facility-hint">No facility-level aggregate is available for this month.</p>
         )}
-        {facilityPeriodEligible && facilityRows.length > 0 && (
+        {facilityPeriodEligible && !facilityLoading && !facilityError && facilityRows.length > 0 && (
           <div className="admin-facility-directions">
             {["Sending", "Receiving"].map((direction) => {
               const rows = facilityRows.filter((row) => row.referral_direction === direction);
