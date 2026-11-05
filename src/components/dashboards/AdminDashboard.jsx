@@ -2673,217 +2673,96 @@ function AdminDashboard({
         </nav>
 
         <div className="admin-modern-main">
-          <div className="admin-modern-heading">
+          <header className="admin-modern-heading">
             <div>
-              <span className="eyebrow">ADMINISTRATION / OVERVIEW</span>
-              <h2>Good evening, {profile?.full_name?.split(" ")[0] || "Administrator"}</h2>
-              <p>Here is the current operational picture across the REFLINK referral network.</p>
+              <span className="eyebrow">REFLINK / ADMINISTRATION</span>
+              <h2>Network overview</h2>
+              <p>Manage facilities and user access, and review privacy-preserving referral activity.</p>
             </div>
             <button type="button" className="primary-button admin-primary-action" onClick={() => setView("facilities")}>
               + Add Facility
             </button>
-          </div>
+          </header>
 
-          <div className="admin-kpi-grid">
-            <button type="button" className="admin-kpi-card kpi-blue" onClick={() => setView("referrals")}>
-              <div className="admin-kpi-icon">↗</div>
-              <span>Total Referrals</span>
-              <strong>{referrals.length.toLocaleString()}</strong>
-              <small>All recorded referral episodes</small>
-            </button>
-            <button type="button" className="admin-kpi-card kpi-purple" onClick={() => setView("active-referrals")}>
-              <div className="admin-kpi-icon">◔</div>
-              <span>Active Referrals</span>
-              <strong>{adminActiveReferrals.length.toLocaleString()}</strong>
-              <small>Currently requiring follow-up</small>
-            </button>
-            <button type="button" className="admin-kpi-card kpi-teal" onClick={() => setView("facilities")}>
+          <section className="admin-kpi-grid" aria-label="Network configuration summary">
+            <article className="admin-kpi-card kpi-teal">
               <div className="admin-kpi-icon">⌂</div>
-              <span>Facilities</span>
-              <strong>{facilities.length.toLocaleString()}</strong>
-              <small>Connected referral facilities</small>
-            </button>
-            <button type="button" className="admin-kpi-card kpi-green" onClick={() => setView("referrals")}>
-              <div className="admin-kpi-icon">✓</div>
-              <span>Closed Episodes</span>
-              <strong>{adminClosedReferrals.length.toLocaleString()}</strong>
-              <small>Completed or discharged</small>
-            </button>
-            <button type="button" className="admin-kpi-card kpi-amber" onClick={() => setView("users")}>
+              <span>Registered facilities</span>
+              <strong>{facilitiesLoading ? "…" : facilities.length.toLocaleString()}</strong>
+              <small>{facilities.filter((facility) => facility.is_active).length} active facilities</small>
+            </article>
+            <article className="admin-kpi-card kpi-amber">
               <div className="admin-kpi-icon">◎</div>
-              <span>System Users</span>
-              <strong>{users.length.toLocaleString()}</strong>
-              <small>Configured users & roles</small>
-            </button>
-            <button type="button" className="admin-kpi-card kpi-red" onClick={() => setView("analysis")}>
-              <div className="admin-kpi-icon">!</div>
-              <span>Quality Flags</span>
-              <strong>{adminQualityIssues.toLocaleString()}</strong>
-              <small>Records requiring review</small>
-            </button>
-          </div>
+              <span>Registered user profiles</span>
+              <strong>{usersLoading ? "…" : users.length.toLocaleString()}</strong>
+              <small>Role and facility assignments</small>
+            </article>
+            <article className="admin-kpi-card kpi-blue">
+              <div className="admin-kpi-icon">▦</div>
+              <span>Referral reporting</span>
+              <strong>Aggregate only</strong>
+              <small>No patient-level records in this workspace</small>
+            </article>
+          </section>
 
-          <div className="admin-executive-strip" role="status" aria-label="Operational summary">
-            <div className="admin-executive-copy">
-              <span className="eyebrow">OPERATIONAL SUMMARY</span>
-              <strong>{adminActiveReferrals.length ? `${adminActiveReferrals.length} referral${adminActiveReferrals.length === 1 ? " is" : "s are"} currently active` : "No active referrals requiring follow-up"}</strong>
-              <p>Live operational view from the connected referral dataset. Summary identifiers are privacy-masked.</p>
+          {(error || message) && (
+            <div className={error ? "error-message" : "success-message"} role={error ? "alert" : "status"}>
+              {error || message}
             </div>
-            <div className="admin-executive-metrics">
-              <div><span>Acknowledgement</span><strong>{adminAcknowledgementRate === null ? "—" : `${adminAcknowledgementRate.toFixed(1)}%`}</strong></div>
-              <div><span>Completion</span><strong>{adminCompletionRate === null ? "—" : `${adminCompletionRate.toFixed(1)}%`}</strong></div>
-              <div><span>Urgent / Emergency</span><strong>{adminUrgentCount}</strong></div>
-              <div className={adminQualityIssues ? "attention" : "healthy"}><span>Governance</span><strong>{adminQualityIssues ? `${adminQualityIssues} review` : "Clear"}</strong></div>
-            </div>
-          </div>
+          )}
 
           <div className="admin-dashboard-grid">
-            <div className="admin-chart-card admin-trend-card">
+            <div className="admin-chart-card">
               <div className="admin-card-heading">
                 <div>
-                  <span className="eyebrow">ACTIVITY</span>
-                  <h3>Referral Trend</h3>
-                  <p>Referral episodes created during the last 7 days.</p>
-                </div>
-                <button type="button" className={view === "analysis" ? "is-active" : ""} onClick={() => setView("analysis")}>View analytics →</button>
-              </div>
-              <div className="admin-bar-chart" aria-label="Seven day referral trend">
-                {adminLastSevenDays.map((item) => (
-                  <div className="admin-bar-column" key={item.fullLabel} title={`${item.fullLabel}: ${item.count} referrals`}>
-                    <span>{item.count}</span>
-                    <div className="admin-bar-track"><i style={{ height: `${Math.max((item.count / adminMaxDailyReferrals) * 100, item.count ? 12 : 4)}%` }} /></div>
-                    <small>{item.label}</small>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="admin-chart-card admin-status-card">
-              <div className="admin-card-heading">
-                <div>
-                  <span className="eyebrow">WORKFLOW</span>
-                  <h3>Referral Status</h3>
-                  <p>Current distribution by operational state.</p>
+                  <span className="eyebrow">PUBLIC HEALTH INTELLIGENCE</span>
+                  <h3>Referral service activity</h3>
+                  <p>Review aggregate referral volume for a defined reporting period.</p>
                 </div>
               </div>
-              <div className="admin-status-list">
-                {adminStatusSummary.map(([label, count, key]) => (
-                  <div className="admin-status-row" key={label}>
-                    <div><i className={`status-dot ${key}`} /><span>{label}</span></div>
-                    <strong>{count}</strong>
-                    <div className="admin-status-track"><i className={`status-fill ${key}`} style={{ width: `${(count / adminStatusMax) * 100}%` }} /></div>
-                  </div>
-                ))}
-              </div>
-              <div className="admin-status-total"><strong>{referrals.length}</strong><span>Total referral episodes</span></div>
-            </div>
-          </div>
-
-          <div className="admin-dashboard-grid admin-dashboard-grid-secondary">
-            <div className="admin-chart-card admin-funnel-card">
-              <div className="admin-card-heading">
-                <div>
-                  <span className="eyebrow">REFERRAL PIPELINE</span>
-                  <h3>Closed-loop pathway</h3>
-                  <p>Progression through the core referral workflow.</p>
-                </div>
-                <span className="admin-data-badge">N = {referrals.length}</span>
-              </div>
-              <div className="admin-funnel-list">
-                {adminFunnel.map(([label, count], index) => (
-                  <div className="admin-funnel-row" key={label}>
-                    <div className="admin-funnel-label"><span>{String(index + 1).padStart(2, "0")}</span><strong>{label}</strong></div>
-                    <div className="admin-funnel-track"><i style={{ width: `${(count / adminFunnelBase) * 100}%` }} /></div>
-                    <strong className="admin-funnel-value">{count}</strong>
-                  </div>
-                ))}
-              </div>
-              <small className="admin-method-note">Counts are descriptive and reflect recorded timestamps/statuses; missing events are not inferred.</small>
-            </div>
-
-            <div className="admin-chart-card admin-insight-card">
-              <div className="admin-card-heading">
-                <div>
-                  <span className="eyebrow">EXECUTIVE SIGNALS</span>
-                  <h3>What needs attention</h3>
-                  <p>Operational observations for administrative review.</p>
-                </div>
-              </div>
-              <div className="admin-insight-list">
-                <div className={adminActiveReferrals.length ? "signal attention" : "signal healthy"}>
-                  <span>{adminActiveReferrals.length ? "!" : "✓"}</span>
-                  <div><strong>{adminActiveReferrals.length ? "Active referrals require follow-up" : "No active referrals"}</strong><small>{adminActiveReferrals.length ? `${adminActiveReferrals.length} episode${adminActiveReferrals.length === 1 ? "" : "s"} remain open.` : "The current dataset contains no open episodes."}</small></div>
-                </div>
-                <div className={adminQualityIssues ? "signal attention" : "signal healthy"}>
-                  <span>{adminQualityIssues ? "!" : "✓"}</span>
-                  <div><strong>{adminQualityIssues ? "Data-quality review required" : "No dashboard quality flags"}</strong><small>{adminQualityIssues ? `${adminQualityIssues} record-level issue${adminQualityIssues === 1 ? "" : "s"} detected by the administrative checks.` : "Current administrative checks found no obvious integrity flags."}</small></div>
-                </div>
-                <div className="signal neutral">
-                  <span>i</span>
-                  <div><strong>Small-sample caution</strong><small>{referrals.length < 30 ? "The current volume is small; avoid interpreting rates as population-level performance." : "Interpret trends alongside context, case mix and data-quality findings."}</small></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="admin-bottom-grid">
-            <div className="admin-table-card">
-              <div className="admin-card-heading">
-                <div>
-                  <span className="eyebrow">RECENT ACTIVITY</span>
-                  <h3>Latest Referrals</h3>
-                  <p>The most recently created referral episodes.</p>
-                </div>
-                <button type="button" className={view === "referrals" || view === "active-referrals" ? "is-active" : ""} onClick={() => setView("referrals")}>View all →</button>
-              </div>
-              {adminRecentReferrals.length ? (
-                <div className="admin-modern-table-wrap">
-                  <table className="admin-modern-table">
-                    <thead><tr><th>Referral</th><th>Patient</th><th>Route</th><th>Urgency</th><th>Status</th></tr></thead>
-                    <tbody>
-                      {adminRecentReferrals.map((referral) => (
-                        <tr key={referral.id}>
-                          <td><strong>{referral.referral_number || "—"}</strong><small>{referral.created_at ? new Date(referral.created_at).toLocaleDateString() : "—"}</small></td>
-                          <td><strong>{adminMaskIdentifier(referral.patient_identifier)}</strong><small>{formatPatientAge(referral.patient_age_months)} · {referral.patient_sex || "Sex not recorded"}</small></td>
-                          <td><strong>{referral.referring_facility?.name || "Unassigned"}</strong><small>→ {referral.receiving_facility?.name || "Receiving facility not assigned"}</small></td>
-                          <td><span className="admin-urgency-pill">{referral.urgency || "Not specified"}</span></td>
-                          <td><span className={`admin-status-pill ${String(referral.status || "unknown").replace(/_/g, "-")}`}>{getStatusLabel(referral.status)}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="admin-empty-dashboard">No referral activity is available in the current scope.</div>
-              )}
+              <AdminAggregateReports />
             </div>
 
             <div className="admin-quick-card">
               <div className="admin-card-heading">
                 <div>
-                  <span className="eyebrow">QUICK ACCESS</span>
+                  <span className="eyebrow">NETWORK MANAGEMENT</span>
                   <h3>Administration</h3>
-                  <p>Common system management tasks.</p>
+                  <p>Common configuration and oversight tasks.</p>
                 </div>
               </div>
               <div className="admin-quick-actions">
-                <button type="button" className={view === "facilities" ? "is-active" : ""} onClick={() => setView("facilities")}><span>⌂</span><div><strong>Manage Facilities</strong><small>Network configuration</small></div><b>→</b></button>
-                <button type="button" className={view === "users" ? "is-active" : ""} onClick={() => setView("users")}><span>◎</span><div><strong>Manage Users</strong><small>Roles and access</small></div><b>→</b></button>
-                <button type="button" className={view === "analysis" ? "is-active" : ""} onClick={() => setView("analysis")}><span>◫</span><div><strong>Healthcare Analysis</strong><small>Clinical intelligence</small></div><b>→</b></button>
-                <button type="button" className={view === "analytics" ? "is-active" : ""} onClick={() => setView("analytics")}><span>▥</span><div><strong>Referral Performance</strong><small>Pathway and outcomes</small></div><b>→</b></button>
+                <button type="button" onClick={() => setView("facilities")}>
+                  <span>⌂</span><div><strong>Manage facilities</strong><small>Facility details and activation</small></div><b>→</b>
+                </button>
+                <button type="button" onClick={() => setView("users")}>
+                  <span>◎</span><div><strong>Manage users and roles</strong><small>Account roles and facility assignment</small></div><b>→</b>
+                </button>
+                <button type="button" onClick={() => setView("analysis")}>
+                  <span>◫</span><div><strong>Aggregate analytics</strong><small>Privacy-preserving reporting</small></div><b>→</b>
+                </button>
               </div>
             </div>
           </div>
 
-          <div className="admin-security-strip">
-            <div><span className="eyebrow">SECURITY & PRIVACY</span><strong>Administrative safeguards</strong><p>Authenticated access is role-gated. Patient identifiers are masked in the executive dashboard. Database row-level security should remain enforced in Supabase for production deployment.</p></div>
-            <div className="admin-security-items"><span>✓ Authenticated session</span><span>✓ Role-aware access</span><span>✓ Privacy-masked summary</span><span>! Verify database RLS</span></div>
-          </div>
+          <section className="admin-security-strip" aria-label="Administrative privacy safeguards">
+            <div>
+              <span className="eyebrow">SECURITY & PRIVACY</span>
+              <strong>Administrative oversight is separated from clinical care</strong>
+              <p>Individual referral records remain within authorised PHC and receiving-facility workflows. Network reporting uses aggregate counts and suppresses small cells where configured.</p>
+            </div>
+            <div className="admin-security-items">
+              <span>✓ Authenticated administrator</span>
+              <span>✓ Role-aware workspace</span>
+              <span>✓ Aggregate reporting</span>
+              <span>✓ Patient-level view restricted</span>
+            </div>
+          </section>
 
-          <div className="admin-modern-footer-note">
-            <span><i /> Data refreshes from the connected REFLINK database.</span>
-            <span>Privacy-aware administrative workspace · v2.0 · Updated {adminLastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-          </div>
+          <footer className="admin-modern-footer-note">
+            <span>Facility and user configuration refreshes from REFLINK.</span>
+            <span>Administrative workspace · Updated {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+          </footer>
         </div>
       </section>
     </div>
