@@ -27,7 +27,7 @@ Run only in a non-production Supabase project with synthetic users and synthetic
 5. Retry after simulating a lost response; verify no duplicate counter-referral is created.
 6. Attempt from PHC role; verify denial.
 7. Attempt from receiving staff assigned to a different facility; verify denial.
-8. Simulate a counter-referral insert succeeding while the referral status update fails; verify the retry reconciles the existing row.
+8. Verify that a pre-existing counter-referral on a still-discharged referral is not silently treated as a successful new submission; it must be reconciled through an authorised clinical workflow.
 9. Attempt completion without a counter-referral; database trigger must reject it.
 10. Attempt to complete a referral from any status other than discharged; database transition trigger must reject it.
 
@@ -68,3 +68,15 @@ The current UI uses two requests, so steps 8 and 9 are especially important. Pre
 ## Not yet verified
 
 These are test cases, not passing test results. No production patient records should be used to perform them.
+
+## Offline referral synchronisation regression
+
+1. Queue a synthetic referral offline and reconnect.
+2. Verify sync checks `offline_client_id` before inserting.
+3. Simulate the server committing while the client loses the response; verify the next sync finds the existing row and removes the queue item without duplicating the referral.
+4. Simulate two clients racing to sync the same client ID; verify the unique constraint conflict is reconciled by looking up the existing row.
+5. Verify no patient payload, client ID, token or raw database error is written to the browser console.
+6. Verify notification failure does not block queue reconciliation; separately record that durable notification delivery is not guaranteed by this client-only queue.
+7. Test account sign-out, shared-device exposure, browser storage inspection and device loss; document residual PHI risks.
+
+These changes improve duplicate prevention and log hygiene. They do not encrypt IndexedDB payloads or make offline PHI storage safe on shared/unmanaged devices.
