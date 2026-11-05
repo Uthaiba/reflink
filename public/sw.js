@@ -41,7 +41,7 @@ self.addEventListener("fetch", (event) => {
   ) return;
 
   // The app shell is a navigation fallback, never a fallback for asset URLs.
-  const looksLikeFile = /\\.[a-z0-9]{2,10}$/i.test(url.pathname);
+  const looksLikeFile = /\.[a-z0-9]{2,10}$/i.test(url.pathname);
   const isAppNavigation = request.mode === "navigate" && !looksLikeFile;
 
   if (isAppNavigation) {
