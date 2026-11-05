@@ -2697,7 +2697,6 @@ function AdminAggregateReports() {
     }
     if (preset === "previous-month") {
       const [year, month] = today.split("-").map(Number);
-      const previousMonth = new Date(Date.UTC(year, month - 2, 1, 12));
       const previousEnd = new Date(Date.UTC(year, month - 1, 0, 12));
       setStartDate(`${previousEnd.getUTCFullYear()}-${String(previousEnd.getUTCMonth() + 1).padStart(2, "0")}-01`);
       setEndDate(`${previousEnd.getUTCFullYear()}-${String(previousEnd.getUTCMonth() + 1).padStart(2, "0")}-${String(previousEnd.getUTCDate()).padStart(2, "0")}`);
