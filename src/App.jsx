@@ -2041,12 +2041,12 @@ const handleSignIn = async () => {
           <div className="trust-row">
             <div>
               <strong>01</strong>
-              <span>Secure Referral</span>
+              <span>Controlled Referral</span>
             </div>
 
             <div>
               <strong>02</strong>
-              <span>Real-Time Tracking</span>
+              <span>Referral Tracking</span>
             </div>
 
             <div>
@@ -2071,11 +2071,11 @@ const handleSignIn = async () => {
             <div className="network-header">
               <div>
                 <span className="live-dot"></span>
-                LIVE REFERRAL NETWORK
+                REFERRAL WORKFLOW PREVIEW
               </div>
 
               <span className="network-status">
-                ACTIVE
+                ILLUSTRATIVE
               </span>
             </div>
 
@@ -2137,10 +2137,10 @@ const handleSignIn = async () => {
             <div className="network-footer">
               <div>
                 <small>REFERRAL STATUS</small>
-                <strong>Connected & Tracked</strong>
+                <strong>Example referral journey</strong>
               </div>
 
-              <span>ACTIVE</span>
+              <span>DEMO</span>
             </div>
 
           </div>
