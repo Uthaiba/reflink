@@ -4655,12 +4655,7 @@ function PHCStaffDashboard({ onNewReferral }) {
         throw referralError;
       }
 
-      console.log(
-        "PHC REFERRALS:",
-        data
-      );
-
-      setReferrals(data || []);
+setReferrals(data || []);
     } catch (err) {
       console.error(
         "PHC DASHBOARD ERROR:",
@@ -4738,20 +4733,11 @@ function PHCStaffDashboard({ onNewReferral }) {
                 `referring_facility_id=eq.${profile.facility_id}`,
             },
             (payload) => {
-              console.log(
-                "PHC REALTIME REFERRAL UPDATE:",
-                payload
-              );
-
-              loadMyReferrals();
+loadMyReferrals();
             }
           )
           .subscribe((status) => {
-            console.log(
-              "PHC REALTIME STATUS:",
-              status
-            );
-          });
+});
       } catch (err) {
         console.error(
           "PHC REALTIME ERROR:",
@@ -6015,12 +6001,7 @@ if (
           throw referralError;
         }
 
-        console.log(
-          "INCOMING REFERRALS:",
-          data
-        );
-
-        setReferrals(
+setReferrals(
           data || []
         );
 
