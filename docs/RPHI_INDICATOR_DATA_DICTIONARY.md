@@ -155,3 +155,21 @@ Before implementing a new RPC, review SECURITY DEFINER necessity, owner, EXECUTE
 | Product owner | Approve scope, release gates and user-facing labels |
 
 Until sign-off and non-production tests are complete, these definitions remain a governed draft, not validated programme statistics.
+
+
+## 10. LGA referral activity distribution — candidate indicator
+
+**Purpose:** Describe where recorded referrals originate and where they are received, grouped by the LGA and state recorded in the facility registry.
+
+- Sending and receiving distributions are separate; they must not be added together.
+- Cohort: referrals created within exactly one complete Africa/Lagos calendar month.
+- Test referrals are excluded.
+- Grouping uses facility LGA and state only. Facility IDs and names are not returned.
+- Counts 1–4 are suppressed. If exactly one small group exists within a direction, one additional visible group is suppressed to reduce subtraction-based disclosure.
+- Missing facility assignment or missing LGA is grouped as **Unassigned geography**; this is a data-quality signal, not a geographic service area.
+- LGA/state labels are withheld whenever a group is suppressed.
+- No drill-down from LGA to facility is permitted from this report.
+
+**Interpretation boundary:** Referral volume is a measure of recorded platform activity. Low volume alone does not establish low service availability, unmet need, disease burden, referral failure or poor quality. Interpretation requires independently verified population denominators, facility readiness, catchment boundaries, access constraints and reporting completeness.
+
+**Release requirements:** Validate grouping against synthetic fixtures, test primary and complementary suppression for both directions, verify query plans and permissions in a non-production database, and obtain public-health, clinical-governance and data-protection sign-off before enabling the RPC.

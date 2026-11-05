@@ -2714,6 +2714,9 @@ function AdminAggregateReports() {
   const [facilityLoading, setFacilityLoading] = useState(false);
   const [facilityError, setFacilityError] = useState("");
   const facilityPeriodEligible = isCompleteCalendarMonth(startDate, endDate);
+  const [lgaRows, setLgaRows] = useState([]);
+  const [lgaLoading, setLgaLoading] = useState(false);
+  const [lgaError, setLgaError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -2771,6 +2774,38 @@ function AdminAggregateReports() {
     };
 
     loadFacilitySummary();
+    return () => { active = false; };
+  }, [startDate, endDate, refreshKey, facilityPeriodEligible]);
+
+  useEffect(() => {
+    let active = true;
+    if (!facilityPeriodEligible) {
+      setLgaRows([]);
+      setLgaError("");
+      setLgaLoading(false);
+      return () => { active = false; };
+    }
+    const loadLgaSummary = async () => {
+      setLgaRows([]);
+      setLgaLoading(true);
+      setLgaError("");
+      try {
+        const { data, error: summaryError } = await supabase.rpc(
+          "get_admin_lga_referral_summary",
+          { p_start_date: startDate, p_end_date: endDate },
+        );
+        if (summaryError) throw summaryError;
+        if (active) setLgaRows(Array.isArray(data) ? data : []);
+      } catch {
+        if (active) {
+          setLgaRows([]);
+          setLgaError("LGA reporting is not yet available. The reviewed database migration must be applied and tested before this breakdown can run.");
+        }
+      } finally {
+        if (active) setLgaLoading(false);
+      }
+    };
+    loadLgaSummary();
     return () => { active = false; };
   }, [startDate, endDate, refreshKey, facilityPeriodEligible]);
 
@@ -2911,6 +2946,56 @@ function AdminAggregateReports() {
           </div>
         )}
         <small className="admin-method-note">Facility breakdowns are restricted to complete calendar months. Counts from 1–4 are suppressed. When exactly one small facility group exists in a direction, an additional visible group is suppressed to reduce subtraction-based disclosure. No facility IDs or patient-level records are returned.</small>
+      </section>
+
+      <section className="admin-facility-intelligence" aria-labelledby="admin-lga-intelligence-heading">
+        <div className="admin-facility-intelligence-heading">
+          <div>
+            <span className="eyebrow">GEOGRAPHIC DISTRIBUTION</span>
+            <h4 id="admin-lga-intelligence-heading">Referral activity by LGA</h4>
+            <p>Sending and receiving activity is grouped by LGA and state. Suppressed geography is not identified.</p>
+          </div>
+          <span className="admin-facility-period-tag">Complete month only</span>
+        </div>
+        {!facilityPeriodEligible && (
+          <p className="admin-facility-hint">Select one complete calendar month to view LGA distribution.</p>
+        )}
+        {lgaLoading && <p role="status" className="admin-facility-hint">Loading LGA aggregates…</p>}
+        {lgaError && <p role="status" className="error-message">{lgaError}</p>}
+        {facilityPeriodEligible && !lgaLoading && !lgaError && lgaRows.length === 0 && (
+          <p className="admin-facility-hint">No LGA-level aggregate is available for this month.</p>
+        )}
+        {facilityPeriodEligible && !lgaLoading && !lgaError && lgaRows.length > 0 && (
+          <div className="admin-facility-directions">
+            {["Sending", "Receiving"].map((direction) => {
+              const rows = lgaRows.filter((row) => row.referral_direction === direction);
+              if (rows.length === 0) return null;
+              return (
+                <div className="admin-facility-direction" key={direction}>
+                  <h5>{direction} activity by LGA</h5>
+                  <div className="admin-facility-list">
+                    {rows.map((row, index) => {
+                      const suppressed = row.small_cell_suppressed || row.complementary_suppressed;
+                      const unassigned = row.lga_label === "Unassigned geography";
+                      return (
+                        <article className="admin-facility-row" key={direction + "-lga-" + index}>
+                          <div>
+                            <strong>{suppressed ? "Suppressed geography" : row.lga_label}</strong>
+                            <small>{suppressed ? "LGA and state withheld" : unassigned ? "Facility assignment or geography not recorded" : row.state || "State not recorded"}</small>
+                          </div>
+                          <span className={suppressed ? "is-suppressed" : ""}>
+                            {suppressed ? "Suppressed" : Number(row.referral_count || 0).toLocaleString()}
+                          </span>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <small className="admin-method-note">LGA groups are limited to complete calendar months. Counts from 1–4 and one additional group where needed are suppressed. Unassigned geography indicates missing facility assignment or geography. Low recorded referral activity is not proof of an unmet need or service gap; interpret alongside verified population, facility readiness and reporting-completeness data.</small>
       </section>
     </section>
   );
