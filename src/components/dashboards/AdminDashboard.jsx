@@ -2483,108 +2483,7 @@ function AdminDashboard({
     );
   }
 
-  /* =======================================================
-     ADMINISTRATION HOME — MODERN COMMAND DASHBOARD
-     ======================================================= */
-
-  const adminActiveReferrals = referrals.filter(
-    (referral) =>
-      !["completed", "discharged"].includes(referral.status)
-  );
-
-  const adminClosedReferrals = referrals.filter(
-    (referral) =>
-      ["completed", "discharged"].includes(referral.status)
-  );
-
-  const adminAcknowledged = referrals.filter(
-    (referral) => Boolean(referral.acknowledged_at)
-  );
-
-  const adminQualityIssues = referrals.reduce((total, referral) => {
-    const hasTimestampIssue =
-      referral.admission_at &&
-      referral.assessment_completed_at &&
-      new Date(referral.admission_at) < new Date(referral.assessment_completed_at);
-
-    const hasDischargeIssue =
-      referral.discharged_at &&
-      referral.admission_at &&
-      new Date(referral.discharged_at) < new Date(referral.admission_at);
-
-    const hasFacilityIssue =
-      !referral.referring_facility_id ||
-      !referral.receiving_facility_id;
-
-    return total + Number(hasTimestampIssue || hasDischargeIssue || hasFacilityIssue);
-  }, 0);
-
-  const adminLastSevenDays = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    date.setDate(date.getDate() - (6 - index));
-
-    const next = new Date(date);
-    next.setDate(next.getDate() + 1);
-
-    const count = referrals.filter((referral) => {
-      if (!referral.created_at) return false;
-      const created = new Date(referral.created_at);
-      return created >= date && created < next;
-    }).length;
-
-    return {
-      label: date.toLocaleDateString(undefined, { weekday: "short" }),
-      fullLabel: date.toLocaleDateString(undefined, { day: "2-digit", month: "short" }),
-      count,
-    };
-  });
-
-  const adminMaxDailyReferrals = Math.max(
-    ...adminLastSevenDays.map((item) => item.count),
-    1
-  );
-
-  const adminStatusSummary = [
-    ["Active", adminActiveReferrals.length, "active"],
-    ["Acknowledged", adminAcknowledged.length, "acknowledged"],
-    ["Closed", adminClosedReferrals.length, "closed"],
-  ];
-
-  const adminStatusMax = Math.max(
-    ...adminStatusSummary.map((item) => item[1]),
-    1
-  );
-
-  const adminRecentReferrals = [...referrals]
-    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
-    .slice(0, 5);
-
-  const adminMaskIdentifier = (value) => {
-    const text = String(value || "").trim();
-    if (!text) return "Patient";
-    if (text.length <= 4) return "••••";
-    return `${text.slice(0, 2)}•••${text.slice(-2)}`;
-  };
-
-  const adminFunnel = [
-    ["Created", referrals.filter((r) => Boolean(r.created_at)).length],
-    ["Acknowledged", referrals.filter((r) => Boolean(r.acknowledged_at)).length],
-    ["Arrived", referrals.filter((r) => Boolean(r.patient_arrived_at)).length],
-    ["Assessed", referrals.filter((r) => Boolean(r.assessment_completed_at)).length],
-    ["Closed", referrals.filter((r) => ["completed", "discharged"].includes(r.status) || Boolean(r.completed_at || r.discharged_at)).length],
-  ];
-
-  const adminFunnelBase = Math.max(adminFunnel[0][1], 1);
-  const adminUrgentCount = referrals.filter((r) => ["urgent", "emergency"].includes(String(r.urgency || "").toLowerCase())).length;
-  const adminCompletionRate = referrals.length
-    ? (adminClosedReferrals.length / referrals.length) * 100
-    : null;
-  const adminAcknowledgementRate = referrals.length
-    ? (adminAcknowledged.length / referrals.length) * 100
-    : null;
-  const adminLastUpdated = new Date();
-  const adminSystemStatus = error ? "Attention required" : (facilitiesLoading || usersLoading || referralsLoading ? "Updating" : "Operational");
+  /* Administrator home renders aggregate reports and network configuration only. */
 
   return (
     <div className="admin-modern-shell">
@@ -2770,16 +2669,19 @@ function AdminDashboard({
 
 }
 function AdminAggregateReports() {
-  const today = new Date();
-  const toDateInput = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+  const toLagosDateInput = (date) => {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Lagos",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date);
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
   };
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const [startDate, setStartDate] = useState(toDateInput(monthStart));
-  const [endDate, setEndDate] = useState(toDateInput(today));
+  const todayValue = toLagosDateInput(new Date());
+  const [startDate, setStartDate] = useState(`${todayValue.slice(0, 7)}-01`);
+  const [endDate, setEndDate] = useState(todayValue);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
