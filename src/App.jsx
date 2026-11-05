@@ -5665,6 +5665,10 @@ function ReceivingDashboard() {
   const [message, setMessage] =
     useState("");
 
+  const [receivingSearch, setReceivingSearch] = useState("");
+  const [receivingStatusFilter, setReceivingStatusFilter] = useState("active");
+  const [receivingUrgencyFilter, setReceivingUrgencyFilter] = useState("all");
+
   const [facilityUserCount, setFacilityUserCount] =
     useState(null);
 
@@ -6903,12 +6907,42 @@ const handleStartAssessment = async (referralId) => {
      FILTERED REFERRALS
      ======================================================= */
 
-  const filteredReferrals =
-    referrals.filter(
-      (referral) =>
-        referral.status !== "completed" &&
-        (referral.status !== "discharged" || !referral.counter_referral)
-    );
+  const receivingQuery = receivingSearch.trim().toLocaleLowerCase();
+  const filteredReferrals = referrals
+    .filter((referral) => {
+      const isOpen = referral.status !== "completed" &&
+        (referral.status !== "discharged" || !referral.counter_referral);
+      const matchesStatus = receivingStatusFilter === "all" ||
+        (receivingStatusFilter === "active" ? isOpen : referral.status === receivingStatusFilter);
+      const matchesUrgency = receivingUrgencyFilter === "all" ||
+        String(referral.urgency || "routine").toLowerCase() === receivingUrgencyFilter;
+      const searchValues = [
+        referral.referral_number,
+        referral.patient_identifier,
+        referral.chief_complaint,
+        referral.provisional_diagnosis,
+        formatDiagnosisSummary(referral.diagnosis_records, referral.provisional_diagnosis),
+        referral.referring_facility?.name,
+      ];
+      const matchesSearch = !receivingQuery || searchValues.some((value) =>
+        String(value || "").toLocaleLowerCase().includes(receivingQuery)
+      );
+      return matchesStatus && matchesUrgency && matchesSearch;
+    })
+    .sort((a, b) => {
+      const urgencyRank = { emergency: 0, urgent: 1, routine: 2 };
+      const urgencyDifference = (urgencyRank[String(a.urgency || "routine").toLowerCase()] ?? 2) -
+        (urgencyRank[String(b.urgency || "routine").toLowerCase()] ?? 2);
+      if (urgencyDifference !== 0) return urgencyDifference;
+      const overdueDifference = Number(isAckOverdue(b)) - Number(isAckOverdue(a));
+      if (overdueDifference !== 0) return overdueDifference;
+      return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+    });
+
+  const overdueIncomingAcknowledgements = referrals.filter(isAckOverdue).length;
+  const emergencyIncomingReferrals = referrals.filter((referral) =>
+    referral.urgency === "emergency" && referral.status !== "completed"
+  ).length;
 
   /* =======================================================
      USER INTERFACE
@@ -6991,6 +7025,18 @@ const handleStartAssessment = async (referralId) => {
         </div>
 
         <div className="stat-card">
+          <span>Emergency referrals</span>
+          <strong>{emergencyIncomingReferrals}</strong>
+          <small>Requires immediate clinical prioritisation</small>
+        </div>
+
+        <div className={`stat-card ${overdueIncomingAcknowledgements > 0 ? "stat-card-alert" : ""}`}>
+          <span>Acknowledgements overdue</span>
+          <strong>{overdueIncomingAcknowledgements}</strong>
+          <small>Past the recorded acknowledgement target</small>
+        </div>
+
+        <div className="stat-card">
           <span>
             Completed
           </span>
@@ -7026,6 +7072,45 @@ const handleStartAssessment = async (referralId) => {
 
           </div>
 
+          <div className="receiving-referral-filters" role="search" aria-label="Filter incoming referrals">
+            <label>
+              <span>Search referrals</span>
+              <input
+                type="search"
+                value={receivingSearch}
+                onChange={(event) => setReceivingSearch(event.target.value)}
+                placeholder="Referral ID, patient, complaint or facility"
+                aria-label="Search incoming referrals"
+              />
+            </label>
+            <label>
+              <span>Referral status</span>
+              <select value={receivingStatusFilter} onChange={(event) => setReceivingStatusFilter(event.target.value)}>
+                <option value="active">Active referrals</option>
+                <option value="all">All statuses</option>
+                <option value="sent">New</option>
+                <option value="acknowledged">Acknowledged</option>
+                <option value="patient_arrived">Patient arrived</option>
+                <option value="under_assessment">Under assessment</option>
+                <option value="admitted">Admitted</option>
+                <option value="discharged">Discharged</option>
+                <option value="completed">Completed</option>
+              </select>
+            </label>
+            <label>
+              <span>Urgency</span>
+              <select value={receivingUrgencyFilter} onChange={(event) => setReceivingUrgencyFilter(event.target.value)}>
+                <option value="all">All urgency levels</option>
+                <option value="emergency">Emergency</option>
+                <option value="urgent">Urgent</option>
+                <option value="routine">Routine</option>
+              </select>
+            </label>
+            <div className="receiving-filter-result" aria-live="polite">
+              Showing {filteredReferrals.length} of {referrals.length} referrals
+            </div>
+          </div>
+
         </div>
 
         {loading && (
@@ -7042,8 +7127,12 @@ const handleStartAssessment = async (referralId) => {
             </p>
           )}
 
+        {!loading && referrals.length > 0 && filteredReferrals.length === 0 && (
+          <p className="empty-selection-state">No incoming referrals match these filters. Adjust the search or select a different status.</p>
+        )}
+
         {!loading &&
-          referrals.length > 0 && (
+          filteredReferrals.length > 0 && (
 
             <div className="referral-list">
 
