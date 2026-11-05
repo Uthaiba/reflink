@@ -112,30 +112,69 @@ export async function syncQueuedReferrals(supabaseClient) {
 
   for (const item of queued) {
     try {
-      const payload = {
-        ...item.payload,
-        created_at: item.created_at,
-        offline_client_id: item.client_id,
-        sync_source: "offline",
-      };
-      const { data: inserted, error } = await supabaseClient.from("referrals").insert(payload).select("id, urgency").single();
-      if (error) throw error;
-      try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session?.access_token && inserted?.id) {
-          await fetch("/api/referral-sms", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-            body: JSON.stringify({ referralId: inserted.id, type: "referral_sent" }),
-          });
+      // Reconcile a server commit whose success response was lost before retrying.
+      const { data: existing, error: lookupError } = await supabaseClient
+        .from("referrals")
+        .select("id, urgency")
+        .eq("offline_client_id", item.client_id)
+        .maybeSingle();
+
+      if (lookupError) throw lookupError;
+
+      let referral = existing;
+      if (!referral) {
+        const payload = {
+          ...item.payload,
+          created_at: item.created_at,
+          offline_client_id: item.client_id,
+          sync_source: "offline",
+        };
+        const { data: inserted, error: insertError } = await supabaseClient
+          .from("referrals")
+          .insert(payload)
+          .select("id, urgency")
+          .single();
+
+        if (insertError) {
+          // A concurrent sync may have inserted the same offline item.
+          if (insertError.code === "23505") {
+            const { data: reconciled, error: reconcileError } = await supabaseClient
+              .from("referrals")
+              .select("id, urgency")
+              .eq("offline_client_id", item.client_id)
+              .maybeSingle();
+            if (reconcileError || !reconciled) throw reconcileError || insertError;
+            referral = reconciled;
+          } else {
+            throw insertError;
+          }
+        } else {
+          referral = inserted;
         }
-      } catch (smsError) {
-        console.warn("REFLINK offline-sync SMS skipped", smsError);
+
+        // SMS delivery is not part of the database transaction. Failures are
+        // deliberately not logged with raw error objects or patient payloads.
+        try {
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          if (session?.access_token && referral?.id) {
+            await fetch("/api/referral-sms", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({ referralId: referral.id, type: "referral_sent" }),
+            });
+          }
+        } catch {
+          // Notification delivery requires a separate durable outbox/retry design.
+        }
       }
+
       await removeQueuedReferral(item.client_id);
       synced += 1;
-    } catch (error) {
-      console.warn("REFLINK OFFLINE SYNC FAILED", item.client_id, error);
+    } catch {
+      // Never log queued referral payloads, identifiers or database error objects.
       failed += 1;
     }
   }
