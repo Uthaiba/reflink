@@ -2717,6 +2717,9 @@ function AdminAggregateReports() {
   const [lgaRows, setLgaRows] = useState([]);
   const [lgaLoading, setLgaLoading] = useState(false);
   const [lgaError, setLgaError] = useState("");
+  const [coverageRows, setCoverageRows] = useState([]);
+  const [coverageLoading, setCoverageLoading] = useState(false);
+  const [coverageError, setCoverageError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -2806,6 +2809,38 @@ function AdminAggregateReports() {
       }
     };
     loadLgaSummary();
+    return () => { active = false; };
+  }, [startDate, endDate, refreshKey, facilityPeriodEligible]);
+
+  useEffect(() => {
+    let active = true;
+    if (!facilityPeriodEligible) {
+      setCoverageRows([]);
+      setCoverageError("");
+      setCoverageLoading(false);
+      return () => { active = false; };
+    }
+    const loadCoverage = async () => {
+      setCoverageRows([]);
+      setCoverageLoading(true);
+      setCoverageError("");
+      try {
+        const { data, error: coverageErrorResult } = await supabase.rpc(
+          "get_admin_facility_reporting_coverage",
+          { p_start_date: startDate, p_end_date: endDate },
+        );
+        if (coverageErrorResult) throw coverageErrorResult;
+        if (active) setCoverageRows(Array.isArray(data) ? data : []);
+      } catch {
+        if (active) {
+          setCoverageRows([]);
+          setCoverageError("Facility reporting coverage is not yet available. The reviewed database migration must be applied and tested before this summary can run.");
+        }
+      } finally {
+        if (active) setCoverageLoading(false);
+      }
+    };
+    loadCoverage();
     return () => { active = false; };
   }, [startDate, endDate, refreshKey, facilityPeriodEligible]);
 
@@ -2996,6 +3031,44 @@ function AdminAggregateReports() {
           </div>
         )}
         <small className="admin-method-note">LGA groups are limited to complete calendar months. Counts from 1–4 and one additional group where needed are suppressed. Unassigned geography indicates missing facility assignment or geography. Low recorded referral activity is not proof of an unmet need or service gap; interpret alongside verified population, facility readiness and reporting-completeness data.</small>
+      </section>
+
+      <section className="admin-facility-intelligence" aria-labelledby="admin-coverage-heading">
+        <div className="admin-facility-intelligence-heading">
+          <div>
+            <span className="eyebrow">DATA QUALITY & COVERAGE</span>
+            <h4 id="admin-coverage-heading">Facility registry and reporting coverage</h4>
+            <p>Shows the current facility registry grouped by active status, recorded referral activity and geography completeness.</p>
+          </div>
+          <span className="admin-facility-period-tag">Monthly activity cohort</span>
+        </div>
+        {!facilityPeriodEligible && (
+          <p className="admin-facility-hint">Select one complete calendar month to assess recorded facility participation.</p>
+        )}
+        {coverageLoading && <p role="status" className="admin-facility-hint">Loading facility coverage aggregates…</p>}
+        {coverageError && <p role="status" className="error-message">{coverageError}</p>}
+        {facilityPeriodEligible && !coverageLoading && !coverageError && coverageRows.length === 0 && (
+          <p className="admin-facility-hint">No facility registry coverage summary is available for this month.</p>
+        )}
+        {facilityPeriodEligible && !coverageLoading && !coverageError && coverageRows.length > 0 && (
+          <div className="admin-facility-list admin-coverage-list">
+            {coverageRows.map((row, index) => {
+              const suppressed = row.small_cell_suppressed || row.complementary_suppressed;
+              return (
+                <article className="admin-facility-row" key={"coverage-" + index}>
+                  <div>
+                    <strong>{suppressed ? "Suppressed facility group" : row.coverage_group}</strong>
+                    <small>{suppressed ? "Category and count withheld to reduce disclosure" : "Registry facility count"}</small>
+                  </div>
+                  <span className={suppressed ? "is-suppressed" : ""}>
+                    {suppressed ? "Suppressed" : Number(row.facility_count || 0).toLocaleString()}
+                  </span>
+                </article>
+              );
+            })}
+          </div>
+        )}
+        <small className="admin-method-note">This combines the current facility registry snapshot with referral activity in the selected creation cohort. “No recorded referral activity” does not prove that a facility failed to report: a facility may not have been expected to refer during the period, may serve another workflow, or may have activity recorded outside REFLINK. Geography is considered complete only when both LGA and state are populated. No facility names, IDs, users or patient records are returned.</small>
       </section>
     </section>
   );

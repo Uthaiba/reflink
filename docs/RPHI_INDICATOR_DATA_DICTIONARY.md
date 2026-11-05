@@ -173,3 +173,20 @@ Until sign-off and non-production tests are complete, these definitions remain a
 **Interpretation boundary:** Referral volume is a measure of recorded platform activity. Low volume alone does not establish low service availability, unmet need, disease burden, referral failure or poor quality. Interpretation requires independently verified population denominators, facility readiness, catchment boundaries, access constraints and reporting completeness.
 
 **Release requirements:** Validate grouping against synthetic fixtures, test primary and complementary suppression for both directions, verify query plans and permissions in a non-production database, and obtain public-health, clinical-governance and data-protection sign-off before enabling the RPC.
+
+
+## 11. Facility registry and observed participation — candidate indicator
+
+**Purpose:** Provide a privacy-preserving snapshot of registry quality and whether registered facilities appear as a sender or receiver in the selected referral creation cohort.
+
+- The registry active status is the current value at query time, not a historical status snapshot.
+- Activity means at least one non-test referral created in the selected complete Africa/Lagos calendar month references the facility as either sending or receiving endpoint.
+- Geography is complete only when both LGA and state are non-empty.
+- Facilities are classified into mutually exclusive groups combining active/inactive/unknown status, observed referral activity and geography completeness.
+- Groups with 1–4 facilities are suppressed. If exactly one small group exists, one additional visible group is suppressed to reduce subtraction-based disclosure.
+- No facility ID, name, address, phone, email, user identity or patient-level record is returned.
+- A facility with no recorded referral activity is not automatically a non-reporting facility or an underperforming facility. Referral participation depends on service scope, catchment, workload, workflow adoption and the completeness of REFLINK capture.
+
+**Interpretation boundary:** This is a registry-quality and observed-platform-participation indicator, not an audited reporting-compliance measure. A facility may provide services without initiating or receiving a referral in the selected period. Do not use this classification for staff or facility performance ranking.
+
+**Release requirements:** Validate the facility active-status, LGA and state fields and referral endpoint semantics in a non-production database; test empty registry, null status, missing geography, facilities with activity in either direction, and all small-cell/complementary-suppression branches.
