@@ -79,7 +79,8 @@ No production database schema, RLS policy, patient record, storage object, secre
 
 ## Validation status
 - Source changes were applied to a new branch created from the exact v2.0 production commit.
-- Automated build, lint, unit, integration, RLS and browser tests have not yet been run.
+- Vercel preview build for commit 3ac2ccd9842b48a85ef686017c0fe017da9b5c4b completed with READY status.
+- Automated lint, unit, integration, RLS and browser workflow tests have not yet been run.
 - No claim of production readiness or legal compliance is made.
 - The new branch must be reviewed and its Vercel preview validated before merge.
 
