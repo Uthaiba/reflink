@@ -4,8 +4,6 @@ import { supabase } from "./lib/supabase.js";
 import { cacheValue, createClientId, getCachedValue, getQueueCount, queueReferral, syncQueuedReferrals } from "./lib/offlineReferralQueue.js";
 import { LanguageSwitcher, useLanguage } from "./lib/i18n.jsx";
 import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
-import AnalyticsDashboard from "./components/dashboards/AnalyticsDashboard.jsx";
-import AnalysisHub from "./components/dashboards/AnalysisHub.jsx";
 import "./App.css";
 import "./reflink-theme-professional.css";
 import "./reflink-branding.css";
@@ -2740,8 +2738,6 @@ const handleSignIn = async () => {
               <AdministratorRoute>
                 <AdminDashboard
                   profile={profile}
-                  AnalyticsDashboard={AnalyticsDashboard}
-                  AnalysisHub={AnalysisHub}
                   formatPatientAge={formatPatientAge}
                   getStatusLabel={getStatusLabel}
                 />
