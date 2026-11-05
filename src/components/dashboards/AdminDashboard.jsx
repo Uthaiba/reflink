@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase.js";
+import { isCompleteCalendarMonth } from "../../lib/rphiFacilityReporting.js";
 
 /* =======================================================
    ADMIN DASHBOARD
@@ -2709,6 +2710,10 @@ function AdminAggregateReports() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [facilityRows, setFacilityRows] = useState([]);
+  const [facilityLoading, setFacilityLoading] = useState(false);
+  const [facilityError, setFacilityError] = useState("");
+  const facilityPeriodEligible = isCompleteCalendarMonth(startDate, endDate);
 
   useEffect(() => {
     let active = true;
@@ -2734,6 +2739,39 @@ function AdminAggregateReports() {
     loadReport();
     return () => { active = false; };
   }, [startDate, endDate, refreshKey]);
+
+  useEffect(() => {
+    let active = true;
+    if (!facilityPeriodEligible) {
+      setFacilityRows([]);
+      setFacilityError("");
+      setFacilityLoading(false);
+      return () => { active = false; };
+    }
+
+    const loadFacilitySummary = async () => {
+      setFacilityLoading(true);
+      setFacilityError("");
+      try {
+        const { data, error: summaryError } = await supabase.rpc(
+          "get_admin_facility_referral_summary",
+          { p_start_date: startDate, p_end_date: endDate },
+        );
+        if (summaryError) throw summaryError;
+        if (active) setFacilityRows(Array.isArray(data) ? data : []);
+      } catch {
+        if (active) {
+          setFacilityRows([]);
+          setFacilityError("Facility-level reporting is not yet available. The reviewed database migration must be applied and tested before this breakdown can run.");
+        }
+      } finally {
+        if (active) setFacilityLoading(false);
+      }
+    };
+
+    loadFacilitySummary();
+    return () => { active = false; };
+  }, [startDate, endDate, refreshKey, facilityPeriodEligible]);
 
   const indicatorCards = result ? [
     {
@@ -2824,6 +2862,55 @@ function AdminAggregateReports() {
       )}
       {!result && !error && !loading && <p>No aggregate result is available for this reporting period.</p>}
       <small className="admin-method-note">Test referrals are excluded. Counts from 1 to 4 are suppressed independently. Timestamp flags are data-quality signals, not clinical outcomes. These aggregate indicators do not establish population incidence, prevalence, clinical quality or referral failure rates. Validate definitions and observation windows with clinical and public-health leads before using them for performance decisions.</small>
+
+      <section className="admin-facility-intelligence" aria-labelledby="admin-facility-intelligence-heading">
+        <div className="admin-facility-intelligence-heading">
+          <div>
+            <span className="eyebrow">NETWORK DISTRIBUTION</span>
+            <h4 id="admin-facility-intelligence-heading">Facility referral activity</h4>
+            <p>Sending and receiving facilities are reported separately. Facility labels and locations are hidden with suppressed counts.</p>
+          </div>
+          <span className="admin-facility-period-tag">Complete month only</span>
+        </div>
+        {!facilityPeriodEligible && (
+          <p className="admin-facility-hint">Select one complete calendar month to view facility distribution. Partial and overlapping date ranges are not accepted for this breakdown.</p>
+        )}
+        {facilityLoading && <p role="status" className="admin-facility-hint">Loading facility aggregates…</p>}
+        {facilityError && <p role="status" className="error-message">{facilityError}</p>}
+        {facilityPeriodEligible && !facilityLoading && !facilityError && facilityRows.length === 0 && (
+          <p className="admin-facility-hint">No facility-level aggregate is available for this month.</p>
+        )}
+        {facilityPeriodEligible && facilityRows.length > 0 && (
+          <div className="admin-facility-directions">
+            {["Sending", "Receiving"].map((direction) => {
+              const rows = facilityRows.filter((row) => row.referral_direction === direction);
+              if (rows.length === 0) return null;
+              return (
+                <div className="admin-facility-direction" key={direction}>
+                  <h5>{direction} facilities</h5>
+                  <div className="admin-facility-list">
+                    {rows.map((row, index) => {
+                      const suppressed = row.small_cell_suppressed || row.complementary_suppressed;
+                      return (
+                        <article className="admin-facility-row" key={direction + "-" + index}>
+                          <div>
+                            <strong>{suppressed ? "Suppressed facility group" : row.facility_label}</strong>
+                            <small>{suppressed ? "Facility identity and geography withheld" : [row.facility_type, row.lga, row.state].filter(Boolean).join(" · ") || "Location not recorded"}</small>
+                          </div>
+                          <span className={suppressed ? "is-suppressed" : ""}>
+                            {suppressed ? "Suppressed" : Number(row.referral_count || 0).toLocaleString()}
+                          </span>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <small className="admin-method-note">Facility breakdowns are restricted to complete calendar months. Counts from 1–4 are suppressed. When exactly one small facility group exists in a direction, an additional visible group is suppressed to reduce subtraction-based disclosure. No facility IDs or patient-level records are returned.</small>
+      </section>
     </section>
   );
 }
