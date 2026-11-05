@@ -115,3 +115,21 @@ No production database schema, RLS policy, patient record, storage object, secre
 6. Strengthen offline queue security and idempotency.
 7. Introduce migrations and automated security/workflow tests.
 8. Proceed with the design-system and modular UI refactor.
+
+## Additional UI and service-worker hardening (5 November 2026)
+
+The following changes were added after the initial audit:
+
+- Added `src/admin-workspace.css` and loaded it after the existing administrator stylesheet to improve responsive administrator navigation, reporting panels, KPI cards and focus states.
+- Added `src/reflink-workspace-quality.css` and loaded it after the existing application styles to improve PHC/receiving workspace layout, referral form spacing, mobile behaviour and keyboard focus visibility. Existing React forms, field names, routes, clinical content and Supabase operations were not intentionally changed by this CSS-only pass.
+- Tightened `public/sw.js`: same-origin `/api/` requests, requests with Authorization headers and requests explicitly marked no-store bypass service-worker caching. Only the app navigation shell and known static assets / Vite assets are cacheable; unknown dynamic GET endpoints are network-only.
+- Static asset path detection was preserved and corrected to match file extensions, avoiding accidental fallback of asset requests to the app shell.
+
+These changes are source-level hardening, not proof of device-level PHI encryption or complete offline privacy. Existing IndexedDB referral queue/cache contents still need a separately designed encryption, key lifecycle, retention and device/session threat model. Existing service-worker caches from older releases should be cleared/retired through a controlled version transition and verified on real devices.
+
+### Validation status for this additional pass
+
+- GitHub Actions passed for the latest administrator/PHC styling commit `35e1df845dc109912db92649371dd0fe24c63800`.
+- Vercel preview for that commit reached READY.
+- Subsequent service-worker cache-hardening commits are running through CI and Vercel Preview. They must pass before this latest service-worker change is treated as validated.
+- No production release or database changes were made.
