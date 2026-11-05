@@ -328,3 +328,49 @@
   background: #edf7f2;
   color: #075d4c;
 }
+
+
+/* R-PHI lifecycle indicator cards — aggregate event counts, not outcome rates. */
+.admin-modern-shell .admin-rphi-indicator-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 16px;
+}
+.admin-modern-shell .admin-rphi-indicator-card {
+  min-height: 112px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.admin-modern-shell .admin-rphi-indicator-card > strong {
+  font-size: 25px;
+  line-height: 1.2;
+}
+.admin-modern-shell .admin-rphi-indicator-card > small {
+  line-height: 1.5;
+}
+.admin-rphi-period-note {
+  display: grid;
+  gap: 5px;
+  margin-top: 13px;
+  padding: 12px 14px;
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  background: #f8fbf9;
+  color: var(--admin-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.admin-rphi-period-note strong {
+  color: var(--admin-ink);
+  font-size: 12px;
+}
+@media (min-width: 1100px) {
+  .admin-modern-shell .admin-rphi-indicator-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 420px) {
+  .admin-modern-shell .admin-rphi-indicator-grid {
+    grid-template-columns: 1fr;
+  }
+}
