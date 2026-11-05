@@ -80,15 +80,17 @@ Advisor findings are prompts for review, not proof of exploitation. Index remova
 4. Replaced administrator patient-level referral queries and records views with aggregate-only reporting UI.
 5. Added a proposed administrator aggregate reporting RPC with Africa/Lagos date boundaries and small-cell suppression.
 6. Added a canonical user-provisioning Edge Function source limited to database-supported roles; not deployed.
-7. Added CI build/lint workflow, test matrix and migration governance documentation.
-8. Added this audit record.
+7. Marked the former root-level Edge Function file as historical/non-deployable.
+8. Added CI build/lint workflow, test matrix and migration governance documentation.
+9. Added this audit record.
 No production database schema, RLS policy, patient record, storage object, secret, Edge Function or Vercel production setting was modified.
 
 ## Validation status
 - Source changes were applied to a new branch created from the exact v2.0 production commit.
-- Vercel preview build for application commit 3ac2ccd9842b48a85ef686017c0fe017da9b5c4b completed with READY status. Later dashboard and migration commits require a fresh preview build.
-- GitHub Actions build/lint workflow has been added; execution result is pending.
-- Automated integration, RLS, counter-referral concurrency, accessibility and browser workflow tests have not yet been run.
+- Vercel preview build for commit 3ab066a97c7c38a8079ee89b46d9b35179da43b5 completed with READY status.
+- GitHub Actions run 42108870471 completed successfully: npm ci, npm run lint and npm run build all passed.
+- Automated integration, RLS, counter-referral concurrency, accessibility and authenticated browser workflow tests have not yet been run.
+- The proposed database migration and canonical create-user Edge Function have not been deployed to Supabase. The administrator aggregate UI therefore reports that aggregate reporting is unavailable until the reviewed migration is deployed.
 - No claim of production readiness or legal compliance is made.
 - The new branch must be reviewed and its Vercel preview validated before merge.
 
