@@ -11,6 +11,7 @@ import "./reflink-human-centered-ux.css";
 import "./reflink-dashboard-refinement.css";
 import "./reflink-referral-detail-ux.css";
 import "./reflink-investigation-results-ux.css";
+import "./reflink-workspace-quality.css";
 
 function formatPatientAge(ageInMonths) {
   const months = Number(ageInMonths);
