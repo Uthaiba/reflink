@@ -1580,22 +1580,73 @@ function App() {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [offlineSyncMessage, setOfflineSyncMessage] = useState("");
+  const [offlineVaultKey, setOfflineVaultKey] = useState(null);
+  const [offlineVaultOwner, setOfflineVaultOwner] = useState(null);
+  const [offlineVaultVisible, setOfflineVaultVisible] = useState(false);
+  const [pendingOfflineReferral, setPendingOfflineReferral] = useState(null);
+
+  const handleOfflineVaultUnlocked = async (key, ownerUserId) => {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user?.id || String(user.id) !== String(ownerUserId)) {
+      throw new Error("The signed-in account changed. Unlock the vault again for the active account.");
+    }
+    const migration = await migratePlaintextQueueToEncrypted(ownerUserId, key);
+    if (pendingOfflineReferral && String(pendingOfflineReferral.referring_user_id) === String(ownerUserId)) {
+      await queueEncryptedReferral(pendingOfflineReferral, ownerUserId, key);
+      setSavedReferralInfo({
+        referralNumber: pendingOfflineReferral.referral_number,
+        patientIdentifier: pendingOfflineReferral.patient_identifier,
+      });
+      setMessage(`Saved securely in the offline queue. Referral ${pendingOfflineReferral.referral_number} will sync when connected.`);
+      setPendingOfflineReferral(null);
+    }
+    setOfflineVaultKey(key);
+    setOfflineVaultOwner(String(ownerUserId));
+    setOfflineVaultVisible(false);
+    if (migration.failed > 0) {
+      setOfflineSyncMessage(`${migration.failed} older offline referral(s) could not be encrypted. They remain stored and were not synchronised.`);
+    }
+    if (navigator.onLine) {
+      const result = await syncQueuedReferrals(supabase, key);
+      if (result.synced > 0) setOfflineSyncMessage(`${result.synced} offline referral${result.synced === 1 ? "" : "s"} synced successfully.`);
+    }
+  };
 
   useEffect(() => {
+    let active = true;
     const sync = async () => {
-      if (!navigator.onLine) return;
+      if (!navigator.onLine || !offlineVaultKey || !offlineVaultOwner) return;
       try {
-        const result = await syncQueuedReferrals(supabase);
-        if (result.synced > 0) setOfflineSyncMessage(`${result.synced} offline referral${result.synced === 1 ? "" : "s"} synced successfully.`);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user?.id || String(user.id) !== String(offlineVaultOwner)) return;
+        const result = await syncQueuedReferrals(supabase, offlineVaultKey);
+        if (active && result.synced > 0) setOfflineSyncMessage(`${result.synced} offline referral${result.synced === 1 ? "" : "s"} synced successfully.`);
       } catch (error) {
-        console.warn("REFLINK offline sync", error);
+        if (active) console.warn("REFLINK offline sync", error);
       }
     };
     sync();
     window.addEventListener("online", sync);
     const timer = window.setInterval(sync, 15000);
-    return () => { window.removeEventListener("online", sync); window.clearInterval(timer); };
-  }, []);
+    return () => { active = false; window.removeEventListener("online", sync); window.clearInterval(timer); };
+  }, [offlineVaultKey, offlineVaultOwner]);
+
+  useEffect(() => {
+    let active = true;
+    const inspectQueue = async () => {
+      if (!profile?.id) return;
+      try {
+        const count = await getQueueCount(profile.id);
+        const envelope = await getOfflineKeyVaultEnvelope(profile.id);
+        if (active && count > 0 && !offlineVaultKey && !offlineVaultVisible) setOfflineVaultVisible(true);
+        if (active && count > 0 && !envelope) setOfflineVaultVisible(true);
+      } catch {
+        if (active) setOfflineVaultVisible(true);
+      }
+    };
+    inspectQueue();
+    return () => { active = false; };
+  }, [profile?.id]);
 
   /* =========================================================
    LOGIN / AUTHENTICATION
