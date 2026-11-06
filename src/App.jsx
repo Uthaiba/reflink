@@ -1650,7 +1650,7 @@ function App() {
 
   useEffect(() => {
     if (offlineVaultOwner && profile?.id && String(offlineVaultOwner) !== String(profile.id)) {
-      offlineVaultChannelRef.current?.broadcastLock(offlineVaultOwner);
+      offlineVaultChannelRef.current?.broadcastLock();
       setOfflineVaultKey(null);
       setOfflineVaultOwner(null);
       setOfflineVaultVisible(true);
@@ -2111,7 +2111,7 @@ const handleSignIn = async () => {
   setLoading(true);
 
   try {
-    offlineVaultChannelRef.current?.broadcastLock(offlineVaultOwner);
+    offlineVaultChannelRef.current?.broadcastLock();
     setOfflineVaultKey(null);
     setOfflineVaultOwner(null);
     setOfflineVaultVisible(false);
@@ -2136,7 +2136,7 @@ const handleSignIn = async () => {
       {profile?.id && !offlineVaultVisible && (
         <button type="button" className="secondary-button reflink-offline-vault-open" onClick={() => {
           if (offlineVaultKey) {
-            offlineVaultChannelRef.current?.broadcastLock(offlineVaultOwner);
+            offlineVaultChannelRef.current?.broadcastLock();
             setOfflineVaultKey(null);
             setOfflineVaultOwner(null);
           } else {
