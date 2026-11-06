@@ -158,3 +158,30 @@ test("offline vault lock events reach only other tabs for the same account", asy
   await accountBTab.close();
   await secondAccountBTab.close();
 });
+
+
+test("two real browser tabs cannot claim the same queued referral concurrently", async ({ page, context }) => {
+  await page.goto(BASE_URL);
+  await page.waitForFunction(() => Boolean(window.offlineQueueBrowserTests));
+  await page.evaluate(() => window.offlineQueueBrowserTests.createVaultAndQueue());
+
+  const secondTab = await context.newPage();
+  await secondTab.goto(BASE_URL);
+  await secondTab.waitForFunction(() => Boolean(window.offlineQueueBrowserTests));
+
+  const [claimA, claimB] = await Promise.all([
+    page.evaluate(() => window.offlineQueueBrowserTests.claimQueueRecord("browser-worker-a")),
+    secondTab.evaluate(() => window.offlineQueueBrowserTests.claimQueueRecord("browser-worker-b")),
+  ]);
+  expect([claimA, claimB].filter(Boolean)).toHaveLength(1);
+  expect([claimA, claimB].filter(Boolean)[0]).toMatch(/browser-worker-/);
+
+  const winningPage = claimA ? page : secondTab;
+  const losingPage = claimA ? secondTab : page;
+  const winningToken = claimA || claimB;
+  expect(await losingPage.evaluate(() => window.offlineQueueBrowserTests.claimQueueRecord("browser-worker-retry"))).toBeNull();
+  expect(await winningPage.evaluate((token) => window.offlineQueueBrowserTests.releaseQueueClaim(token), winningToken)).toBe(true);
+  expect(await losingPage.evaluate(() => window.offlineQueueBrowserTests.claimQueueRecord("browser-worker-retry"))).toBe("browser-worker-retry");
+
+  await secondTab.close();
+});
