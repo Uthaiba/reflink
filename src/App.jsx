@@ -1595,7 +1595,6 @@ function App() {
   const [offlineVaultKey, setOfflineVaultKey] = useState(null);
   const [offlineVaultOwner, setOfflineVaultOwner] = useState(null);
   const [offlineVaultVisible, setOfflineVaultVisible] = useState(false);
-  const [pendingOfflineReferral, setPendingOfflineReferral] = useState(null);
   const offlineVaultChannelRef = useRef(null);
 
 
@@ -1622,15 +1621,6 @@ function App() {
       throw new Error("The signed-in account changed. Unlock the vault again for the active account.");
     }
     const migration = await migratePlaintextQueueToEncrypted(ownerUserId, key);
-    if (pendingOfflineReferral && String(pendingOfflineReferral.referring_user_id) === String(ownerUserId)) {
-      await queueEncryptedReferral(pendingOfflineReferral, ownerUserId, key);
-      setSavedReferralInfo({
-        referralNumber: pendingOfflineReferral.referral_number,
-        patientIdentifier: pendingOfflineReferral.patient_identifier,
-      });
-      setMessage(`Saved securely in the offline queue. Referral ${pendingOfflineReferral.referral_number} will sync when connected.`);
-      setPendingOfflineReferral(null);
-    }
     setOfflineVaultKey(key);
     setOfflineVaultOwner(String(ownerUserId));
     setOfflineVaultVisible(false);
@@ -1968,7 +1958,6 @@ const handleSignIn = async () => {
         setOfflineVaultKey(null);
         setOfflineVaultOwner(null);
         setOfflineVaultVisible(false);
-        setPendingOfflineReferral(null);
         setProfile(null);
         setRole(null);
         setDashboardView("overview");
@@ -2130,7 +2119,6 @@ const handleSignIn = async () => {
     setOfflineVaultKey(null);
     setOfflineVaultOwner(null);
     setOfflineVaultVisible(false);
-    setPendingOfflineReferral(null);
     await supabase.auth.signOut();
   } finally {
     setRole(null);
@@ -2166,7 +2154,7 @@ const handleSignIn = async () => {
         <OfflineVaultPanel
           ownerUserId={profile.id}
           onUnlocked={handleOfflineVaultUnlocked}
-          onClose={() => { if (!pendingOfflineReferral) setOfflineVaultVisible(false); }}
+          onClose={() => setOfflineVaultVisible(false)}
         />
       )}
       {offlineSyncMessage && (
@@ -3016,6 +3004,9 @@ const handleSignIn = async () => {
 
             <NewReferralForm
               onBack={() => setScreen("dashboard")}
+              offlineVaultKey={offlineVaultKey}
+              offlineVaultOwner={offlineVaultOwner}
+              onRequestVault={() => setOfflineVaultVisible(true)}
             />
 
           </main>
