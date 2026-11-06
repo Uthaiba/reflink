@@ -280,7 +280,7 @@ export async function saveOfflineKeyVaultEnvelope(envelope, ownerUserId) {
   try {
     await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_KEY_VAULT, "readwrite");
-      tx.objectStore(STORE_KEY_VAULT).put({ ...envelope, owner_user_id: String(ownerUserId) });
+      tx.objectStore(STORE_KEY_VAULT).add({ ...envelope, owner_user_id: String(ownerUserId) });
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error || new Error("Unable to save the offline key vault."));
