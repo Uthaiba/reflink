@@ -106,3 +106,5 @@ A read-only review of the current feature branch confirms that a dispatch worker
 **Worker implementation is blocked by the recipient-model and in-app-store decisions, in addition to the previously documented migration-baseline/staging blocker.** Keep the existing SMS endpoint unchanged. Do not add a referral-sent trigger, schedule a worker, send test SMS, apply migrations or alter production configuration until these contracts are approved and validated with synthetic data.
 
 The recipient identity, in-app inbox ownership, event routing, dispatch authorization and delivery acceptance contract are specified in [NOTIFICATION_RECIPIENT_AND_DELIVERY_CONTRACT.md](./NOTIFICATION_RECIPIENT_AND_DELIVERY_CONTRACT.md). It is a source-only proposal and does not authorize schema or runtime changes.
+
+The isolated user-facing inbox component and its security/lifecycle contract are documented in [IN_APP_NOTIFICATION_CENTRE.md](./IN_APP_NOTIFICATION_CENTRE.md). The component is not mounted in the application and has no live database integration.
