@@ -75,3 +75,19 @@ Automatic sync now:
 Static unit tests cover owner matching and reject unowned records. They do not prove IndexedDB isolation against same-origin script execution, cross-tab races, RLS correctness or server-side role/facility authorization. Those controls remain mandatory.
 
 **Still outstanding:** queue payloads remain plaintext in IndexedDB; no application-layer encryption or key lifecycle has been implemented. Logout does not yet implement a reviewed purge/recovery policy. Device encryption, screen locks, managed endpoints, XSS mitigation, server-side sync authorization and clinical retention policy remain release gates.
+
+
+## AES-GCM implementation foundation — 6 November 2026
+
+Added `src/lib/offlineQueueCrypto.js` as a source-only cryptographic primitive. It:
+- Generates non-extractable AES-256-GCM keys through Web Crypto.
+- Uses a fresh 96-bit IV for each encryption operation and a 128-bit authentication tag.
+- Authenticates the format version, owner user ID and offline client ID as additional authenticated data.
+- Rejects malformed envelopes, unsupported versions, extractable keys and invalid record context.
+- Normalizes decryption/authentication failures so callers do not receive low-level cryptographic details.
+
+Added `tests/offlineQueueCrypto.test.js` for key properties, encryption/decryption round trips, fresh IVs, owner/record binding, tampering, wrong-key rejection, malformed envelopes and extractable-key rejection.
+
+**Important implementation boundary:** this module is not wired into `offlineReferralQueue.js`. Existing IndexedDB records are still stored in plaintext, and the application does not yet provision, persist, unlock, rotate, revoke or recover encryption keys. The helper's generated key is in-memory only; using it without a durable, approved lifecycle would make unsynced referrals unrecoverable after a reload. It does not by itself protect against same-origin XSS, malicious extensions, or a compromised browser profile.
+
+Do not describe offline referral storage as encrypted until the queue migration, key lifecycle, logout/recovery flow, retention policy and browser integration tests are implemented and reviewed. This source-only step does not change the database, production app, current queue schema or referral synchronization behaviour.
