@@ -1915,6 +1915,11 @@ const handleSignIn = async () => {
 
       if (event === "SIGNED_IN" && session?.user) {
         currentSessionUser = session.user;
+        if (offlineVaultOwner && String(offlineVaultOwner) !== String(session.user.id)) {
+          setOfflineVaultKey(null);
+          setOfflineVaultOwner(null);
+          setOfflineVaultVisible(true);
+        }
       }
 
       if (event === "SIGNED_OUT") {
@@ -2103,9 +2108,16 @@ const handleSignIn = async () => {
     <div className="app">
 
       <OfflineStatusBadge />
-      {profile?.id && !offlineVaultKey && !offlineVaultVisible && (
-        <button type="button" className="secondary-button reflink-offline-vault-open" onClick={() => setOfflineVaultVisible(true)}>
-          Unlock offline referrals
+      {profile?.id && !offlineVaultVisible && (
+        <button type="button" className="secondary-button reflink-offline-vault-open" onClick={() => {
+          if (offlineVaultKey) {
+            setOfflineVaultKey(null);
+            setOfflineVaultOwner(null);
+          } else {
+            setOfflineVaultVisible(true);
+          }
+        }}>
+          {offlineVaultKey ? "Lock offline vault" : "Unlock offline referrals"}
         </button>
       )}
       {profile?.id && offlineVaultVisible && (
