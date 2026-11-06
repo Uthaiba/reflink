@@ -96,3 +96,17 @@ test("concurrent referral sync sends the SMS only for the attempt that inserted 
   assert.match(queueSource, /if \(createdByThisAttempt && referral\?\.id\)/);
   assert.doesNotMatch(queueSource, /if \(!existing && referral\?\.id\)/);
 });
+
+
+test("cross-tab sync claims use owner-scoped atomic IndexedDB transactions and fencing tokens", () => {
+  assert.match(queueSource, /export async function claimQueuedReferral\(/);
+  assert.match(queueSource, /db\.transaction\(STORE_QUEUE, "readwrite"\)/);
+  assert.match(queueSource, /sync_claim:\s*\{/);
+  assert.match(queueSource, /expires_at:\s*now \+ leaseMs/);
+  assert.match(queueSource, /export async function releaseQueuedReferralClaim\(/);
+  assert.match(queueSource, /record\.sync_claim\?\.token === String\(claimToken\)/);
+  assert.match(queueSource, /export async function removeQueuedReferral\(clientId, ownerUserId, claimToken\)/);
+  assert.match(queueSource, /claimToken = await claimQueuedReferral\(storedItem\.client_id, userId\)/);
+  assert.match(queueSource, /removeQueuedReferral\(item\.client_id, userId, claimToken\)/);
+  assert.match(queueSource, /releaseQueuedReferralClaim\(storedItem\.client_id, userId, claimToken\)/);
+});
