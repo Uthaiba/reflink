@@ -250,6 +250,8 @@ test("aborted migration transaction preserves the original plaintext referral fo
   });
 
   const key = await createOfflineQueueCryptoKey();
+  // Run the production opener first so the v2 fixture receives the v3 owner index.
+  await listQueuedReferrals("user-a");
   const db = await openDatabase();
   const databasePrototype = Object.getPrototypeOf(db);
   const originalTransaction = databasePrototype.transaction;
