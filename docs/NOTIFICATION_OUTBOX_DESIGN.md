@@ -108,3 +108,7 @@ A read-only review of the current feature branch confirms that a dispatch worker
 The recipient identity, in-app inbox ownership, event routing, dispatch authorization and delivery acceptance contract are specified in [NOTIFICATION_RECIPIENT_AND_DELIVERY_CONTRACT.md](./NOTIFICATION_RECIPIENT_AND_DELIVERY_CONTRACT.md). It is a source-only proposal and does not authorize schema or runtime changes.
 
 The isolated user-facing inbox component and its security/lifecycle contract are documented in [IN_APP_NOTIFICATION_CENTRE.md](./IN_APP_NOTIFICATION_CENTRE.md). The component is not mounted in the application and has no live database integration.
+
+## In-app inbox schema follow-on
+
+The separate user-facing inbox, ownership policy, restricted mark-read operation, recipient-selection blocker and integration acceptance tests are specified in [NOTIFICATION_INBOX_SCHEMA_AND_ACCESS_DESIGN.md](./NOTIFICATION_INBOX_SCHEMA_AND_ACCESS_DESIGN.md).
