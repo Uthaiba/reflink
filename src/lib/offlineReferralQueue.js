@@ -1,10 +1,10 @@
+import { decryptOfflineReferralPayload, encryptOfflineReferralPayload } from "./offlineQueueCrypto.js";
+
 const DB_NAME = "reflink-offline";
 const DB_VERSION = 3;
 const STORE_QUEUE = "referral_queue";
 const STORE_CACHE = "cache";
 const STORE_KEY_VAULT = "offline_key_vault";
-import { decryptOfflineReferralPayload, encryptOfflineReferralPayload } from "./offlineQueueCrypto.js";
-
 let activeSyncPromise = null;
 
 function openDb() {
