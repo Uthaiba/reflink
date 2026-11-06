@@ -246,3 +246,13 @@ Vault unlock now revalidates the authenticated account after asynchronous legacy
 This validates the shared channel helper and account-routing behaviour through helper-level browser tests and source-contract integration tests; it is not a full authenticated React UI test or a security boundary against malicious same-origin scripts. Firefox/WebKit, full authenticated UI coverage, server-side authorization and managed-device controls remain separate validation areas.
 
 **Validation history:** GitHub Actions runs #310 and #311 passed on exact branch head `a7908b2de65d5775280be7deca9061fbe31f55e1`; runs #312 and #313 passed on documentation head `6876a5b46db696ba75be2d8867725f9d35be9f88`; runs #316 and #317 passed on lifecycle head `94caa701a45feedcfce1b65d9e0c7dfdf3f3f15d`. The additional sign-out/account-replacement broadcast changes and their regression test are now committed on a newer branch head; exact-HEAD CI is pending and must pass before treating those latest changes as verified.
+
+## Concurrent sync notification safeguard — 6 November 2026
+
+A cross-tab race review identified that two browser tabs could both observe a missing server referral before attempting the same offline referral insert. The database uniqueness conflict path reconciles the second attempt to the already-created referral. Previously, both attempts could still satisfy the later notification condition and independently call the SMS endpoint.
+
+The sync path now records whether the current attempt actually inserted the referral. Only that successful inserting attempt may trigger the referral-sent SMS call. A tab that finds an existing referral or reconciles a uniqueness conflict does not send another SMS.
+
+This is a client-side duplicate-notification safeguard, not a complete distributed sync lock. Correctness still depends on the server enforcing a unique idempotency constraint for the offline referral identity. The SMS endpoint itself does not yet provide a durable idempotency key or transactional outbox guarantee, so delivery across network timeouts/retries is not exactly-once. Server-side notification idempotency remains a release-hardening item.
+
+No production schema or endpoint has been changed by this source-only client safeguard.
