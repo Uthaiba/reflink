@@ -43,7 +43,7 @@ test("acknowledgement reminder hooks queue in-app events at the stored deadline"
     "referral_acknowledgement_notification_hooks",
   );
   assert.match(sql, /'in_app'/);
-  assert.match(sql, /next_attempt_at\s*,?\s*\n\s*new\.ack_due_at/i);
+  assert.match(sql, /'pending',\s*new\.ack_due_at/i);
   assert.match(sql, /p\.role\s*=\s*'receiving_staff'/i);
   assert.match(sql, /p\.facility_id\s*=\s*new\.receiving_facility_id/i);
   assert.match(sql, /r\.status\s*=\s*'sent'/i);
