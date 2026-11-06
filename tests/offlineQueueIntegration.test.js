@@ -14,7 +14,7 @@ test("application offline submission uses encrypted queue writes without plainte
 
 test("background queue sync fails closed without an unlocked key", () => {
   assert.match(queueSource, /if \(!key\) return \{ synced: 0, failed: 0, skipped: true, reason: "vault_locked" \}/);
-  assert.match(queueSource, /if \(!isEncryptedQueueRecord\(storedItem\)\) \{ failed \+= 1; continue; \}/);
+  assert.match(queueSource, /if \(!isEncryptedQueueRecord\(storedItem\)\) \{ failed \+= 1; await releaseQueuedReferralClaim\(storedItem\.client_id, userId, claimToken\); continue; \}/);
 });
 
 test("plaintext migration compares the source record before atomic replacement", () => {
