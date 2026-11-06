@@ -26,7 +26,7 @@ test("plaintext migration compares the source record before atomic replacement",
 test("vault is locked on sign-out and manual lock uses the account-scoped cross-tab channel", () => {
   assert.match(appSource, /setOfflineVaultKey\(null\)/);
   assert.match(appSource, /createOfflineVaultLockChannel\(offlineVaultOwner/);
-  assert.match(appSource, /broadcastLock\(offlineVaultOwner\)/);
+  assert.match(appSource, /broadcastLock\(\)/);
   assert.match(vaultLockSource, /new BroadcastChannel\(OFFLINE_VAULT_LOCK_CHANNEL\)/);
   assert.match(vaultLockSource, /message\.ownerUserId !== owner/);
   assert.match(vaultLockSource, /type: "LOCK"/);
