@@ -39,3 +39,22 @@ test("the referral form owns the pending referral until its matching account vau
   assert.match(appSource, /onRequestVault\?\.\(\)/);
   assert.match(appSource, /String\(pendingOfflineReferral\.referring_user_id\) !== String\(offlineVaultOwner\)/);
 });
+
+test("legacy queue API is encryption-only and cannot write plaintext", () => {
+  const legacyApi = queueSource.match(/export async function queueReferral\([\s\S]*?\n\}/)?.[0] || "";
+  assert.match(legacyApi, /return queueEncryptedReferral\(payload, ownerUserId, key\)/);
+  assert.doesNotMatch(legacyApi, /openDb\(|payload:\s*\{\s*\.\.\.payload\s*\}/);
+});
+
+test("encrypted queue writes use insert semantics rather than overwriting an existing client ID", () => {
+  const encryptedWriter = queueSource.match(/export async function queueEncryptedReferral\([\s\S]*?\n\}/)?.[0] || "";
+  assert.match(encryptedWriter, /objectStore\(STORE_QUEUE\)\.add\(record\)/);
+  assert.doesNotMatch(encryptedWriter, /objectStore\(STORE_QUEUE\)\.put\(record\)/);
+});
+
+test("decrypted listing refuses legacy plaintext records instead of returning them", () => {
+  const listing = queueSource.match(/export async function listDecryptedQueuedReferrals\([\s\S]*?\n\}/)?.[0] || "";
+  assert.match(listing, /if \(!isEncryptedQueueRecord\(record\)\)/);
+  assert.match(listing, /must be encrypted before it can be read/);
+  assert.doesNotMatch(listing, /results\.push\(record\)/);
+});
