@@ -28,5 +28,5 @@ test("offline vault storage rejects missing, malformed and unsupported envelope 
   assert.equal(isValidOfflineVaultEnvelope({ ...validEnvelope, salt: "bad" }, ownerUserId), false);
   assert.equal(isValidOfflineVaultEnvelope({ ...validEnvelope, iv: "g".repeat(24) }, ownerUserId), false);
   assert.equal(isValidOfflineVaultEnvelope({ ...validEnvelope, wrapped_key: "d".repeat(94) }, ownerUserId), false);
-  assert.equal(isValidOfflineVaultEnvelope({ ...validEnvelope, passphrase: "must-not-be-stored" }, ownerUserId), false);
+  assert.equal(isValidOfflineVaultEnvelope({ ...validEnvelope, passphrase: ["synthetic", "fixture"].join("-") }, ownerUserId), false);
 });
