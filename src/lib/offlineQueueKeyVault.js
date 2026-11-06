@@ -40,7 +40,11 @@ function toHex(bytes) {
 }
 
 function fromHex(value, expectedLength, label) {
-  if (typeof value !== "string" || !/^(?:[0-9a-f]{2})+$/i.test(value)) {
+  if (
+    typeof value !== "string"
+    || !/^(?:[0-9a-f]{2})+$/i.test(value)
+    || (expectedLength && value.length !== expectedLength * 2)
+  ) {
     throw new Error("The offline key vault " + label + " is malformed.");
   }
   const bytes = new Uint8Array(value.length / 2);
