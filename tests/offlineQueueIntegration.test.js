@@ -76,3 +76,16 @@ test("auth changes use the latest vault owner and unlock revalidates after migra
   assert.ok(keyActivationIndex > postMigrationCheckIndex, "key must not become active before post-migration auth verification");
   assert.match(appSource, /String\(verifiedUser\.id\) !== String\(ownerUserId\)/);
 });
+
+test("sign-out and account replacement broadcast a vault lock before clearing local key state", () => {
+  const signedInStart = appSource.indexOf('if (event === "SIGNED_IN" && session?.user)');
+  const signedOutStart = appSource.indexOf('if (event === "SIGNED_OUT")', signedInStart);
+  assert.ok(signedInStart >= 0 && signedOutStart > signedInStart, "auth lifecycle handlers must exist");
+
+  const signedInHandler = appSource.slice(signedInStart, signedOutStart);
+  assert.match(signedInHandler, /if \(activeVaultOwner && String\(activeVaultOwner\) !== String\(session\.user\.id\)\) \{\s*offlineVaultChannelRef\.current\?\.broadcastLock\(\);\s*setOfflineVaultKey\(null\);/);
+
+  const signedOutEnd = appSource.indexOf("\n      }", signedOutStart);
+  const signedOutHandler = appSource.slice(signedOutStart, signedOutEnd > signedOutStart ? signedOutEnd : signedOutStart + 900);
+  assert.match(signedOutHandler, /if \(offlineVaultOwnerRef\.current\) offlineVaultChannelRef\.current\?\.broadcastLock\(\);\s*setOfflineVaultKey\(null\);/);
+});
