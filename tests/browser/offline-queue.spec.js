@@ -77,7 +77,7 @@ test("two browser tabs cannot overwrite the same pending offline referral", asyn
   const attemptInTab = () => window.offlineQueueBrowserTests.queueSameIdAfterUnlock("concurrent-duplicate-id")
     .then(
       () => ({ outcome: "saved" }),
-      (error) => ({ outcome: error.name === "ConstraintError" ? "duplicate-rejected" : "error", name: error.name, message: error.message }),
+      (error) => ({ outcome: error?.name === "ConstraintError" ? "duplicate-rejected" : "error", name: error?.name ?? null, message: error?.message ?? String(error) }),
     );
   const attempts = await Promise.all([
     page.evaluate(attemptInTab),
