@@ -1584,6 +1584,25 @@ function App() {
   const [offlineVaultOwner, setOfflineVaultOwner] = useState(null);
   const [offlineVaultVisible, setOfflineVaultVisible] = useState(false);
   const [pendingOfflineReferral, setPendingOfflineReferral] = useState(null);
+  const offlineVaultChannelRef = useRef(null);
+
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return undefined;
+    const channel = new BroadcastChannel("reflink-offline-vault");
+    offlineVaultChannelRef.current = channel;
+    channel.onmessage = (event) => {
+      if (event.data?.type === "LOCK" && offlineVaultOwner
+        && String(event.data.ownerUserId) === String(offlineVaultOwner)) {
+        setOfflineVaultKey(null);
+        setOfflineVaultOwner(null);
+      }
+    };
+    return () => {
+      channel.close();
+      offlineVaultChannelRef.current = null;
+    };
+  }, [offlineVaultOwner]);
 
   const handleOfflineVaultUnlocked = async (key, ownerUserId) => {
     const { data: { user }, error } = await supabase.auth.getUser();
@@ -2086,6 +2105,7 @@ const handleSignIn = async () => {
   setLoading(true);
 
   try {
+    offlineVaultChannelRef.current?.postMessage({ type: "LOCK", ownerUserId: offlineVaultOwner });
     setOfflineVaultKey(null);
     setOfflineVaultOwner(null);
     setOfflineVaultVisible(false);
@@ -2111,6 +2131,7 @@ const handleSignIn = async () => {
       {profile?.id && !offlineVaultVisible && (
         <button type="button" className="secondary-button reflink-offline-vault-open" onClick={() => {
           if (offlineVaultKey) {
+            offlineVaultChannelRef.current?.postMessage({ type: "LOCK", ownerUserId: offlineVaultOwner });
             setOfflineVaultKey(null);
             setOfflineVaultOwner(null);
           } else {
