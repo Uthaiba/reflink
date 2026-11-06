@@ -41,3 +41,24 @@ jobs:
 
       - name: Build production bundle
         run: npm run build
+
+      - name: Install pinned browser test runner
+        run: npm install --no-save --package-lock=false @playwright/test@1.56.1
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start Vite browser test server
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 4173 > /tmp/reflink-vite.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/tests/browser/offline-queue.html > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/reflink-vite.log
+          exit 1
+
+      - name: Run real-browser offline queue tests
+        run: npx playwright test tests/browser/offline-queue.spec.js --reporter=line
