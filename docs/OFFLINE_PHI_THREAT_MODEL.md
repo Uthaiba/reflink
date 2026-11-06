@@ -209,3 +209,6 @@ The initial Chromium scenarios cover:
 The CI workflow installs the pinned Playwright runner as a temporary CI-only dependency (it is not added to the application's runtime dependencies), installs Chromium, starts the Vite development server and executes the browser suite after the existing unit, lint and production-build gates.
 
 **Validation status:** implementation and workflow wiring are committed, but the real-browser suite is not considered verified until GitHub Actions completes successfully on the exact current branch head. This first pass covers Chromium only. Firefox/WebKit compatibility, multi-tab races, storage quota/eviction, browser process termination, device loss, and production endpoint/security governance remain outstanding. No production database, secrets, Auth configuration, deployment or patient records are changed by this test harness.
+
+
+**CI runner compatibility adjustment:** the first browser-CI attempt failed before launching Chromium because the hosted `ubuntu-latest` image resolved to Ubuntu 26.04, which the pinned Playwright release does not support. The workflow has been pinned to `ubuntu-24.04`, a supported runner. The corrected exact-HEAD run must complete before the browser suite is considered validated.
