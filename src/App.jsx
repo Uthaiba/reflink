@@ -1596,7 +1596,9 @@ function App() {
   const [offlineVaultKey, setOfflineVaultKey] = useState(null);
   const [offlineVaultOwner, setOfflineVaultOwner] = useState(null);
   const [offlineVaultVisible, setOfflineVaultVisible] = useState(false);
+  const offlineVaultOwnerRef = useRef(null);
   const offlineVaultChannelRef = useRef(null);
+  offlineVaultOwnerRef.current = offlineVaultOwner;
 
 
   useEffect(() => {
@@ -1617,6 +1619,10 @@ function App() {
       throw new Error("The signed-in account changed. Unlock the vault again for the active account.");
     }
     const migration = await migratePlaintextQueueToEncrypted(ownerUserId, key);
+    const { data: { user: verifiedUser }, error: verificationError } = await supabase.auth.getUser();
+    if (verificationError || !verifiedUser?.id || String(verifiedUser.id) !== String(ownerUserId)) {
+      throw new Error("The signed-in account changed while the offline vault was unlocking. Unlock the vault again for the active account.");
+    }
     setOfflineVaultKey(key);
     setOfflineVaultOwner(String(ownerUserId));
     setOfflineVaultVisible(false);
@@ -1941,7 +1947,8 @@ const handleSignIn = async () => {
 
       if (event === "SIGNED_IN" && session?.user) {
         currentSessionUser = session.user;
-        if (offlineVaultOwner && String(offlineVaultOwner) !== String(session.user.id)) {
+        const activeVaultOwner = offlineVaultOwnerRef.current;
+        if (activeVaultOwner && String(activeVaultOwner) !== String(session.user.id)) {
           setOfflineVaultKey(null);
           setOfflineVaultOwner(null);
           setOfflineVaultVisible(true);
