@@ -62,7 +62,7 @@ test("each encryption operation generates a fresh IV", async () => {
   };
 
   const first = await encryptOfflineReferralPayload({ referring_user_id: "user-123", value: "same" }, options);
-  const second = await encryptOfflineReferralPayload({ value: "same" }, options);
+  const second = await encryptOfflineReferralPayload({ referring_user_id: "user-123", value: "same" }, options);
 
   assert.notEqual(first.iv, second.iv);
   assert.notEqual(first.ciphertext, second.ciphertext);
