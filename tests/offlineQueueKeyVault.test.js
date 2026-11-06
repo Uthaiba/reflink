@@ -9,7 +9,12 @@ import {
 
 const cryptoProvider = webcrypto;
 const ownerUserId = "user-123";
-const passphrase = "Correct-Horse-Battery-9!";
+
+// Repeated-character fixtures are intentionally non-secret test inputs.
+// Never copy these values into application configuration or real accounts.
+const passphrase = "p".repeat(32);
+const wrongPassphrase = "w".repeat(32);
+const nextPassphrase = "n".repeat(32);
 
 test("offline key vault creates a non-extractable AES-256 key and wrapped envelope", async () => {
   const { envelope, key } = await createOfflineKeyVault({
@@ -76,7 +81,7 @@ test("wrong passphrase and cross-account unlock attempts fail closed", async () 
   await assert.rejects(
     unlockOfflineKeyVault(envelope, {
       ownerUserId,
-      passphrase: "Wrong-Passphrase-123!",
+      passphrase: wrongPassphrase,
       cryptoProvider,
     }),
     /Unable to unlock/,
@@ -122,12 +127,12 @@ test("passphrase rotation preserves the data key and rejects the old passphrase"
   const rotated = await rotateOfflineKeyVaultPassphrase(created.envelope, {
     ownerUserId,
     currentPassphrase: passphrase,
-    newPassphrase: "Another-Strong-Phrase-2026!",
+    newPassphrase: nextPassphrase,
     cryptoProvider,
   });
   const unlocked = await unlockOfflineKeyVault(rotated.envelope, {
     ownerUserId,
-    passphrase: "Another-Strong-Phrase-2026!",
+    passphrase: nextPassphrase,
     cryptoProvider,
   });
 
