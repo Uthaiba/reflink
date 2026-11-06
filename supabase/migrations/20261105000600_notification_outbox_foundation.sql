@@ -19,7 +19,7 @@ create table if not exists private.notification_outbox (
   channel text not null check (channel in ('in_app', 'sms')),
   recipient_user_id uuid not null,
   referral_id uuid not null,
-  template_key text not null check (template_key ~ '^[a-z0-9_]+\\.v[0-9]+$'),
+  template_key text not null check (template_key ~ '^[a-z0-9_]+\.v[0-9]+$'),
   status text not null default 'pending'
     check (status in ('pending', 'processing', 'retry_wait', 'sent', 'dead_letter', 'cancelled')),
   attempt_count integer not null default 0 check (attempt_count between 0 and 8),
@@ -122,7 +122,7 @@ begin
      or p_recipient_user_id is null
      or p_referral_id is null
      or p_template_key is null
-     or p_template_key !~ '^[a-z0-9_]+\\.v[0-9]+$'
+     or p_template_key !~ '^[a-z0-9_]+\.v[0-9]+$'
      or (p_expires_at is not null and p_expires_at <= pg_catalog.now()) then
     raise exception 'Notification event metadata is invalid.' using errcode = '22023';
   end if;
