@@ -208,7 +208,7 @@ The initial Chromium scenarios cover:
 
 The CI workflow installs the pinned Playwright runner as a temporary CI-only dependency (it is not added to the application's runtime dependencies), installs Chromium, starts the Vite development server and executes the browser suite after the existing unit, lint and production-build gates.
 
-**Validation status:** implementation and workflow wiring are committed, but the real-browser suite is not considered verified until GitHub Actions completes successfully on the exact current branch head. This first pass covers Chromium only. Firefox/WebKit compatibility, multi-tab races, storage quota/eviction, browser process termination, device loss, and production endpoint/security governance remain outstanding. No production database, secrets, Auth configuration, deployment or patient records are changed by this test harness.
+**Validation status:** the Chromium browser suite passed in GitHub Actions run #294 on exact branch head `d535933de5221b8ebbc7bdccad11b1aece6f1134` (6 November 2026). The suite includes the initial persistence/reload/migration scenarios plus the multi-tab duplicate-write, account-isolation and cross-tab lock scenarios documented below. This is Chromium-only validation; Firefox/WebKit compatibility, storage quota/eviction, browser process termination, device loss, and production endpoint/security governance remain outstanding. No production database, secrets, Auth configuration, deployment or patient records were changed by this test harness.
 
 
 **CI runner compatibility adjustment:** the first browser-CI attempt failed before launching Chromium because the hosted `ubuntu-latest` image resolved to Ubuntu 26.04, which the pinned Playwright release does not support. The workflow has been pinned to `ubuntu-24.04`, a supported runner. The corrected exact-HEAD run must complete before the browser suite is considered validated.
@@ -218,11 +218,25 @@ The CI workflow installs the pinned Playwright runner as a temporary CI-only dep
 
 Extended the Chromium browser suite to open two same-origin tabs in one browser context, independently unlock the same synthetic account vault and attempt to persist a referral using the same offline client ID at the same time. The expected result is exactly one successful IndexedDB `add` and one duplicate-key rejection; the stored queue must contain exactly one encrypted record for that client ID, with no plaintext payload field. This validates the browser's actual IndexedDB uniqueness/transaction behaviour for this scenario. It does not validate the application's full React lock UI, all BroadcastChannel races, concurrent network sync or server-side idempotency.
 
-The scenario uses synthetic test account and patient values only. CI verification is pending for the exact branch head; do not treat it as passed until the Chromium workflow completes.
+The scenario uses synthetic test account and patient values only. **Validation:** passed in Chromium CI run #294 on exact branch head `d535933de5221b8ebbc7bdccad11b1aece6f1134`.
 
 
 ## Phase 3.5 — real-browser account isolation (6 November 2026)
 
 Added a Chromium scenario that creates encrypted queue entries for two synthetic account owners in the same browser profile. It verifies that each owner's queue count is scoped to that owner and that unlocking account A decrypts only account A's referral. This tests the actual browser IndexedDB owner index and the application queue read API. It is not a security boundary against same-origin script execution, browser profile access or a malicious extension; server-side authorization remains essential.
 
-Exact-HEAD CI is pending. The scenario uses synthetic records only.
+**Validation:** passed in Chromium CI run #294 on exact branch head `d535933de5221b8ebbc7bdccad11b1aece6f1134`. The scenario uses synthetic records only.
+
+
+## Phase 3.6 — account-scoped cross-tab vault locking (6 November 2026)
+
+Extracted the existing same-origin vault lock coordination into `src/lib/offlineVaultLockChannel.js` and wired the application to use that shared helper for lock subscription and broadcasts. The helper validates the message shape, lock type and exact account owner before invoking the receiving tab's lock callback. It closes the channel during effect cleanup and degrades safely when `BroadcastChannel` is unavailable.
+
+The real Chromium browser test opens two same-origin tabs with different synthetic account owners and verifies:
+- A lock message addressed to account B locks only B's subscriber, not account A.
+- A lock message addressed to account A locks only A's subscriber, not account B.
+- The production helper used by the application is the module exercised by the browser test.
+
+Only the lock event and account identifier are broadcast. Encryption keys, passphrases, referral payloads and patient information are not included. This validates the channel helper and its account-routing behaviour; it is not a full authenticated React UI test or a security boundary against malicious same-origin scripts.
+
+**Validation:** unit tests, lint, production build and the real Chromium browser suite all passed in GitHub Actions run #294 on exact branch head `d535933de5221b8ebbc7bdccad11b1aece6f1134`. Firefox/WebKit and full authenticated UI coverage remain outstanding.
