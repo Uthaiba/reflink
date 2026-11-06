@@ -2103,6 +2103,18 @@ const handleSignIn = async () => {
     <div className="app">
 
       <OfflineStatusBadge />
+      {profile?.id && !offlineVaultKey && !offlineVaultVisible && (
+        <button type="button" className="secondary-button reflink-offline-vault-open" onClick={() => setOfflineVaultVisible(true)}>
+          Unlock offline referrals
+        </button>
+      )}
+      {profile?.id && offlineVaultVisible && (
+        <OfflineVaultPanel
+          ownerUserId={profile.id}
+          onUnlocked={handleOfflineVaultUnlocked}
+          onClose={() => { if (!pendingOfflineReferral) setOfflineVaultVisible(false); }}
+        />
+      )}
       {offlineSyncMessage && (
         <div className="success-message reflink-offline-sync-banner">
           {offlineSyncMessage}
