@@ -87,6 +87,16 @@ window.offlineQueueBrowserTests = {
     };
   },
 
+  async queueSameIdAfterUnlock(id) {
+    const envelope = await getOfflineKeyVaultEnvelope(TEST_OWNER);
+    if (!envelope) throw new Error("Test vault is not available.");
+    const key = await unlockOfflineKeyVault(envelope, {
+      ownerUserId: TEST_OWNER,
+      passphrase: TEST_PASSPHRASE,
+    });
+    return queueEncryptedReferral(syntheticReferral(id), TEST_OWNER, key);
+  },
+
   async inspectStoredRecords() {
     const request = indexedDB.open(DB_NAME, 3);
     const db = await new Promise((resolve, reject) => {
@@ -98,6 +108,8 @@ window.offlineQueueBrowserTests = {
         const tx = db.transaction("referral_queue", "readonly");
         const read = tx.objectStore("referral_queue").getAll();
         read.onsuccess = () => resolve(read.result.map((record) => ({
+          clientId: record.client_id,
+          owner: record.owner_user_id,
           hasPlaintextPayload: Object.hasOwn(record, "payload"),
           encrypted: record.payload_storage === "encrypted",
           hasCiphertext: typeof record.payload_envelope?.ciphertext === "string",
