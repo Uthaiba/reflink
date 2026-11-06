@@ -1949,6 +1949,7 @@ const handleSignIn = async () => {
         currentSessionUser = session.user;
         const activeVaultOwner = offlineVaultOwnerRef.current;
         if (activeVaultOwner && String(activeVaultOwner) !== String(session.user.id)) {
+          offlineVaultChannelRef.current?.broadcastLock();
           setOfflineVaultKey(null);
           setOfflineVaultOwner(null);
           setOfflineVaultVisible(true);
@@ -1958,6 +1959,7 @@ const handleSignIn = async () => {
       if (event === "SIGNED_OUT") {
         restoreSequence += 1;
         currentSessionUser = null;
+        if (offlineVaultOwnerRef.current) offlineVaultChannelRef.current?.broadcastLock();
         setOfflineVaultKey(null);
         setOfflineVaultOwner(null);
         setOfflineVaultVisible(false);
