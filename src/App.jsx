@@ -1403,14 +1403,30 @@ function OfflineStatusBadge() {
   const [online, setOnline] = useState(navigator.onLine);
   const [queued, setQueued] = useState(0);
   useEffect(() => {
-    const refresh = async () => setQueued(await getQueueCount());
+    let active = true;
+    const refresh = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const count = session?.user?.id ? await getQueueCount(session.user.id) : 0;
+        if (active) setQueued(count);
+      } catch {
+        if (active) setQueued(0);
+      }
+    };
     const onOnline = () => { setOnline(true); refresh(); };
     const onOffline = () => setOnline(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => refresh());
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     refresh();
     const timer = window.setInterval(refresh, 5000);
-    return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); window.clearInterval(timer); };
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      window.clearInterval(timer);
+    };
   }, []);
   return (
     <span className={`reflink-connectivity-badge ${online ? "is-online" : "is-offline"}`} aria-live="polite">
@@ -3423,7 +3439,7 @@ provisional_diagnosis: "",
           referring_user_id: session.user.id,
           status: "sent",
         };
-        await queueReferral(offlinePayload);
+        await queueReferral(offlinePayload, session.user.id);
         setMessage(`Saved offline. Referral ${offlinePayload.referral_number} will be sent automatically when connected.`);
         setSavedReferralInfo({ referralNumber: offlinePayload.referral_number, patientIdentifier: form.patient_identifier });
         setLoading(false);
