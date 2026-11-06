@@ -74,15 +74,18 @@ test("two browser tabs cannot overwrite the same pending offline referral", asyn
   await secondTab.goto(BASE_URL);
   await secondTab.waitForFunction(() => Boolean(window.offlineQueueBrowserTests));
 
+  const attemptInTab = () => window.offlineQueueBrowserTests.queueSameIdAfterUnlock("concurrent-duplicate-id")
+    .then(
+      () => ({ outcome: "saved" }),
+      (error) => ({ outcome: error.name === "ConstraintError" ? "duplicate-rejected" : "error", name: error.name, message: error.message }),
+    );
   const attempts = await Promise.all([
-    page.evaluate(() => window.offlineQueueBrowserTests.queueSameIdAfterUnlock("concurrent-duplicate-id")),
-    secondTab.evaluate(() => window.offlineQueueBrowserTests.queueSameIdAfterUnlock("concurrent-duplicate-id")),
-  ].map((promise) => promise.then(
-    () => "saved",
-    (error) => error.name === "ConstraintError" ? "duplicate-rejected" : Promise.reject(error),
-  )));
+    page.evaluate(attemptInTab),
+    secondTab.evaluate(attemptInTab),
+  ]);
 
-  expect(attempts.sort()).toEqual(["duplicate-rejected", "saved"]);
+  expect(attempts.filter((attempt) => attempt.outcome === "error")).toEqual([]);
+  expect(attempts.map((attempt) => attempt.outcome).sort()).toEqual(["duplicate-rejected", "saved"]);
   const records = await page.evaluate(() => window.offlineQueueBrowserTests.inspectStoredRecords());
   const duplicates = records.filter((record) => record.clientId === "concurrent-duplicate-id");
   expect(duplicates).toHaveLength(1);
