@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
 import { cacheValue, createClientId, getCachedValue, getQueueCount, getOfflineKeyVaultEnvelope, saveOfflineKeyVaultEnvelope, queueEncryptedReferral, migratePlaintextQueueToEncrypted, syncQueuedReferrals } from "./lib/offlineReferralQueue.js";
 import { createOfflineKeyVault, unlockOfflineKeyVault } from "./lib/offlineQueueKeyVault.js";
+import { createOfflineVaultLockChannel } from "./lib/offlineVaultLockChannel.js";
 import { LanguageSwitcher, useLanguage } from "./lib/i18n.jsx";
 import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
 import "./App.css";
@@ -1599,19 +1600,14 @@ function App() {
 
 
   useEffect(() => {
-    if (typeof BroadcastChannel === "undefined") return undefined;
-    const channel = new BroadcastChannel("reflink-offline-vault");
+    const channel = createOfflineVaultLockChannel(offlineVaultOwner, () => {
+      setOfflineVaultKey(null);
+      setOfflineVaultOwner(null);
+    });
     offlineVaultChannelRef.current = channel;
-    channel.onmessage = (event) => {
-      if (event.data?.type === "LOCK" && offlineVaultOwner
-        && String(event.data.ownerUserId) === String(offlineVaultOwner)) {
-        setOfflineVaultKey(null);
-        setOfflineVaultOwner(null);
-      }
-    };
     return () => {
       channel.close();
-      offlineVaultChannelRef.current = null;
+      if (offlineVaultChannelRef.current === channel) offlineVaultChannelRef.current = null;
     };
   }, [offlineVaultOwner]);
 
@@ -1654,7 +1650,7 @@ function App() {
 
   useEffect(() => {
     if (offlineVaultOwner && profile?.id && String(offlineVaultOwner) !== String(profile.id)) {
-      offlineVaultChannelRef.current?.postMessage({ type: "LOCK", ownerUserId: offlineVaultOwner });
+      offlineVaultChannelRef.current?.broadcastLock(offlineVaultOwner);
       setOfflineVaultKey(null);
       setOfflineVaultOwner(null);
       setOfflineVaultVisible(true);
