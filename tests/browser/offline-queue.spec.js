@@ -16,6 +16,7 @@ test("encrypted offline referral survives a real browser reload and unlock", asy
     hasPlaintextPayload: false,
     encrypted: true,
     hasCiphertext: true,
+    hasActiveSyncClaim: false,
   }]);
 
   await page.reload();
@@ -62,6 +63,7 @@ test("legacy queue migration works in a real browser IndexedDB implementation", 
     hasPlaintextPayload: false,
     encrypted: true,
     hasCiphertext: true,
+    hasActiveSyncClaim: false,
   }]);
 });
 
