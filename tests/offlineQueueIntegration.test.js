@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 const queueSource = await readFile(new URL("../src/lib/offlineReferralQueue.js", import.meta.url), "utf8");
 const appSource = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+const vaultLockSource = await readFile(new URL("../src/lib/offlineVaultLockChannel.js", import.meta.url), "utf8");
 const threatModel = await readFile(new URL("../docs/OFFLINE_PHI_THREAT_MODEL.md", import.meta.url), "utf8");
 
 test("application offline submission uses encrypted queue writes without plaintext fallback", () => {
@@ -22,10 +23,13 @@ test("plaintext migration compares the source record before atomic replacement",
   assert.match(queueSource, /migratePlaintextQueueToEncrypted/);
 });
 
-test("vault is locked on sign-out and manual lock is broadcast to other tabs", () => {
+test("vault is locked on sign-out and manual lock uses the account-scoped cross-tab channel", () => {
   assert.match(appSource, /setOfflineVaultKey\(null\)/);
-  assert.match(appSource, /postMessage\(\{ type: "LOCK", ownerUserId: offlineVaultOwner \}\)/);
-  assert.match(appSource, /new BroadcastChannel\("reflink-offline-vault"\)/);
+  assert.match(appSource, /createOfflineVaultLockChannel\(offlineVaultOwner/);
+  assert.match(appSource, /broadcastLock\(offlineVaultOwner\)/);
+  assert.match(vaultLockSource, /new BroadcastChannel\(OFFLINE_VAULT_LOCK_CHANNEL\)/);
+  assert.match(vaultLockSource, /message\.ownerUserId !== owner/);
+  assert.match(vaultLockSource, /type: "LOCK"/);
 });
 
 test("documentation does not claim full production readiness", () => {
