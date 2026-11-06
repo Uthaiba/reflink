@@ -138,3 +138,16 @@ Do not wire the current isolated `NotificationCenter` into `App.jsx` until the i
 - reviewed trigger owner/ACL and transaction behavior.
 
 No production schema, RLS, Auth setting, Edge Function, provider configuration, patient record or deployment was changed by this design.
+
+
+## 10. Recipient policy decision — 6 November 2026
+
+The recipient eligibility decision is now explicit: **do not select any automatic user recipient until an approved authoritative roster or notification-duty assignment source is identified. Facility-wide fan-out to every `receiving_staff` profile is not approved.** This supersedes the two open options described in §4; option 1 (all assigned receiving staff) is not an implicit default.
+
+The proposed trigger in `20261106000100_referral_acknowledgement_notification_hooks.sql` still contains broad profile fan-out and must remain unapplied. Referral workflows must not depend on a notification recipient being available. The required governance questions, assignment lifecycle and acceptance tests are recorded in [NOTIFICATION_RECIPIENT_ELIGIBILITY.md](./NOTIFICATION_RECIPIENT_ELIGIBILITY.md).
+
+## 11. Authenticated adapter source status
+
+An isolated client adapter is now implemented in `src/lib/notificationInbox.js`, with mocked-client tests in `tests/notificationInbox.test.js`. It verifies the authenticated user, narrows list queries to that owner, selects an allowlisted projection, uses bounded keyset pagination and calls only the proposed owner-scoped mark-read RPC. It is not mounted in `App.jsx`; the inbox relation and RPC remain proposals. See [NOTIFICATION_INBOX_ADAPTER.md](./NOTIFICATION_INBOX_ADAPTER.md).
+
+The tests do not establish PostgreSQL/RLS/PostgREST behavior or cross-account isolation. Database integration remains blocked by migration-baseline reconciliation, synthetic-data staging, recipient approval and retention approval.
