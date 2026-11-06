@@ -89,3 +89,10 @@ test("sign-out and account replacement broadcast a vault lock before clearing lo
   const signedOutHandler = appSource.slice(signedOutStart, signedOutEnd > signedOutStart ? signedOutEnd : signedOutStart + 900);
   assert.match(signedOutHandler, /if \(offlineVaultOwnerRef\.current\) offlineVaultChannelRef\.current\?\.broadcastLock\(\);\s*setOfflineVaultKey\(null\);/);
 });
+
+test("concurrent referral sync sends the SMS only for the attempt that inserted the referral", () => {
+  assert.match(queueSource, /let createdByThisAttempt = false/);
+  assert.match(queueSource, /referral = inserted;\s*createdByThisAttempt = true;/);
+  assert.match(queueSource, /if \(createdByThisAttempt && referral\?\.id\)/);
+  assert.doesNotMatch(queueSource, /if \(!existing && referral\?\.id\)/);
+});
