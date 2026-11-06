@@ -82,3 +82,25 @@ However, the Supabase migration ledger currently reports only version `202609282
 6. Pilot with explicitly opted-in facilities before any production activation.
 
 No live notification has been sent by this change.
+
+## 6 November 2026 source integration audit
+
+A read-only review of the current feature branch confirms that a dispatch worker cannot yet be implemented safely against the present source contract:
+
+- `api/referral-sms.js` is the only current server-side notification sender. It authenticates the caller with a Supabase access token, re-reads the actor profile and referral, authorizes by role/facility, and sends directly to the destination/source facility's `referral_notification_phone` using Twilio.
+- `src/App.jsx` invokes that endpoint directly after referral workflow actions. This remains a best-effort client-triggered delivery path; it is not backed by an outbox claim and has no durable pre-send idempotency claim.
+- The current outbox schema requires `recipient_user_id` for every event. The existing SMS workflow addresses a facility-level phone number, not an individual user. A worker must not map a facility phone to an arbitrary staff profile or choose one recipient without an approved routing rule.
+- The inspected application source contains no established in-app notification persistence/read model that the proposed `in_app` channel can safely write to. The outbox's `in_app` label is therefore not yet a complete delivery implementation.
+- The inspected `supabase/functions` tree has no notification worker. No scheduled worker or provider adapter is configured in the repository.
+
+### Required design decisions before worker implementation
+
+1. Define recipient identity explicitly. For facility-directed SMS, model a facility recipient separately from a user recipient (for example, a mutually exclusive recipient-user / recipient-facility contract with channel-specific constraints). Define how facility contact changes, opt-in/consent and delivery eligibility are handled.
+2. Define the in-app notification store and read contract, including user visibility, read state, retention and RLS. Do not assume an existing `notifications` table.
+3. Choose the server runtime and scheduling/authentication mechanism. The worker must use server-only credentials, reject unauthenticated invocations, bound its batch size and avoid logging PHI or secrets.
+4. Add the transactional event producer and worker together in a reviewed sequence. Do not switch `api/referral-sms.js` or the client call sites to depend on the unapplied outbox migration.
+5. Specify provider timeout semantics. Without provider-supported idempotency, a timeout after provider acceptance remains an at-least-once duplicate-send risk; a database claim token cannot prove whether Twilio accepted a timed-out request.
+
+### Current implementation decision
+
+**Worker implementation is blocked by the recipient-model and in-app-store decisions, in addition to the previously documented migration-baseline/staging blocker.** Keep the existing SMS endpoint unchanged. Do not add a referral-sent trigger, schedule a worker, send test SMS, apply migrations or alter production configuration until these contracts are approved and validated with synthetic data.
