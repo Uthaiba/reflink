@@ -3,6 +3,7 @@ const DB_VERSION = 3;
 const STORE_QUEUE = "referral_queue";
 const STORE_CACHE = "cache";
 const STORE_KEY_VAULT = "offline_key_vault";
+import { decryptOfflineReferralPayload, encryptOfflineReferralPayload } from "./offlineQueueCrypto.js";
 
 let activeSyncPromise = null;
 
@@ -89,6 +90,92 @@ export async function queueReferral(payload, ownerUserId) {
     db.close();
   }
   return record;
+}
+
+
+export async function queueEncryptedReferral(payload, ownerUserId, key) {
+  if (!isValidQueueOwner(payload, ownerUserId)) throw new Error("The offline referral must belong to the currently authenticated user.");
+  const clientId = payload.offline_client_id || createClientId();
+  const envelope = await encryptOfflineReferralPayload(payload, { key, ownerUserId, clientId });
+  const record = {
+    client_id: clientId, owner_user_id: String(ownerUserId),
+    created_at: payload.created_at || new Date().toISOString(),
+    payload_storage: "encrypted", payload_envelope: envelope,
+    sync_status: "pending", queued_at: new Date().toISOString(),
+  };
+  const db = await openDb();
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_QUEUE, "readwrite");
+      tx.objectStore(STORE_QUEUE).put(record);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error("Unable to save the encrypted offline referral."));
+    });
+  } finally { db.close(); }
+  return { ...record };
+}
+
+export async function decryptQueuedReferralRecord(record, ownerUserId, key) {
+  if (!isQueueRecordOwnedBy(record, ownerUserId) || record.payload_storage !== "encrypted" || !record.payload_envelope) {
+    throw new Error("The encrypted offline referral is invalid or belongs to another account.");
+  }
+  const payload = await decryptOfflineReferralPayload(record.payload_envelope, {
+    key, ownerUserId, clientId: record.client_id,
+  });
+  if (!isValidQueueOwner(payload, ownerUserId)) throw new Error("The decrypted referral owner does not match the authenticated account.");
+  return { ...record, payload };
+}
+
+export async function migratePlaintextQueueToEncrypted(ownerUserId, key) {
+  if (!ownerUserId) throw new Error("An authenticated account is required for queue migration.");
+  const owner = String(ownerUserId);
+  const records = await listQueuedReferrals(owner);
+  let migrated = 0, skipped = 0, failed = 0;
+  for (const record of records) {
+    if (record.payload_storage === "encrypted") { skipped += 1; continue; }
+    if (!isQueueRecordOwnedBy(record, owner) || !isValidQueueOwner(record.payload, owner)) { failed += 1; continue; }
+    try {
+      const originalPayload = JSON.stringify(record.payload);
+      const envelope = await encryptOfflineReferralPayload(record.payload, { key, ownerUserId: owner, clientId: record.client_id });
+      const db = await openDb();
+      try {
+        const replaced = await new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_QUEUE, "readwrite");
+          const store = tx.objectStore(STORE_QUEUE);
+          let didReplace = false;
+          const request = store.get(record.client_id);
+          request.onsuccess = () => {
+            const current = request.result;
+            if (isQueueRecordOwnedBy(current, owner)
+              && current.payload_storage !== "encrypted"
+              && JSON.stringify(current.payload) === originalPayload) {
+              const next = { ...current, payload_storage: "encrypted", payload_envelope: envelope };
+              delete next.payload;
+              store.put(next);
+              didReplace = true;
+            }
+          };
+          request.onerror = () => reject(request.error);
+          tx.oncomplete = () => resolve(didReplace);
+          tx.onerror = () => reject(tx.error);
+          tx.onabort = () => reject(tx.error || new Error("Unable to commit offline referral encryption."));
+        });
+        if (replaced) migrated += 1; else skipped += 1;
+      } finally { db.close(); }
+    } catch { failed += 1; }
+  }
+  return { migrated, skipped, failed };
+}
+
+export async function listDecryptedQueuedReferrals(ownerUserId, key) {
+  const records = await listQueuedReferrals(ownerUserId);
+  const results = [];
+  for (const record of records) {
+    if (record.payload_storage === "encrypted") results.push(await decryptQueuedReferralRecord(record, ownerUserId, key));
+    else if (record.payload && isValidQueueOwner(record.payload, ownerUserId)) results.push(record);
+  }
+  return results;
 }
 
 export async function listQueuedReferrals(ownerUserId) {
@@ -279,16 +366,15 @@ export async function getQueueCount(ownerUserId) {
   return (await listQueuedReferrals(ownerUserId)).length;
 }
 
-async function syncOwnedQueue(supabaseClient, userId) {
+async function syncOwnedQueue(supabaseClient, userId, key) {
   const queued = await listQueuedReferrals(userId);
   let synced = 0;
   let failed = 0;
-  for (const item of queued) {
-    if (!isQueueRecordOwnedBy(item, userId) || !isValidQueueOwner(item.payload, userId)) {
-      failed += 1;
-      continue;
-    }
+  for (const storedItem of queued) {
+    let item = storedItem;
     try {
+      if (storedItem.payload_storage === "encrypted") item = await decryptQueuedReferralRecord(storedItem, userId, key);
+      if (!isQueueRecordOwnedBy(item, userId) || !isValidQueueOwner(item.payload, userId)) { failed += 1; continue; }
       const { data: existing, error: lookupError } = await supabaseClient
         .from("referrals")
         .select("id, urgency")
@@ -360,13 +446,13 @@ async function syncOwnedQueue(supabaseClient, userId) {
   return { synced, failed, skipped: false };
 }
 
-export async function syncQueuedReferrals(supabaseClient) {
+export async function syncQueuedReferrals(supabaseClient, key = null) {
   if (typeof navigator === "undefined" || !navigator.onLine) return { synced: 0, failed: 0, skipped: true };
   if (activeSyncPromise) return activeSyncPromise;
   activeSyncPromise = (async () => {
     const { data: { user }, error } = await supabaseClient.auth.getUser();
     if (error || !user?.id) return { synced: 0, failed: 0, skipped: true };
-    return syncOwnedQueue(supabaseClient, user.id);
+    return syncOwnedQueue(supabaseClient, user.id, key);
   })();
   try {
     return await activeSyncPromise;
