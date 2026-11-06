@@ -16,6 +16,7 @@ function installFakeBroadcastChannel() {
     }
 
     postMessage(data) {
+      this.sentMessages.push(structuredClone(data));
       for (const peer of instances) {
         if (peer !== this && peer.name === this.name && !peer.closed) {
           peer.onmessage?.({ data: structuredClone(data) });
@@ -43,25 +44,36 @@ function installFakeBroadcastChannel() {
   };
 }
 
-test("offline vault lock channel routes only valid lock messages to the matching owner", () => {
+test("offline vault lock channel routes lock messages only to matching account tabs", () => {
   const fake = installFakeBroadcastChannel();
   try {
-    let accountALocks = 0;
-    let accountBLocks = 0;
-    const accountA = createOfflineVaultLockChannel("account-a", () => { accountALocks += 1; });
-    const accountB = createOfflineVaultLockChannel("account-b", () => { accountBLocks += 1; });
+    let accountASecondTabLocks = 0;
+    let accountBSecondTabLocks = 0;
+    const accountAFirstTab = createOfflineVaultLockChannel("account-a", () => {});
+    const accountASecondTab = createOfflineVaultLockChannel("account-a", () => { accountASecondTabLocks += 1; });
+    const accountBFirstTab = createOfflineVaultLockChannel("account-b", () => {});
+    const accountBSecondTab = createOfflineVaultLockChannel("account-b", () => { accountBSecondTabLocks += 1; });
 
     assert.equal(fake.instances[0].name, OFFLINE_VAULT_LOCK_CHANNEL);
-    accountA.broadcastLock("account-b");
-    assert.equal(accountALocks, 0);
-    assert.equal(accountBLocks, 1);
+    accountAFirstTab.broadcastLock();
+    assert.equal(accountASecondTabLocks, 1);
+    assert.equal(accountBSecondTabLocks, 0);
+    assert.deepEqual(fake.instances[0].sentMessages[0], {
+      type: "LOCK",
+      ownerUserId: "account-a",
+    });
 
-    accountB.broadcastLock("account-a");
-    assert.equal(accountALocks, 1);
-    assert.equal(accountBLocks, 1);
+    accountBFirstTab.broadcastLock();
+    assert.equal(accountASecondTabLocks, 1);
+    assert.equal(accountBSecondTabLocks, 1);
+    assert.deepEqual(fake.instances[2].sentMessages[0], {
+      type: "LOCK",
+      ownerUserId: "account-b",
+    });
 
-    accountA.close();
-    accountB.close();
+    for (const channel of [accountAFirstTab, accountASecondTab, accountBFirstTab, accountBSecondTab]) {
+      channel.close();
+    }
   } finally {
     fake.restore();
   }
@@ -98,7 +110,7 @@ test("offline vault lock channel degrades safely without BroadcastChannel and cl
     const unavailable = createOfflineVaultLockChannel("account-a", () => {
       assert.fail("No callback should run without a channel.");
     });
-    assert.equal(unavailable.broadcastLock("account-a"), false);
+    assert.equal(unavailable.broadcastLock(), false);
     assert.doesNotThrow(() => unavailable.close());
   } finally {
     if (original) Object.defineProperty(globalThis, "BroadcastChannel", original);
