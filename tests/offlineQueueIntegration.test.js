@@ -62,3 +62,17 @@ test("decrypted listing refuses legacy plaintext records instead of returning th
   assert.match(listing, /must be encrypted before it can be read/);
   assert.doesNotMatch(listing, /results\.push\(record\)/);
 });
+
+test("auth changes use the latest vault owner and unlock revalidates after migration", () => {
+  assert.match(appSource, /const offlineVaultOwnerRef = useRef\(null\)/);
+  assert.match(appSource, /offlineVaultOwnerRef\.current = offlineVaultOwner/);
+  assert.match(appSource, /const activeVaultOwner = offlineVaultOwnerRef\.current/);
+
+  const migrationIndex = appSource.indexOf("const migration = await migratePlaintextQueueToEncrypted(ownerUserId, key)");
+  const postMigrationCheckIndex = appSource.indexOf("const { data: { user: verifiedUser }, error: verificationError } = await supabase.auth.getUser()", migrationIndex);
+  const keyActivationIndex = appSource.indexOf("setOfflineVaultKey(key)", migrationIndex);
+  assert.ok(migrationIndex >= 0, "vault migration step must exist");
+  assert.ok(postMigrationCheckIndex > migrationIndex, "auth must be rechecked after migration");
+  assert.ok(keyActivationIndex > postMigrationCheckIndex, "key must not become active before post-migration auth verification");
+  assert.match(appSource, /String\(verifiedUser\.id\) !== String\(ownerUserId\)/);
+});
