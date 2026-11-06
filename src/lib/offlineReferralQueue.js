@@ -141,11 +141,17 @@ export async function removeQueuedReferral(clientId, ownerUserId) {
  */
 export function isValidOfflineVaultEnvelope(envelope, ownerUserId) {
   const owner = String(ownerUserId ?? "").trim();
-  return Boolean(
-    owner
-    && envelope
+  const allowedFields = [
+    "version", "owner_user_id", "kdf", "hash", "iterations",
+    "algorithm", "key_length", "salt", "iv", "wrapped_key",
+  ];
+  const hasOnlyAllowedFields = envelope
     && typeof envelope === "object"
     && !Array.isArray(envelope)
+    && Object.keys(envelope).every((field) => allowedFields.includes(field));
+  return Boolean(
+    owner
+    && hasOnlyAllowedFields
     && envelope.version === 1
     && envelope.owner_user_id === owner
     && envelope.kdf === "PBKDF2"
