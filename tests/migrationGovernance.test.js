@@ -208,10 +208,10 @@ test("reporting RPC migrations retain administrator checks and browser grant res
   ];
   for (const [version, suffix] of files) {
     const sql = await migration(version, suffix);
-    assert.match(sql, /auth\.uid\(\)\s+is\s+null/i, \`\${version}: missing authenticated-user check\`);
-    assert.match(sql, /public\.is_administrator\(\)/i, \`\${version}: missing administrator check\`);
-    assert.match(sql, /revoke all on function[\s\S]*?from public/i, \`\${version}: missing PUBLIC revoke\`);
-    assert.match(sql, /revoke all on function[\s\S]*?from anon/i, \`\${version}: missing anon revoke\`);
+    assert.match(sql, /auth\.uid\(\)\s+is\s+null/i);
+    assert.match(sql, /public\.is_administrator\(\)/i);
+    assert.match(sql, /revoke all on function[\s\S]*?from public/i);
+    assert.match(sql, /revoke all on function[\s\S]*?from anon/i);
   }
 });
 
