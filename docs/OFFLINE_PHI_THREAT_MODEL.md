@@ -230,13 +230,17 @@ Added a Chromium scenario that creates encrypted queue entries for two synthetic
 
 ## Phase 3.6 — account-scoped cross-tab vault locking (6 November 2026)
 
-Extracted the existing same-origin vault lock coordination into `src/lib/offlineVaultLockChannel.js` and wired the application to use that shared helper for lock subscription and broadcasts. The helper validates the message shape, lock type and exact account owner before invoking the receiving tab's lock callback. It closes the channel during effect cleanup and degrades safely when `BroadcastChannel` is unavailable.
+Extracted the same-origin vault lock coordination into `src/lib/offlineVaultLockChannel.js` and wired the application to use that shared helper for lock subscription and broadcasts. The helper validates message shape, lock type and exact account owner before invoking the receiving tab's lock callback. It closes the channel during effect cleanup and degrades safely when `BroadcastChannel` is unavailable.
 
-The real Chromium browser test opens two same-origin tabs with different synthetic account owners and verifies:
-- A lock message addressed to account B locks only B's subscriber, not account A.
-- A lock message addressed to account A locks only A's subscriber, not account B.
+The broadcast API is deliberately owner-bound: `broadcastLock()` accepts no target account argument and always publishes the channel instance's own authenticated owner ID. A caller therefore cannot use the helper to send a lock event targeting a different account. The receiving tab independently validates the owner ID before locking.
+
+The real Chromium browser test opens four same-origin tabs in one browser context: two synthetic tabs for account A and two for account B. It verifies:
+- A lock initiated by one A tab locks the other A tab, while both B tabs remain unlocked.
+- A lock initiated by one B tab locks the other B tab, while both A tabs remain unlocked.
 - The production helper used by the application is the module exercised by the browser test.
 
-Only the lock event and account identifier are broadcast. Encryption keys, passphrases, referral payloads and patient information are not included. This validates the channel helper and its account-routing behaviour; it is not a full authenticated React UI test or a security boundary against malicious same-origin scripts.
+Unit tests additionally verify exact outgoing payloads, account-scoped message delivery, rejection of malformed/non-lock/nonmatching messages, graceful fallback when `BroadcastChannel` is unavailable, and channel cleanup. Only the lock event and account identifier are broadcast. Encryption keys, passphrases, referral payloads and patient information are not included.
 
-**Validation:** unit tests, lint, production build and the real Chromium browser suite all passed in GitHub Actions run #294 on exact branch head `d535933de5221b8ebbc7bdccad11b1aece6f1134`. Firefox/WebKit and full authenticated UI coverage remain outstanding.
+This validates the shared channel helper and account-routing behaviour; it is not a full authenticated React UI test or a security boundary against malicious same-origin scripts. Firefox/WebKit, full authenticated UI coverage, server-side authorization and managed-device controls remain separate validation areas.
+
+**Validation:** GitHub Actions runs #310 and #311 both passed on exact branch head `a7908b2de65d5775280be7deca9061fbe31f55e1`, including unit tests, lint, production build and the real Chromium browser suite. Run #311: https://github.com/Uthaiba/reflink/actions/runs/42180237918.
