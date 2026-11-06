@@ -3,12 +3,15 @@ import assert from "node:assert/strict";
 import { IDBFactory } from "fake-indexeddb";
 import { createOfflineQueueCryptoKey } from "../src/lib/offlineQueueCrypto.js";
 import {
+  claimQueuedReferral,
   getOfflineKeyVaultEnvelope,
   getQueueCount,
   listQueuedReferrals,
   listDecryptedQueuedReferrals,
   migratePlaintextQueueToEncrypted,
   queueEncryptedReferral,
+  releaseQueuedReferralClaim,
+  removeQueuedReferral,
   saveOfflineKeyVaultEnvelope,
 } from "../src/lib/offlineReferralQueue.js";
 
@@ -317,4 +320,48 @@ test("quota failure rejects encrypted queue save and preserves existing pending 
   } finally {
     storePrototype.add = originalAdd;
   }
+});
+
+
+test("concurrent tabs atomically claim a queue record for only one sync worker", async () => {
+  const key = await createOfflineQueueCryptoKey();
+  await queueEncryptedReferral(referral("user-a", "claim-race"), "user-a", key);
+
+  const [claimA, claimB] = await Promise.all([
+    claimQueuedReferral("claim-race", "user-a", { token: "worker-a", now: 1000 }),
+    claimQueuedReferral("claim-race", "user-a", { token: "worker-b", now: 1000 }),
+  ]);
+
+  assert.deepEqual([claimA, claimB].filter(Boolean), [claimA || claimB]);
+  assert.equal([claimA, claimB].filter(Boolean).length, 1);
+  const winner = claimA || claimB;
+  assert.ok(winner === "worker-a" || winner === "worker-b");
+});
+
+test("expired claims can be reclaimed and stale workers cannot release or delete the record", async () => {
+  const key = await createOfflineQueueCryptoKey();
+  await queueEncryptedReferral(referral("user-a", "claim-expiry"), "user-a", key);
+
+  assert.equal(await claimQueuedReferral("claim-expiry", "user-a", {
+    token: "old-worker", now: 1000, leaseMs: 100,
+  }), "old-worker");
+  assert.equal(await claimQueuedReferral("claim-expiry", "user-a", {
+    token: "blocked-worker", now: 1050, leaseMs: 100,
+  }), null);
+  assert.equal(await claimQueuedReferral("claim-expiry", "user-a", {
+    token: "new-worker", now: 1101, leaseMs: 100,
+  }), "new-worker");
+
+  assert.equal(await releaseQueuedReferralClaim("claim-expiry", "user-a", "old-worker"), false);
+  assert.equal(await removeQueuedReferral("claim-expiry", "user-a", "old-worker"), false);
+  assert.equal(await removeQueuedReferral("claim-expiry", "user-a", "new-worker"), true);
+  assert.equal((await listQueuedReferrals("user-a")).length, 0);
+});
+
+test("queue claims are owner-scoped and cannot be used to claim another account's record", async () => {
+  const key = await createOfflineQueueCryptoKey();
+  await queueEncryptedReferral(referral("user-a", "claim-owner"), "user-a", key);
+
+  assert.equal(await claimQueuedReferral("claim-owner", "user-b", { token: "wrong-owner" }), null);
+  assert.equal(await claimQueuedReferral("claim-owner", "user-a", { token: "right-owner" }), "right-owner");
 });
