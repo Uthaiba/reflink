@@ -384,6 +384,7 @@ async function syncOwnedQueue(supabaseClient, userId, key) {
       if (lookupError) throw lookupError;
 
       let referral = existing;
+      let createdByThisAttempt = false;
       if (!referral) {
         const payload = {
           ...item.payload,
@@ -412,6 +413,7 @@ async function syncOwnedQueue(supabaseClient, userId, key) {
           }
         } else {
           referral = inserted;
+          createdByThisAttempt = true;
         }
       }
 
@@ -420,7 +422,7 @@ async function syncOwnedQueue(supabaseClient, userId, key) {
         throw new Error("The authenticated account changed during offline synchronization.");
       }
 
-      if (!existing && referral?.id) {
+      if (createdByThisAttempt && referral?.id) {
         try {
           const { data: { session } } = await supabaseClient.auth.getSession();
           if (session?.access_token) {
