@@ -1,7 +1,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
-import { cacheValue, createClientId, getCachedValue, getQueueCount, queueReferral, syncQueuedReferrals } from "./lib/offlineReferralQueue.js";
+import { cacheValue, createClientId, getCachedValue, getQueueCount, getOfflineKeyVaultEnvelope, saveOfflineKeyVaultEnvelope, queueEncryptedReferral, migratePlaintextQueueToEncrypted, syncQueuedReferrals } from "./lib/offlineReferralQueue.js";
+import { createOfflineKeyVault, unlockOfflineKeyVault } from "./lib/offlineQueueKeyVault.js";
 import { LanguageSwitcher, useLanguage } from "./lib/i18n.jsx";
 import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
 import "./App.css";
@@ -1461,6 +1462,96 @@ function urgencyMeta(urgency) {
 
 function isAckOverdue(referral) {
   return referral?.status === "sent" && referral?.ack_due_at && new Date(referral.ack_due_at).getTime() < Date.now();
+}
+
+
+function OfflineVaultPanel({ ownerUserId, onUnlocked, onClose }) {
+  const [envelope, setEnvelope] = useState(null);
+  const [passphrase, setPassphrase] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    getOfflineKeyVaultEnvelope(ownerUserId)
+      .then((stored) => { if (active) setEnvelope(stored); })
+      .catch(() => { if (active) setError("Unable to read the offline vault from this browser."); });
+    return () => { active = false; };
+  }, [ownerUserId]);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      let result;
+      if (envelope) {
+        result = await unlockOfflineKeyVault(envelope, { ownerUserId, passphrase });
+      } else {
+        if (passphrase !== confirmation) throw new Error("The passphrases do not match.");
+        result = await createOfflineKeyVault({ ownerUserId, passphrase });
+        await saveOfflineKeyVaultEnvelope(result.envelope, ownerUserId);
+        setEnvelope(result.envelope);
+      }
+      setPassphrase("");
+      setConfirmation("");
+      await onUnlocked(result.key, ownerUserId);
+    } catch (unlockError) {
+      setError(unlockError?.message || "Unable to unlock the offline vault.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="reflink-offline-vault-panel" aria-labelledby="offline-vault-title">
+      <div className="reflink-offline-vault-panel__header">
+        <div>
+          <h3 id="offline-vault-title">Offline referral protection</h3>
+          <p>{envelope ? "Unlock your account's offline vault to access and synchronise pending referrals." : "Create a passphrase-protected vault before saving referrals while offline."}</p>
+        </div>
+        {onClose && <button type="button" className="secondary-button" onClick={onClose}>Close</button>}
+      </div>
+      <form onSubmit={submit}>
+        <label htmlFor="offline-vault-passphrase">Vault passphrase</label>
+        <input
+          id="offline-vault-passphrase"
+          type="password"
+          autoComplete="current-password"
+          minLength={12}
+          maxLength={1024}
+          required
+          value={passphrase}
+          onChange={(event) => setPassphrase(event.target.value)}
+          placeholder="At least 12 characters"
+        />
+        {!envelope && (
+          <>
+            <label htmlFor="offline-vault-confirm">Confirm passphrase</label>
+            <input
+              id="offline-vault-confirm"
+              type="password"
+              autoComplete="new-password"
+              minLength={12}
+              maxLength={1024}
+              required
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+              placeholder="Re-enter passphrase"
+            />
+          </>
+        )}
+        {error && <p className="error-message" role="alert">{error}</p>}
+        <p className="reflink-offline-vault-panel__notice">
+          Keep this passphrase safe. It cannot be recovered by REFLINK. Signing out locks the vault but does not delete pending referrals.
+        </p>
+        <button type="submit" disabled={busy}>
+          {busy ? "Please wait…" : envelope ? "Unlock offline vault" : "Create offline vault"}
+        </button>
+      </form>
+    </section>
+  );
 }
 
 function App() {
