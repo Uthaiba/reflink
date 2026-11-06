@@ -137,3 +137,6 @@ Added encrypted queue operations to `src/lib/offlineReferralQueue.js`:
 **Critical integration boundary:** the current application still calls the legacy `queueReferral` API, which stores new offline referrals in plaintext. The automatic sync effect also has no vault-unlock UI/key session and therefore cannot sync encrypted records. This step adds the safe primitives and migration path but does not yet switch the production-facing submit flow. Do not claim the application queue is encrypted.
 
 The migration code is guarded against a same-record concurrent change by re-reading and comparing the plaintext payload in the commit transaction. Browser-level tests are still required for real IndexedDB transaction behaviour, database upgrades, multiple tabs, browser termination between encrypt and commit, and simultaneous migration attempts. A Web Crypto key passed to these APIs must come from the correct account's unlocked vault; this module does not itself authenticate a user or implement UI lock state.
+
+
+Implementation follow-up: the offline queue module's ES module imports were normalized in commit `2dd8f69f965ab0e5df9b1033caba3dc4a98498c6`. The branch's CI and Preview checks for this latest commit have not yet been reported; treat validation as pending until exact-SHA checks are available.
