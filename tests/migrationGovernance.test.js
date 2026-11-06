@@ -164,7 +164,7 @@ test("outbox claiming is bounded, concurrent-safe and records each attempt", asy
   assert.match(definition, /error_code\s*=\s*'ATTEMPTS_EXHAUSTED'/i);
   assert.match(definition, /outcome\s*=\s*'retry_wait'/i);
   assert.match(definition, /error_code\s*=\s*'LEASE_EXPIRED'/i);
-  assert.match(definition, /a\.claim_token\s*=\s*o\.claim_token/i);
+  assert.match(definition, /o\\.claim_token\\s*=\\s*a\\.claim_token/i);
   assert.match(definition, /o\.attempt_count\s*<\s*8/i);
 });
 
