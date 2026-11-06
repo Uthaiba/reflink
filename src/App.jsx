@@ -3682,7 +3682,7 @@ provisional_diagnosis: "",
         return;
       }
 
-      try { await syncQueuedReferrals(supabase); } catch (syncError) { console.warn("REFLINK pre-submit offline sync", syncError); }
+      try { await syncQueuedReferrals(supabase, offlineVaultKey); } catch (syncError) { console.warn("REFLINK pre-submit offline sync", syncError); }
 
       const {
         data: {
