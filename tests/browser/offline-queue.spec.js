@@ -114,12 +114,17 @@ test("real browser queue reads remain isolated between two accounts", async ({ p
   });
 });
 
-test("offline vault lock events coordinate across tabs without crossing account boundaries", async ({ page, context }) => {
+test("offline vault lock events reach only other tabs for the same account", async ({ page, context }) => {
   await page.goto(BASE_URL);
   await page.waitForFunction(() => Boolean(window.offlineQueueBrowserTests));
-  const secondTab = await context.newPage();
-  await secondTab.goto(BASE_URL);
-  await secondTab.waitForFunction(() => Boolean(window.offlineQueueBrowserTests));
+
+  const accountATab = await context.newPage();
+  const accountBTab = await context.newPage();
+  const secondAccountBTab = await context.newPage();
+  for (const tab of [accountATab, accountBTab, secondAccountBTab]) {
+    await tab.goto(BASE_URL);
+    await tab.waitForFunction(() => Boolean(window.offlineQueueBrowserTests));
+  }
 
   const subscribe = async (targetPage, owner) => targetPage.evaluate(async (accountOwner) => {
     const { createOfflineVaultLockChannel } = await import("/src/lib/offlineVaultLockChannel.js");
@@ -130,17 +135,26 @@ test("offline vault lock events coordinate across tabs without crossing account 
   }, owner);
 
   await subscribe(page, "browser-test-account-a");
-  await subscribe(secondTab, "browser-test-account-b");
+  await subscribe(accountATab, "browser-test-account-a");
+  await subscribe(accountBTab, "browser-test-account-b");
+  await subscribe(secondAccountBTab, "browser-test-account-b");
 
-  await page.evaluate(() => window.__vaultLockChannel.broadcastLock("browser-test-account-b"));
-  await expect.poll(() => secondTab.evaluate(() => window.__vaultLockCount)).toBe(1);
+  await page.evaluate(() => window.__vaultLockChannel.broadcastLock());
+  await expect.poll(() => accountATab.evaluate(() => window.__vaultLockCount)).toBe(1);
   expect(await page.evaluate(() => window.__vaultLockCount)).toBe(0);
+  expect(await accountBTab.evaluate(() => window.__vaultLockCount)).toBe(0);
+  expect(await secondAccountBTab.evaluate(() => window.__vaultLockCount)).toBe(0);
 
-  await secondTab.evaluate(() => window.__vaultLockChannel.broadcastLock("browser-test-account-a"));
-  await expect.poll(() => page.evaluate(() => window.__vaultLockCount)).toBe(1);
-  expect(await secondTab.evaluate(() => window.__vaultLockCount)).toBe(1);
+  await accountBTab.evaluate(() => window.__vaultLockChannel.broadcastLock());
+  await expect.poll(() => secondAccountBTab.evaluate(() => window.__vaultLockCount)).toBe(1);
+  expect(await page.evaluate(() => window.__vaultLockCount)).toBe(0);
+  expect(await accountATab.evaluate(() => window.__vaultLockCount)).toBe(1);
+  expect(await accountBTab.evaluate(() => window.__vaultLockCount)).toBe(0);
 
-  await page.evaluate(() => window.__vaultLockChannel.close());
-  await secondTab.evaluate(() => window.__vaultLockChannel.close());
-  await secondTab.close();
+  for (const tab of [page, accountATab, accountBTab, secondAccountBTab]) {
+    await tab.evaluate(() => window.__vaultLockChannel.close());
+  }
+  await accountATab.close();
+  await accountBTab.close();
+  await secondAccountBTab.close();
 });
