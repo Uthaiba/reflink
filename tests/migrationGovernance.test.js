@@ -135,15 +135,15 @@ test("PostgREST outbox entry points stay in public but delegate as service-role-
   ]) {
     const definition = functionDefinition(sql, "public", name);
     assert.match(definition, /security invoker/i, `${name} wrapper must not elevate privileges`);
-    assert.match(definition, /set search_path\\s*=\\s*''/i, `${name} wrapper must pin search_path`);
-    assert.match(definition, new RegExp(`private\\\\.${name}\\\\(`, "i"), `${name} wrapper must delegate to private implementation`);
+    assert.match(definition, /set search_path\s*=\s*''/i, `${name} wrapper must pin search_path`);
+    assert.match(definition, new RegExp(`private\\.${name}\\\\(`, "i"), `${name} wrapper must delegate to private implementation`);
     assert.match(
       sql,
-      new RegExp(`grant execute on function public\\\\.${name}\\\\(`, "i"),
+      new RegExp(`grant execute on function public\\.${name}\\\\(`, "i"),
     );
     assert.match(
       sql,
-      new RegExp(`revoke all on function public\\\\.${name}\\\\(`, "i"),
+      new RegExp(`revoke all on function public\\.${name}\\\\(`, "i"),
     );
   }
 });
