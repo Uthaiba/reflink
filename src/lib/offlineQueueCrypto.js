@@ -93,6 +93,9 @@ export async function encryptOfflineReferralPayload(
   }
 
   const { owner, recordId } = assertRecordContext(ownerUserId, clientId);
+  if (!payload.referring_user_id || String(payload.referring_user_id) !== owner) {
+    throw new Error("The offline referral payload owner must match the encryption owner.");
+  }
   assertAesGcmKey(key);
   const provider = getCryptoProvider(cryptoProvider);
 
@@ -170,6 +173,9 @@ export async function decryptOfflineReferralPayload(
     const payload = JSON.parse(new TextDecoder().decode(plaintext));
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
       throw new Error("Invalid decrypted payload shape.");
+    }
+    if (!payload.referring_user_id || String(payload.referring_user_id) !== owner) {
+      throw new Error("The decrypted referral owner does not match its authenticated context.");
     }
     return payload;
   } catch {
