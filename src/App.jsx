@@ -2111,7 +2111,7 @@ const handleSignIn = async () => {
   setLoading(true);
 
   try {
-    offlineVaultChannelRef.current?.postMessage({ type: "LOCK", ownerUserId: offlineVaultOwner });
+    offlineVaultChannelRef.current?.broadcastLock(offlineVaultOwner);
     setOfflineVaultKey(null);
     setOfflineVaultOwner(null);
     setOfflineVaultVisible(false);
@@ -2136,7 +2136,7 @@ const handleSignIn = async () => {
       {profile?.id && !offlineVaultVisible && (
         <button type="button" className="secondary-button reflink-offline-vault-open" onClick={() => {
           if (offlineVaultKey) {
-            offlineVaultChannelRef.current?.postMessage({ type: "LOCK", ownerUserId: offlineVaultOwner });
+            offlineVaultChannelRef.current?.broadcastLock(offlineVaultOwner);
             setOfflineVaultKey(null);
             setOfflineVaultOwner(null);
           } else {
