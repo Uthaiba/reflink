@@ -65,7 +65,7 @@ create table if not exists private.notification_attempts (
   claim_token uuid not null unique,
   claimed_at timestamptz not null default now(),
   finished_at timestamptz,
-  outcome text check (outcome in ('sent', 'retry_wait', 'dead_letter')),
+  outcome text check (outcome in ('sent', 'retry_wait', 'dead_letter', 'cancelled')),
   provider_message_id text,
   error_code text,
   unique (outbox_id, attempt_number),
