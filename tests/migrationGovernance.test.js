@@ -123,6 +123,31 @@ test("outbox queue functions have exact service-role-only execute grants", async
   }
 });
 
+test("PostgREST outbox entry points stay in public but delegate as service-role-only invokers", async () => {
+  const sql = await migration(
+    "20261105000600",
+    "notification_outbox_foundation",
+  );
+  for (const name of [
+    "enqueue_notification",
+    "claim_notification_batch",
+    "finish_notification_attempt",
+  ]) {
+    const definition = functionDefinition(sql, "public", name);
+    assert.match(definition, /security invoker/i, `${name} wrapper must not elevate privileges`);
+    assert.match(definition, /set search_path\\s*=\\s*''/i, `${name} wrapper must pin search_path`);
+    assert.match(definition, new RegExp(`private\\\\.${name}\\\\(`, "i"), `${name} wrapper must delegate to private implementation`);
+    assert.match(
+      sql,
+      new RegExp(`grant execute on function public\\\\.${name}\\\\(`, "i"),
+    );
+    assert.match(
+      sql,
+      new RegExp(`revoke all on function public\\\\.${name}\\\\(`, "i"),
+    );
+  }
+});
+
 test("outbox claiming is bounded, concurrent-safe and records each attempt", async () => {
   const sql = await migration(
     "20261105000600",
