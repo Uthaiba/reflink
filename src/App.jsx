@@ -1467,6 +1467,7 @@ function isAckOverdue(referral) {
 
 function OfflineVaultPanel({ ownerUserId, onUnlocked, onClose }) {
   const [envelope, setEnvelope] = useState(null);
+  const [vaultLoading, setVaultLoading] = useState(true);
   const [passphrase, setPassphrase] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1476,7 +1477,8 @@ function OfflineVaultPanel({ ownerUserId, onUnlocked, onClose }) {
     let active = true;
     getOfflineKeyVaultEnvelope(ownerUserId)
       .then((stored) => { if (active) setEnvelope(stored); })
-      .catch(() => { if (active) setError("Unable to read the offline vault from this browser."); });
+      .catch(() => { if (active) setError("Unable to read the offline vault from this browser."); })
+      .finally(() => { if (active) setVaultLoading(false); });
     return () => { active = false; };
   }, [ownerUserId]);
 
@@ -1546,8 +1548,8 @@ function OfflineVaultPanel({ ownerUserId, onUnlocked, onClose }) {
         <p className="reflink-offline-vault-panel__notice">
           Keep this passphrase safe. It cannot be recovered by REFLINK. Signing out locks the vault but does not delete pending referrals.
         </p>
-        <button type="submit" disabled={busy}>
-          {busy ? "Please wait…" : envelope ? "Unlock offline vault" : "Create offline vault"}
+        <button type="submit" disabled={busy || vaultLoading}>
+          {vaultLoading ? "Checking existing vault…" : busy ? "Please wait…" : envelope ? "Unlock offline vault" : "Create offline vault"}
         </button>
       </form>
     </section>
