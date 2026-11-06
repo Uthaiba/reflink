@@ -159,3 +159,26 @@ test("mark-read rejects malformed IDs and fails closed when unauthenticated or R
     (error) => error.code === "INBOX_UNAVAILABLE" && !error.message.includes("permission denied"),
   );
 });
+
+
+test("cursor preserves PostgreSQL microsecond precision", async () => {
+  const preciseTimestamp = "2026-11-06T08:00:00.123456+00:00";
+  const { client, calls } = makeClient({ rows: [] });
+  const adapter = createNotificationInboxAdapter(client);
+  await adapter.listMyNotifications({
+    before: { createdAt: preciseTimestamp, id: NOTIFICATION_1 },
+  });
+  assert.match(calls.or[0][0], /2026-11-06T08:00:00\.123456\+00:00/);
+});
+
+test("unknown event and template keys are normalized to generic allowlist values", async () => {
+  const unsafeRow = {
+    ...notification(),
+    event_type: "patient_name_should_not_be_a_template_key",
+    template_key: "arbitrary_payload.v9",
+  };
+  const { client } = makeClient({ rows: [unsafeRow] });
+  const result = await createNotificationInboxAdapter(client).listMyNotifications();
+  assert.equal(result.notifications[0].event_type, "unknown");
+  assert.equal(result.notifications[0].template_key, "unknown.v1");
+});
