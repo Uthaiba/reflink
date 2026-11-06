@@ -92,3 +92,20 @@ Added `tests/offlineQueueCrypto.test.js` for key properties, encryption/decrypti
 **Important implementation boundary:** this module is not wired into `offlineReferralQueue.js`. Existing IndexedDB records are still stored in plaintext, and the application does not yet provision, persist, unlock, rotate, revoke or recover encryption keys. The helper's generated key is in-memory only; using it without a durable, approved lifecycle would make unsynced referrals unrecoverable after a reload. It does not by itself protect against same-origin XSS, malicious extensions, or a compromised browser profile.
 
 Do not describe offline referral storage as encrypted until the queue migration, key lifecycle, logout/recovery flow, retention policy and browser integration tests are implemented and reviewed. This source-only step does not change the database, production app, current queue schema or referral synchronization behaviour.
+
+
+## Offline key-vault foundation — 6 November 2026
+
+Added `src/lib/offlineQueueKeyVault.js` with a passphrase-wrapped data-key lifecycle foundation:
+- Generates a random 256-bit data key and imports it as a non-extractable AES-GCM CryptoKey for active use.
+- Wraps the raw data key using an AES-256-GCM key derived from a user-supplied passphrase with PBKDF2-HMAC-SHA-256 (600,000 iterations) and a random 128-bit salt.
+- Uses a fresh 96-bit IV and binds the vault envelope to the account owner through authenticated additional data.
+- Unlocks into a non-extractable, in-memory CryptoKey; the passphrase is not returned or persisted.
+- Supports passphrase rewrapping of the same data key without changing referral ciphertext.
+- Bounds and validates envelope fields and clears temporary raw-key byte buffers after use.
+
+Added `tests/offlineQueueKeyVault.test.js` for vault creation, correct unlock, wrong-passphrase rejection, cross-account rejection, envelope tampering, passphrase rotation and invalid passphrase/envelope handling.
+
+**Not yet integrated with IndexedDB or the referral queue:** the vault envelope is not persisted by the application, no UI prompts for a passphrase, and the returned CryptoKey is not connected to queue reads/writes. Existing queue payloads remain plaintext. There is no recovery mechanism if the passphrase is lost; losing it makes wrapped key material and any data encrypted by it unrecoverable. A reset must never silently discard pending referrals.
+
+Before production integration, approve a passphrase/recovery policy, device and session threat model, rate-limiting/lockout approach, cross-tab coordination, account-disablement behaviour, key rotation workflow and unsynced-record recovery. A passphrase-derived wrapping key does not protect against malicious same-origin JavaScript while the vault is unlocked.
