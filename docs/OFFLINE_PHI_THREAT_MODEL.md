@@ -256,3 +256,21 @@ The sync path now records whether the current attempt actually inserted the refe
 This is a client-side duplicate-notification safeguard, not a complete distributed sync lock. Correctness still depends on the server enforcing a unique idempotency constraint for the offline referral identity. The SMS endpoint itself does not yet provide a durable idempotency key or transactional outbox guarantee, so delivery across network timeouts/retries is not exactly-once. Server-side notification idempotency remains a release-hardening item.
 
 No production schema or endpoint has been changed by this source-only client safeguard.
+
+
+## Phase 4.1 — cross-tab offline sync claims and stale-worker fencing — 6 November 2026
+
+The offline queue now uses an owner-scoped per-record claim before a sync worker begins processing a queued referral. The claim is written in a short IndexedDB readwrite transaction, which serializes competing transactions against the queue object store across same-origin tabs. Claim metadata contains only the account owner, a random claim token and an expiry timestamp; it does not contain referral payload or patient information.
+
+The default lease is five minutes. A worker that finds a non-expired claim skips that record. An expired claim can be reclaimed by another tab. On successful server reconciliation, queue deletion is conditional on the current claim token still matching the worker's token. Failure cleanup likewise clears a claim only when its token still matches. This fencing prevents a delayed worker from deleting a record or clearing a newer worker's claim after its own lease has expired.
+
+Automated coverage now includes:
+- Concurrent fake-IndexedDB claim attempts, proving only one receives the active claim.
+- Lease expiry and reclamation.
+- Rejection of stale-worker release and deletion attempts.
+- Account-owner isolation for claims.
+- A real Chromium multi-tab test that races two tabs for one queue record, verifies only one wins, then verifies the other tab can claim after release.
+
+**Limitations and release boundary:** the lease is time-bounded and is not renewed while a network request is in flight. A request lasting longer than five minutes may outlive its lease; fencing still protects local deletion, but cannot prevent an already-issued remote request from completing. The server's unique offline-referral identity remains necessary to reconcile duplicate submissions, and the SMS endpoint still lacks durable idempotency/outbox guarantees. This client-side lease is not a distributed transaction, does not coordinate across different browser profiles/devices, and does not establish exactly-once server processing. Browser crash recovery, Firefox/WebKit compatibility, and production endpoint/security validation remain separate release gates.
+
+No production Supabase schema, RLS policy, credentials, Auth settings or deployment configuration was changed.
