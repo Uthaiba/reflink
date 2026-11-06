@@ -183,6 +183,44 @@ begin
     raise exception 'Batch size must be between 1 and 50.' using errcode = '22023';
   end if;
 
+  -- Close the active attempt ledger row before changing or reclaiming its lease.
+  update private.notification_attempts a
+     set finished_at = pg_catalog.now(),
+         outcome = 'cancelled',
+         error_code = 'EXPIRED'
+    from private.notification_outbox o
+   where o.id = a.outbox_id
+     and o.claim_token = a.claim_token
+     and o.status = 'processing'
+     and o.expires_at is not null
+     and o.expires_at <= pg_catalog.now()
+     and a.finished_at is null;
+
+  update private.notification_attempts a
+     set finished_at = pg_catalog.now(),
+         outcome = 'dead_letter',
+         error_code = 'ATTEMPTS_EXHAUSTED'
+    from private.notification_outbox o
+   where o.id = a.outbox_id
+     and o.claim_token = a.claim_token
+     and o.status = 'processing'
+     and o.attempt_count >= 8
+     and o.claimed_until <= pg_catalog.now()
+     and a.finished_at is null;
+
+  update private.notification_attempts a
+     set finished_at = pg_catalog.now(),
+         outcome = 'retry_wait',
+         error_code = 'LEASE_EXPIRED'
+    from private.notification_outbox o
+   where o.id = a.outbox_id
+     and o.claim_token = a.claim_token
+     and o.status = 'processing'
+     and o.attempt_count < 8
+     and o.claimed_until <= pg_catalog.now()
+     and (o.expires_at is null or o.expires_at > pg_catalog.now())
+     and a.finished_at is null;
+
   -- Expired items and exhausted leases are terminally closed, not silently stranded.
   update private.notification_outbox o
      set status = 'cancelled',
