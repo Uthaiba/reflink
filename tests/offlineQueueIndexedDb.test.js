@@ -238,3 +238,81 @@ test("concurrent migration callers atomically replace a legacy record only once"
   const [decrypted] = await listDecryptedQueuedReferrals("user-a", key);
   assert.equal(decrypted.payload.patient_name, "Synthetic Test Patient");
 });
+
+test("aborted migration transaction preserves the original plaintext referral for retry", async () => {
+  await seedVersionTwoPlaintextQueue({
+    client_id: "legacy-aborted-commit",
+    owner_user_id: "user-a",
+    created_at: "2026-11-06T10:00:00.000Z",
+    payload: referral("user-a", "legacy-aborted-commit"),
+    sync_status: "pending",
+    queued_at: "2026-11-06T10:00:00.000Z",
+  });
+
+  const key = await createOfflineQueueCryptoKey();
+  const db = await openDatabase();
+  const databasePrototype = Object.getPrototypeOf(db);
+  const originalTransaction = databasePrototype.transaction;
+  let abortNextQueueWrite = true;
+  databasePrototype.transaction = function (storeNames, mode, ...options) {
+    const tx = originalTransaction.call(this, storeNames, mode, ...options);
+    const names = Array.isArray(storeNames) ? storeNames : [storeNames];
+    if (abortNextQueueWrite && mode === "readwrite" && names.includes(STORE_QUEUE)) {
+      abortNextQueueWrite = false;
+      queueMicrotask(() => {
+        try { tx.abort(); } catch { /* transaction may already have completed */ }
+      });
+    }
+    return tx;
+  };
+  db.close();
+
+  try {
+    const interrupted = await migratePlaintextQueueToEncrypted("user-a", key);
+    assert.deepEqual(interrupted, { migrated: 0, skipped: 0, failed: 1 });
+
+    const [preserved] = await readAllQueueRecords();
+    assert.equal(preserved.client_id, "legacy-aborted-commit");
+    assert.equal(preserved.payload.patient_name, "Synthetic Test Patient");
+    assert.equal(preserved.payload_storage, undefined);
+
+    const retried = await migratePlaintextQueueToEncrypted("user-a", key);
+    assert.deepEqual(retried, { migrated: 1, skipped: 0, failed: 0 });
+    const [decrypted] = await listDecryptedQueuedReferrals("user-a", key);
+    assert.equal(decrypted.payload.patient_name, "Synthetic Test Patient");
+  } finally {
+    databasePrototype.transaction = originalTransaction;
+  }
+});
+
+test("quota failure rejects encrypted queue save and preserves existing pending referrals", async () => {
+  const key = await createOfflineQueueCryptoKey();
+  await queueEncryptedReferral(referral("user-a", "existing-before-quota"), "user-a", key);
+
+  const db = await openDatabase();
+  const store = db.transaction(STORE_QUEUE, "readwrite").objectStore(STORE_QUEUE);
+  const storePrototype = Object.getPrototypeOf(store);
+  const originalAdd = storePrototype.add;
+  let failNextQueueAdd = true;
+  storePrototype.add = function (value, ...args) {
+    if (failNextQueueAdd && this.name === STORE_QUEUE && value?.client_id === "quota-failure") {
+      failNextQueueAdd = false;
+      throw new DOMException("Synthetic storage quota exceeded.", "QuotaExceededError");
+    }
+    return originalAdd.call(this, value, ...args);
+  };
+  db.close();
+
+  try {
+    await assert.rejects(
+      queueEncryptedReferral(referral("user-a", "quota-failure"), "user-a", key),
+      (error) => error?.name === "QuotaExceededError",
+    );
+    const queued = await listDecryptedQueuedReferrals("user-a", key);
+    assert.equal(queued.length, 1);
+    assert.equal(queued[0].client_id, "existing-before-quota");
+    assert.equal(queued[0].payload.patient_name, "Synthetic Test Patient");
+  } finally {
+    storePrototype.add = originalAdd;
+  }
+});
