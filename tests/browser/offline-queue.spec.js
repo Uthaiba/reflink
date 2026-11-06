@@ -11,6 +11,8 @@ test("encrypted offline referral survives a real browser reload and unlock", asy
 
   const stored = await page.evaluate(() => window.offlineQueueBrowserTests.inspectStoredRecords());
   expect(stored).toEqual([{
+    clientId: "browser-reload-test",
+    owner: "browser-test-account",
     hasPlaintextPayload: false,
     encrypted: true,
     hasCiphertext: true,
@@ -55,6 +57,8 @@ test("legacy queue migration works in a real browser IndexedDB implementation", 
   });
   const stored = await page.evaluate(() => window.offlineQueueBrowserTests.inspectStoredRecords());
   expect(stored).toEqual([{
+    clientId: "browser-legacy-test",
+    owner: "browser-test-account",
     hasPlaintextPayload: false,
     encrypted: true,
     hasCiphertext: true,
