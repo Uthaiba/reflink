@@ -1651,6 +1651,15 @@ function App() {
   }, [offlineVaultKey, offlineVaultOwner]);
 
   useEffect(() => {
+    if (offlineVaultOwner && profile?.id && String(offlineVaultOwner) !== String(profile.id)) {
+      offlineVaultChannelRef.current?.postMessage({ type: "LOCK", ownerUserId: offlineVaultOwner });
+      setOfflineVaultKey(null);
+      setOfflineVaultOwner(null);
+      setOfflineVaultVisible(true);
+    }
+  }, [profile?.id, offlineVaultOwner]);
+
+  useEffect(() => {
     let active = true;
     const inspectQueue = async () => {
       if (!profile?.id) return;
