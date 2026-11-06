@@ -32,3 +32,10 @@ test("documentation does not claim full production readiness", () => {
   assert.match(threatModel, /no recovery\/reset workflow/i);
   assert.match(threatModel, /Browser-level IndexedDB tests .* not yet implemented/i);
 });
+
+test("the referral form owns the pending referral until its matching account vault unlocks", () => {
+  assert.match(appSource, /function NewReferralForm\(\{ onBack, offlineVaultKey, offlineVaultOwner, onRequestVault \}\)/);
+  assert.match(appSource, /setPendingOfflineReferral\(offlinePayload\)/);
+  assert.match(appSource, /onRequestVault\?\.\(\)/);
+  assert.match(appSource, /String\(pendingOfflineReferral\.referring_user_id\) !== String\(offlineVaultOwner\)/);
+});
