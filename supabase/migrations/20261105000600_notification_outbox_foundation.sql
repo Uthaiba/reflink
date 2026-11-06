@@ -380,6 +380,74 @@ grant execute on function private.enqueue_notification(text, text, text, uuid, u
 grant execute on function private.claim_notification_batch(integer) to service_role;
 grant execute on function private.finish_notification_attempt(uuid, uuid, text, text, text, integer) to service_role;
 
+-- PostgREST-facing wrappers. The private schema stays unexposed; only service_role
+-- can execute these SECURITY INVOKER functions through the exposed public schema.
+create or replace function public.enqueue_notification(
+  p_event_key text,
+  p_event_type text,
+  p_channel text,
+  p_recipient_user_id uuid,
+  p_referral_id uuid,
+  p_template_key text,
+  p_expires_at timestamptz default null
+)
+returns uuid
+language sql
+security invoker
+set search_path = ''
+as $function$
+  select private.enqueue_notification(
+    p_event_key, p_event_type, p_channel, p_recipient_user_id,
+    p_referral_id, p_template_key, p_expires_at
+  );
+$function$;
+
+create or replace function public.claim_notification_batch(p_batch_size integer default 10)
+returns table (
+  outbox_id uuid,
+  event_key text,
+  event_type text,
+  channel text,
+  recipient_user_id uuid,
+  referral_id uuid,
+  template_key text,
+  attempt_number integer,
+  claim_token uuid,
+  expires_at timestamptz
+)
+language sql
+security invoker
+set search_path = ''
+as $function$
+  select * from private.claim_notification_batch(p_batch_size);
+$function$;
+
+create or replace function public.finish_notification_attempt(
+  p_outbox_id uuid,
+  p_claim_token uuid,
+  p_outcome text,
+  p_provider_message_id text default null,
+  p_error_code text default null,
+  p_retry_after_seconds integer default 60
+)
+returns text
+language sql
+security invoker
+set search_path = ''
+as $function$
+  select private.finish_notification_attempt(
+    p_outbox_id, p_claim_token, p_outcome,
+    p_provider_message_id, p_error_code, p_retry_after_seconds
+  );
+$function$;
+
+revoke all on function public.enqueue_notification(text, text, text, uuid, uuid, text, timestamptz) from public, anon, authenticated;
+revoke all on function public.claim_notification_batch(integer) from public, anon, authenticated;
+revoke all on function public.finish_notification_attempt(uuid, uuid, text, text, text, integer) from public, anon, authenticated;
+grant execute on function public.enqueue_notification(text, text, text, uuid, uuid, text, timestamptz) to service_role;
+grant execute on function public.claim_notification_batch(integer) to service_role;
+grant execute on function public.finish_notification_attempt(uuid, uuid, text, text, text, integer) to service_role;
+
 comment on schema private is
 'Non-exposed internal schema for server-operated REFLINK workflows. Do not add to PostgREST exposed schemas.';
 comment on table private.notification_outbox is
