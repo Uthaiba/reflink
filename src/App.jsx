@@ -1500,7 +1500,17 @@ function OfflineVaultPanel({ ownerUserId, onUnlocked, onClose }) {
       setConfirmation("");
       await onUnlocked(result.key, ownerUserId);
     } catch (unlockError) {
-      setError(unlockError?.message || "Unable to unlock the offline vault.");
+      if (unlockError?.name === "ConstraintError") {
+        const existing = await getOfflineKeyVaultEnvelope(ownerUserId).catch(() => null);
+        if (existing) {
+          setEnvelope(existing);
+          setError("An offline vault already exists for this account. Enter its passphrase to unlock it.");
+        } else {
+          setError("Another tab may be creating the vault. Close other REFLINK tabs and try again.");
+        }
+      } else {
+        setError(unlockError?.message || "Unable to unlock the offline vault.");
+      }
     } finally {
       setBusy(false);
     }
