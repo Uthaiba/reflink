@@ -380,13 +380,16 @@ export async function getQueueCount(ownerUserId) {
 }
 
 async function syncOwnedQueue(supabaseClient, userId, key) {
+  if (!key) return { synced: 0, failed: 0, skipped: true, reason: "vault_locked" };
+  await migratePlaintextQueueToEncrypted(userId, key);
   const queued = await listQueuedReferrals(userId);
   let synced = 0;
   let failed = 0;
   for (const storedItem of queued) {
     let item = storedItem;
     try {
-      if (storedItem.payload_storage === "encrypted") item = await decryptQueuedReferralRecord(storedItem, userId, key);
+      if (!isEncryptedQueueRecord(storedItem)) { failed += 1; continue; }
+      item = await decryptQueuedReferralRecord(storedItem, userId, key);
       if (!isQueueRecordOwnedBy(item, userId) || !isValidQueueOwner(item.payload, userId)) { failed += 1; continue; }
       const { data: existing, error: lookupError } = await supabaseClient
         .from("referrals")
@@ -460,6 +463,7 @@ async function syncOwnedQueue(supabaseClient, userId, key) {
 }
 
 export async function syncQueuedReferrals(supabaseClient, key = null) {
+  if (!key) return { synced: 0, failed: 0, skipped: true, reason: "vault_locked" };
   if (typeof navigator === "undefined" || !navigator.onLine) return { synced: 0, failed: 0, skipped: true };
   if (activeSyncPromise) return activeSyncPromise;
   activeSyncPromise = (async () => {
