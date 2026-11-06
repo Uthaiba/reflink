@@ -67,7 +67,7 @@ const referral = (owner, id = "offline-1") => ({
   created_at: "2026-11-06T10:00:00.000Z",
 });
 
-test("real IndexedDB API implementation persists only ciphertext for encrypted referrals", async () => {
+test("IndexedDB implementation persists only ciphertext for encrypted referrals", async () => {
   const key = await createOfflineQueueCryptoKey();
   await queueEncryptedReferral(referral("user-a"), "user-a", key);
 
@@ -177,4 +177,38 @@ test("vault and queue stores are created independently without dropping cache da
   } finally {
     db.close();
   }
+});
+
+test("failed legacy encryption leaves the original queued record intact", async () => {
+  await getQueueCount("user-a");
+  const circular = referral("user-a", "bad-legacy");
+  circular.self = circular;
+  const db = await openDatabase();
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_QUEUE, "readwrite");
+      tx.objectStore(STORE_QUEUE).put({
+        client_id: "bad-legacy",
+        owner_user_id: "user-a",
+        created_at: "2026-11-06T10:00:00.000Z",
+        payload: circular,
+        sync_status: "pending",
+        queued_at: "2026-11-06T10:00:00.000Z",
+      });
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
+
+  const key = await createOfflineQueueCryptoKey();
+  const result = await migratePlaintextQueueToEncrypted("user-a", key);
+  assert.deepEqual(result, { migrated: 0, skipped: 0, failed: 1 });
+
+  const [stored] = await readAllQueueRecords();
+  assert.equal(stored.client_id, "bad-legacy");
+  assert.equal(stored.payload.patient_name, "Synthetic Test Patient");
+  assert.equal(stored.payload_storage, undefined);
 });
