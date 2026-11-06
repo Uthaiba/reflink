@@ -87,6 +87,24 @@ window.offlineQueueBrowserTests = {
     };
   },
 
+  async createSecondAccountQueueRecord() {
+    const owner = "browser-test-account-b";
+    const passphrase = "Second-synthetic-account-passphrase-2026";
+    const { envelope, key } = await createOfflineKeyVault({ ownerUserId: owner, passphrase });
+    await saveOfflineKeyVaultEnvelope(envelope, owner);
+    await queueEncryptedReferral({
+      offline_client_id: "account-b-record",
+      referring_user_id: owner,
+      patient_name: "Synthetic Account B Patient",
+      urgency: "routine",
+      created_at: new Date().toISOString(),
+    }, owner, key);
+    return {
+      accountA: await getQueueCount(TEST_OWNER),
+      accountB: await getQueueCount(owner),
+    };
+  },
+
   async queueSameIdAfterUnlock(id) {
     const envelope = await getOfflineKeyVaultEnvelope(TEST_OWNER);
     if (!envelope) throw new Error("Test vault is not available.");
