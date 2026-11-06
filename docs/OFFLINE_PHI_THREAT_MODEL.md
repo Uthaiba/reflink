@@ -140,3 +140,23 @@ The migration code is guarded against a same-record concurrent change by re-read
 
 
 Implementation follow-up: the offline queue module's ES module imports were normalized in commit `2dd8f69f965ab0e5df9b1033caba3dc4a98498c6`. The branch's CI and Preview checks for this latest commit have not yet been reported; treat validation as pending until exact-SHA checks are available.
+
+
+## Application integration — offline vault lifecycle and encrypted submission — 6 November 2026
+
+The PHC application now imports the vault and encrypted queue APIs and exposes an account-scoped vault panel:
+- A user can create a vault with a minimum 12-character passphrase or unlock the existing account envelope.
+- The application persists only the wrapped envelope. The non-extractable data key remains in React application memory and is cleared on explicit lock, sign-out, and account-switch handling.
+- A pending offline referral is held in application memory until vault unlock/create completes. It is then written using `queueEncryptedReferral`; if vault setup fails, the referral is not reported as saved and there is no plaintext fallback.
+- Existing plaintext queue records are migrated when the vault is unlocked. Each item is atomically replaced only after successful encryption and unchanged-record verification.
+- Background sync now requires an unlocked key for the current authenticated account, attempts migration first, and processes only structurally valid encrypted records. Legacy plaintext records that fail migration remain queued and are not uploaded by this path.
+- The app exposes a manual lock control. A `BroadcastChannel` message coordinates manual lock across open tabs where that browser API is supported. Sign-out and account-switch handlers clear the current tab's in-memory key.
+- The offline queue badge still reports queued item counts without decrypting patient payloads.
+
+**Security and operational limitations that remain:**
+- A vault passphrase has no recovery/reset workflow. If lost, encrypted pending referrals cannot be decrypted. Clinical governance must approve this risk before enabling broad use.
+- Cross-tab lock messaging is best-effort and depends on browser support; it is not a substitute for managed-device controls or protection against malicious same-origin JavaScript.
+- The pending referral being composed is held in memory until the vault unlock completes. A browser crash or refresh before the encrypted queue write means that not-yet-saved referral is lost; the UI explicitly does not claim it has been stored.
+- Browser-level IndexedDB tests (schema upgrade, persistence/reload, migration interruption, multi-tab transactions, quota/eviction and browser compatibility) are not yet implemented. The existing automated tests cover cryptographic helpers, ownership/classification and static contracts, not full browser behaviour.
+- Offline encryption does not replace server-side RLS, role/facility authorization, revalidation at sync, endpoint disk encryption, screen locks, CSP/XSS controls or a clinically approved retention policy.
+- Do not treat this as production approval for shared or unmanaged devices. PR release gates and clinical/security sign-off remain mandatory.
