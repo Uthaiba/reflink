@@ -213,30 +213,46 @@ export async function rotateOfflineKeyVaultPassphrase(
   envelope,
   { ownerUserId, currentPassphrase, newPassphrase, cryptoProvider = globalThis.crypto } = {},
 ) {
-  const key = await unlockOfflineKeyVault(envelope, {
-    ownerUserId,
-    passphrase: currentPassphrase,
-    cryptoProvider,
-  });
+  const owner = validateOwner(ownerUserId);
+  validatePassphrase(currentPassphrase);
   validatePassphrase(newPassphrase);
+  validateVaultEnvelope(envelope, owner);
   const provider = cryptoProviderOrThrow(cryptoProvider);
-  const rawDataKey = new Uint8Array(await provider.subtle.exportKey("raw", key));
+  const salt = fromHex(envelope.salt, SALT_LENGTH, "salt");
+  const iv = fromHex(envelope.iv, IV_LENGTH, "IV");
+  const wrappedKey = fromHex(envelope.wrapped_key, DATA_KEY_LENGTH + TAG_LENGTH_BITS / 8, "wrapped key");
+  const currentWrappingKey = await deriveWrappingKey(currentPassphrase, salt, provider);
 
+  let rawDataKey;
   try {
-    const salt = provider.getRandomValues(new Uint8Array(SALT_LENGTH));
-    const iv = provider.getRandomValues(new Uint8Array(IV_LENGTH));
-    const wrappingKey = await deriveWrappingKey(newPassphrase, salt, provider);
-    const wrapped = await provider.subtle.encrypt(
+    rawDataKey = new Uint8Array(await provider.subtle.decrypt(
       {
         name: WRAP_ALGORITHM,
         iv,
-        additionalData: vaultAdditionalData(String(ownerUserId)),
+        additionalData: vaultAdditionalData(owner),
         tagLength: TAG_LENGTH_BITS,
       },
-      wrappingKey,
+      currentWrappingKey,
+      wrappedKey,
+    ));
+    if (rawDataKey.length !== DATA_KEY_LENGTH) {
+      throw new Error("Invalid data key length.");
+    }
+
+    const newSalt = provider.getRandomValues(new Uint8Array(SALT_LENGTH));
+    const newIv = provider.getRandomValues(new Uint8Array(IV_LENGTH));
+    const newWrappingKey = await deriveWrappingKey(newPassphrase, newSalt, provider);
+    const newWrapped = await provider.subtle.encrypt(
+      {
+        name: WRAP_ALGORITHM,
+        iv: newIv,
+        additionalData: vaultAdditionalData(owner),
+        tagLength: TAG_LENGTH_BITS,
+      },
+      newWrappingKey,
       rawDataKey,
     );
-    const newKey = await provider.subtle.importKey(
+    const key = await provider.subtle.importKey(
       "raw",
       rawDataKey,
       { name: WRAP_ALGORITHM },
@@ -247,13 +263,15 @@ export async function rotateOfflineKeyVaultPassphrase(
     return {
       envelope: {
         ...envelope,
-        salt: toHex(salt),
-        iv: toHex(iv),
-        wrapped_key: toHex(new Uint8Array(wrapped)),
+        salt: toHex(newSalt),
+        iv: toHex(newIv),
+        wrapped_key: toHex(new Uint8Array(newWrapped)),
       },
-      key: newKey,
+      key,
     };
+  } catch {
+    throw new Error("Unable to rotate the offline key vault. Check the current passphrase and account context.");
   } finally {
-    rawDataKey.fill(0);
+    rawDataKey?.fill(0);
   }
 }
