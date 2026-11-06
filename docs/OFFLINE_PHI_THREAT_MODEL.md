@@ -212,3 +212,10 @@ The CI workflow installs the pinned Playwright runner as a temporary CI-only dep
 
 
 **CI runner compatibility adjustment:** the first browser-CI attempt failed before launching Chromium because the hosted `ubuntu-latest` image resolved to Ubuntu 26.04, which the pinned Playwright release does not support. The workflow has been pinned to `ubuntu-24.04`, a supported runner. The corrected exact-HEAD run must complete before the browser suite is considered validated.
+
+
+## Phase 3.4 — multi-tab duplicate-write validation (6 November 2026)
+
+Extended the Chromium browser suite to open two same-origin tabs in one browser context, independently unlock the same synthetic account vault and attempt to persist a referral using the same offline client ID at the same time. The expected result is exactly one successful IndexedDB `add` and one duplicate-key rejection; the stored queue must contain exactly one encrypted record for that client ID, with no plaintext payload field. This validates the browser's actual IndexedDB uniqueness/transaction behaviour for this scenario. It does not validate the application's full React lock UI, all BroadcastChannel races, concurrent network sync or server-side idempotency.
+
+The scenario uses synthetic test account and patient values only. CI verification is pending for the exact branch head; do not treat it as passed until the Chromium workflow completes.
