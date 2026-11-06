@@ -192,3 +192,5 @@ Added `tests/offlineQueueIndexedDb.test.js` using `fake-indexeddb` 6.2.5, a Node
 - Creation and coexistence of queue, cache and vault object stores.
 
 **Testing boundary:** `fake-indexeddb` is an in-memory implementation, not Chromium, Firefox or Safari. These tests do not prove browser storage persistence across process restarts, quota/eviction behaviour, real multi-tab locking, browser-specific transaction scheduling, device loss, or browser compatibility. Those still require a real-browser test matrix with synthetic data. Do not describe this test harness as end-to-end browser validation or clinical acceptance.
+
+The harness also verifies that a serialization/encryption failure during legacy migration leaves the original pending record in place, with no partial plaintext deletion. This is an in-memory IndexedDB transaction test; actual browser crash/termination behaviour remains outside this harness.
