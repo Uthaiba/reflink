@@ -94,7 +94,8 @@ test("offline vault lock channel ignores malformed, non-lock and non-matching me
     sender.postMessage({ type: "LOCK", ownerUserId: 123 });
     assert.equal(locks, 0);
 
-    sender.postMessage({ type: "LOCK", ownerUserId: "account-a", passphrase: ["synthetic", "fixture"].join("-") });
+    // Extra, unrelated message fields must not change lock routing.
+    sender.postMessage({ type: "LOCK", ownerUserId: "account-a", unexpectedField: true });
     assert.equal(locks, 1);
 
     subscriber.close();
