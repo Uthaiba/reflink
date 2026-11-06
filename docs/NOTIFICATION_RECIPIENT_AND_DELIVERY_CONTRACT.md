@@ -130,3 +130,10 @@ This notification system is workflow communication, not a clinical decision engi
 ## Inbox schema and access detail
 
 The separate inbox relation, owner-only RLS, restricted read-state operation and recipient-eligibility audit are specified in [NOTIFICATION_INBOX_SCHEMA_AND_ACCESS_DESIGN.md](./NOTIFICATION_INBOX_SCHEMA_AND_ACCESS_DESIGN.md).
+
+
+## Recipient eligibility decision — 6 November 2026
+
+The current profile fields do not establish active/on-call or notification-duty eligibility. **Do not infer a recipient from role plus facility, and do not broadcast to every receiving-staff profile.** The default is no automatic user recipient until an authoritative approved roster/notification-duty assignment source and lifecycle rule are identified. Referral create/acknowledge operations must continue when no recipient is eligible. This decision supersedes the generic “eligible receiving-facility users” wording above until the resolver is approved.
+
+See [NOTIFICATION_RECIPIENT_ELIGIBILITY.md](./NOTIFICATION_RECIPIENT_ELIGIBILITY.md) for the explicit assignment contract, rejected shortcuts, reassignment and dispatch rules, and synthetic-data acceptance tests.
