@@ -1415,7 +1415,7 @@ function OfflineStatusBadge() {
     };
     const onOnline = () => { setOnline(true); refresh(); };
     const onOffline = () => setOnline(false);
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => refresh());
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => { Promise.resolve().then(refresh); });
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     refresh();
