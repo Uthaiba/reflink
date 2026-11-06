@@ -167,3 +167,14 @@ The PHC application now imports the vault and encrypted queue APIs and exposes a
 The integrated application revision at commit `f4c29fa0da2c1af45c4a297d8cd002493cade0bf` passed the GitHub Actions quality workflow: automated unit tests, lint and production bundle build all completed successfully (run #234, `42173481598`). A subsequent one-line change passes the active unlocked vault key to the online pre-submit sync call (commit `46dc349998d0b5581fda2631fe18f86df5f24710`); exact-HEAD CI has not yet been reported for that final adjustment.
 
 Vercel Preview returned a build-rate-limit failure for this branch. This is a platform quota failure, so there is no successful Preview build for the integrated revision. The source has not been deployed to production.
+
+
+## Phase 3 hardening — remove plaintext queue bypasses (6 November 2026)
+
+The queue module no longer has a plaintext write path through its legacy API:
+- `queueReferral(payload, ownerUserId, key)` remains as a compatibility alias but delegates directly to `queueEncryptedReferral`; callers must supply the account's unlocked key.
+- New encrypted records use IndexedDB `add` semantics, so a reused `client_id` cannot silently overwrite an existing pending referral. A collision fails visibly and leaves the existing record intact.
+- `listDecryptedQueuedReferrals` now rejects legacy plaintext records. Callers must explicitly run the per-record migration first; the decrypted-list API never returns a plaintext record as though it had passed through decryption.
+- Added source-contract tests for these fail-closed behaviours.
+
+These changes remove accidental plaintext bypasses from the module's public API. They do not replace browser-level IndexedDB tests, server-side authorization, or clinical/security approval. Legacy plaintext records remain available to the explicit migration path and are not silently deleted.
