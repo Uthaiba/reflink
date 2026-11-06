@@ -112,3 +112,10 @@ The isolated user-facing inbox component and its security/lifecycle contract are
 ## In-app inbox schema follow-on
 
 The separate user-facing inbox, ownership policy, restricted mark-read operation, recipient-selection blocker and integration acceptance tests are specified in [NOTIFICATION_INBOX_SCHEMA_AND_ACCESS_DESIGN.md](./NOTIFICATION_INBOX_SCHEMA_AND_ACCESS_DESIGN.md).
+
+
+## Notification inbox and recipient eligibility follow-on — 6 November 2026
+
+The source-level authenticated inbox adapter is documented in [NOTIFICATION_INBOX_ADAPTER.md](./NOTIFICATION_INBOX_ADAPTER.md) and implemented in `src/lib/notificationInbox.js` with isolated unit tests. It remains unwired because its inbox relation and mark-read RPC are not installed or integration-tested.
+
+Recipient selection is now explicitly fail-closed: no user is automatically selected until an approved roster/notification-duty assignment source exists; facility-wide fan-out to all receiving-staff profiles is not approved. See [NOTIFICATION_RECIPIENT_ELIGIBILITY.md](./NOTIFICATION_RECIPIENT_ELIGIBILITY.md). The existing acknowledgement-hook migration still contains broad fan-out and must remain unapplied.
