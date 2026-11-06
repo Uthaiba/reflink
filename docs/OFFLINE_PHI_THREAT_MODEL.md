@@ -83,6 +83,7 @@ Added `src/lib/offlineQueueCrypto.js` as a source-only cryptographic primitive. 
 - Generates non-extractable AES-256-GCM keys through Web Crypto.
 - Uses a fresh 96-bit IV for each encryption operation and a 128-bit authentication tag.
 - Authenticates the format version, owner user ID and offline client ID as additional authenticated data.
+- Requires the payload's `referring_user_id` to match the owner context before encryption and after decryption.
 - Rejects malformed envelopes, unsupported versions, extractable keys and invalid record context.
 - Normalizes decryption/authentication failures so callers do not receive low-level cryptographic details.
 
