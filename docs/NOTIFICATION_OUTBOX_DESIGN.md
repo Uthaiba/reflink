@@ -19,8 +19,13 @@ This stage establishes the database-side queue primitives required for reliable 
 - The worker settles only with the matching claim token. Retry delay is bounded to 1–3,600 seconds; the queue dead-letters after eight attempts.
 - Expired notifications are cancelled. A worker must independently re-check referral status, recipient role/facility assignment, contact eligibility and consent immediately before dispatch.
 - The attempt ledger records claim and outcome metadata without raw provider responses.
+- Expired, exhausted and reclaimed leases close their prior attempt-ledger rows before the queue item changes state.
 
 ## Database functions
+
+The implementation functions reside in the non-exposed `private` schema. Because PostgREST cannot invoke functions in a schema that is not exposed, the migration also defines three thin `public` RPC wrappers. These wrappers are `SECURITY INVOKER`, pin an empty search path, delegate to the private functions, and revoke execution from `PUBLIC`, `anon` and `authenticated`; only `service_role` receives execute permission. A trusted server-side worker can therefore call the public wrappers through Supabase RPC without exposing the private tables or functions to browser roles.
+
+
 
 | Function | Purpose |
 |---|---|
