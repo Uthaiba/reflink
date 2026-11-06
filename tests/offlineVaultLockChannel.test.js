@@ -12,6 +12,7 @@ function installFakeBroadcastChannel() {
       this.name = name;
       this.onmessage = null;
       this.closed = false;
+      this.sentMessages = [];
       instances.push(this);
     }
 
