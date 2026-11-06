@@ -101,9 +101,10 @@ export async function queueEncryptedReferral(payload, ownerUserId, key) {
   try {
     await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_QUEUE, "readwrite");
-      tx.objectStore(STORE_QUEUE).add(record);
+      const request = tx.objectStore(STORE_QUEUE).add(record);
+      request.onerror = () => reject(request.error || new Error("Unable to add the encrypted offline referral."));
       tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
+      tx.onerror = () => reject(tx.error || new Error("The encrypted offline referral transaction failed."));
       tx.onabort = () => reject(tx.error || new Error("Unable to save the encrypted offline referral."));
     });
   } finally { db.close(); }
