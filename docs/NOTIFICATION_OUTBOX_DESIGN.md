@@ -45,6 +45,14 @@ A successful provider acceptance is not proof that a recipient read or acted on 
 
 The queue is not a clinical escalation decision engine. It must not automatically decline, redirect or close referrals. An acknowledgement reminder cannot replace direct clinical escalation for an emergency.
 
+## Migration baseline verification blocker
+
+A read-only inspection of the linked Supabase project confirmed that the live schema contains the required referral and profile columns, and that the existing acknowledgement-deadline trigger runs before referral insert/update. It also confirmed existing referral status-validation and audit triggers.
+
+However, the Supabase migration ledger currently reports only version `20260928203447`. The repository branch contains subsequent remediation migrations `20261105000100` through `20261105000600`, plus this acknowledgement-hook migration. Those repository migrations are not recorded as applied in the linked project's ledger.
+
+**Do not apply migration `20261105000600` or `20261106000100` independently yet.** First reconcile the migration history and verify which SQL changes are already represented in the live schema. Applying the branch migrations out of sequence could conflict with existing functions, triggers, grants or policies. This verification was read-only; no database schema or migration history was changed.
+
 ## Required staging tests before migration approval
 
 - Verify the migration against the actual schema baseline and Supabase role grants.
