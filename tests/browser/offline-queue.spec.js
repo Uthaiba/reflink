@@ -94,3 +94,19 @@ test("two browser tabs cannot overwrite the same pending offline referral", asyn
   });
   await secondTab.close();
 });
+
+test("real browser queue reads remain isolated between two accounts", async ({ page }) => {
+  await page.goto(BASE_URL);
+  await page.waitForFunction(() => Boolean(window.offlineQueueBrowserTests));
+  await page.evaluate(() => window.offlineQueueBrowserTests.createVaultAndQueue());
+
+  const counts = await page.evaluate(() => window.offlineQueueBrowserTests.createSecondAccountQueueRecord());
+  expect(counts).toEqual({ accountA: 1, accountB: 1 });
+
+  const accountARecords = await page.evaluate(() => window.offlineQueueBrowserTests.unlockAfterReload());
+  expect(accountARecords).toMatchObject({
+    count: 1,
+    patientName: "Synthetic Browser Test Patient",
+    clientId: "browser-reload-test",
+  });
+});
