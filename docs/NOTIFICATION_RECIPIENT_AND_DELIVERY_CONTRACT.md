@@ -126,3 +126,7 @@ No worker or schedule is currently confirmed in the repository. Do not add produ
 **Design proposal only; implementation remains blocked.** The current SMS endpoint remains unchanged. Do not alter the outbox schema, add event triggers, implement a worker, send provider messages, apply migrations or modify production settings until recipient policy, inbox ownership, migration baseline and staging validation are approved.
 
 This notification system is workflow communication, not a clinical decision engine. It must not automatically decline, redirect or close referrals, and it cannot replace direct clinician-to-clinician escalation for emergencies.
+
+## Inbox schema and access detail
+
+The separate inbox relation, owner-only RLS, restricted read-state operation and recipient-eligibility audit are specified in [NOTIFICATION_INBOX_SCHEMA_AND_ACCESS_DESIGN.md](./NOTIFICATION_INBOX_SCHEMA_AND_ACCESS_DESIGN.md).
