@@ -123,3 +123,17 @@ The offline database schema is now version 3 and creates a separate `offline_key
 - The storage functions have unit coverage for envelope validation, but require real-browser IndexedDB tests for upgrade, persistence across reloads, blocked upgrades, multi-tab behaviour and interrupted writes before release.
 
 Do not represent the offline queue as encrypted or production-ready. The next integration step must add a deliberate unlock state, encrypt new queue writes, decrypt only for the authenticated owner, and implement an idempotent per-record migration that commits each ciphertext replacement atomically without losing pending referrals.
+
+
+## Encrypted queue API and per-record migration foundation — 6 November 2026
+
+Added encrypted queue operations to `src/lib/offlineReferralQueue.js`:
+- `queueEncryptedReferral(payload, ownerUserId, key)` encrypts before opening the IndexedDB write transaction and writes an envelope-only queue record. It has no plaintext fallback.
+- `decryptQueuedReferralRecord(record, ownerUserId, key)` checks record ownership, decrypts with the owner/client-ID context, and validates the decrypted referrer.
+- `migratePlaintextQueueToEncrypted(ownerUserId, key)` processes one record at a time. Web Crypto runs outside IndexedDB transactions; a short readwrite transaction re-reads the original record and replaces it only if its owner and serialized payload still match. A failed or interrupted item is left unchanged; already encrypted items are skipped, making retries idempotent.
+- `listDecryptedQueuedReferrals` provides a key-gated read path. `syncQueuedReferrals` now accepts an optional unlocked key and decrypts encrypted records before upload. Without a key, encrypted records fail closed and remain queued.
+- Added an explicit encrypted-record classifier and unit coverage that rejects records carrying both ciphertext and a plaintext payload field.
+
+**Critical integration boundary:** the current application still calls the legacy `queueReferral` API, which stores new offline referrals in plaintext. The automatic sync effect also has no vault-unlock UI/key session and therefore cannot sync encrypted records. This step adds the safe primitives and migration path but does not yet switch the production-facing submit flow. Do not claim the application queue is encrypted.
+
+The migration code is guarded against a same-record concurrent change by re-reading and comparing the plaintext payload in the commit transaction. Browser-level tests are still required for real IndexedDB transaction behaviour, database upgrades, multiple tabs, browser termination between encrypt and commit, and simultaneous migration attempts. A Web Crypto key passed to these APIs must come from the correct account's unlocked vault; this module does not itself authenticate a user or implement UI lock state.
