@@ -1920,6 +1920,10 @@ const handleSignIn = async () => {
       if (event === "SIGNED_OUT") {
         restoreSequence += 1;
         currentSessionUser = null;
+        setOfflineVaultKey(null);
+        setOfflineVaultOwner(null);
+        setOfflineVaultVisible(false);
+        setPendingOfflineReferral(null);
         setProfile(null);
         setRole(null);
         setDashboardView("overview");
@@ -2077,6 +2081,10 @@ const handleSignIn = async () => {
   setLoading(true);
 
   try {
+    setOfflineVaultKey(null);
+    setOfflineVaultOwner(null);
+    setOfflineVaultVisible(false);
+    setPendingOfflineReferral(null);
     await supabase.auth.signOut();
   } finally {
     setRole(null);
@@ -3581,9 +3589,15 @@ provisional_diagnosis: "",
           referring_user_id: session.user.id,
           status: "sent",
         };
-        await queueReferral(offlinePayload, session.user.id);
-        setMessage(`Saved offline. Referral ${offlinePayload.referral_number} will be sent automatically when connected.`);
-        setSavedReferralInfo({ referralNumber: offlinePayload.referral_number, patientIdentifier: form.patient_identifier });
+        if (offlineVaultKey && String(offlineVaultOwner) === String(session.user.id)) {
+          await queueEncryptedReferral(offlinePayload, session.user.id, offlineVaultKey);
+          setMessage(`Saved securely in the offline queue. Referral ${offlinePayload.referral_number} will sync when connected.`);
+          setSavedReferralInfo({ referralNumber: offlinePayload.referral_number, patientIdentifier: form.patient_identifier });
+        } else {
+          setPendingOfflineReferral(offlinePayload);
+          setOfflineVaultVisible(true);
+          setMessage("Unlock or create your offline vault to encrypt and save this referral. The referral has not yet been stored.");
+        }
         setLoading(false);
         return;
       }
