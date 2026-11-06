@@ -78,31 +78,12 @@ export function isEncryptedQueueRecord(record) {
   );
 }
 
-export async function queueReferral(payload, ownerUserId) {
-  if (!isValidQueueOwner(payload, ownerUserId)) {
-    throw new Error("The offline referral must belong to the currently authenticated user.");
-  }
-  const db = await openDb();
-  const record = {
-    client_id: payload.offline_client_id || createClientId(),
-    owner_user_id: String(ownerUserId),
-    created_at: payload.created_at || new Date().toISOString(),
-    payload: { ...payload },
-    sync_status: "pending",
-    queued_at: new Date().toISOString(),
-  };
-  try {
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_QUEUE, "readwrite");
-      tx.objectStore(STORE_QUEUE).put(record);
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error || new Error("Unable to save the offline referral."));
-    });
-  } finally {
-    db.close();
-  }
-  return record;
+/**
+ * @deprecated Use queueEncryptedReferral. Kept as a compatibility alias, but
+ * deliberately requires the vault key and never writes plaintext payloads.
+ */
+export async function queueReferral(payload, ownerUserId, key) {
+  return queueEncryptedReferral(payload, ownerUserId, key);
 }
 
 
@@ -120,7 +101,7 @@ export async function queueEncryptedReferral(payload, ownerUserId, key) {
   try {
     await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_QUEUE, "readwrite");
-      tx.objectStore(STORE_QUEUE).put(record);
+      tx.objectStore(STORE_QUEUE).add(record);
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error || new Error("Unable to save the encrypted offline referral."));
@@ -185,8 +166,10 @@ export async function listDecryptedQueuedReferrals(ownerUserId, key) {
   const records = await listQueuedReferrals(ownerUserId);
   const results = [];
   for (const record of records) {
-    if (record.payload_storage === "encrypted") results.push(await decryptQueuedReferralRecord(record, ownerUserId, key));
-    else if (record.payload && isValidQueueOwner(record.payload, ownerUserId)) results.push(record);
+    if (!isEncryptedQueueRecord(record)) {
+      throw new Error("A legacy offline referral must be encrypted before it can be read through this API.");
+    }
+    results.push(await decryptQueuedReferralRecord(record, ownerUserId, key));
   }
   return results;
 }
