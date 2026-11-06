@@ -176,6 +176,56 @@ test("outbox settlement validates the active lease and bounds retry delay", asyn
   assert.match(definition, /finished_at\s*=\s*v_finished_at/i);
 });
 
+test("outbox template keys escape the version separator as a literal dot", async () => {
+  const sql = await migration(
+    "20261105000600",
+    "notification_outbox_foundation",
+  );
+  assert.ok(sql.includes("template_key ~ '^[a-z0-9_]+\\.v[0-9]+
+  const sql = await migration(
+    "20261105000600",
+    "notification_outbox_foundation",
+  );
+  const tableDefinition = sql.slice(
+    sql.indexOf("create table if not exists private.notification_outbox"),
+    sql.indexOf("create index if not exists notification_outbox_ready_idx"),
+  );
+  assert.match(tableDefinition, /recipient_user_id uuid not null/i);
+  assert.match(tableDefinition, /referral_id uuid not null/i);
+  assert.doesNotMatch(tableDefinition, /message_body|phone_number|payload\s+jsonb/i);
+});
+
+test("reporting RPC migrations retain administrator checks and browser grant restrictions", async () => {
+  const files = [
+    ["20261105000100", "admin_aggregate_referral_volume"],
+    ["20261105000200", "admin_lga_referral_summary"],
+    ["20261105000300", "admin_facility_reporting_coverage"],
+    ["20261105000400", "admin_referral_pathway_intelligence"],
+    ["20261105000500", "admin_acknowledgement_delay_alerts"],
+  ];
+  for (const [version, suffix] of files) {
+    const sql = await migration(version, suffix);
+    assert.match(sql, /auth\.uid\(\)\s+is\s+null/i, `${version}: missing authenticated-user check`);
+    assert.match(sql, /public\.is_administrator\(\)/i, `${version}: missing administrator check`);
+    assert.match(sql, /revoke all on function[\s\S]*?from public/i, `${version}: missing PUBLIC revoke`);
+    assert.match(sql, /revoke all on function[\s\S]*?from anon/i, `${version}: missing anon revoke`);
+  }
+});
+
+test("counter-referral RPC enforces receiving role and destination facility", async () => {
+  const sql = await migration(
+    "20261105000100",
+    "admin_aggregate_referral_volume",
+  );
+  assert.match(sql, /v_role\s+is\s+distinct\s+from\s+'receiving_staff'/i);
+  assert.match(sql, /v_receiving_facility_id\s+is\s+distinct\s+from\s+v_facility_id/i);
+  assert.match(sql, /for update/i);
+  assert.match(sql, /grant execute on function public\.submit_counter_referral[\s\S]*?to authenticated/i);
+});
+"));
+  assert.ok(!sql.includes("\\\\.v"));
+});
+
 test("outbox schema excludes message bodies, phone numbers and arbitrary payload columns", async () => {
   const sql = await migration(
     "20261105000600",
