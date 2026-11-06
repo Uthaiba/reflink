@@ -219,3 +219,10 @@ The CI workflow installs the pinned Playwright runner as a temporary CI-only dep
 Extended the Chromium browser suite to open two same-origin tabs in one browser context, independently unlock the same synthetic account vault and attempt to persist a referral using the same offline client ID at the same time. The expected result is exactly one successful IndexedDB `add` and one duplicate-key rejection; the stored queue must contain exactly one encrypted record for that client ID, with no plaintext payload field. This validates the browser's actual IndexedDB uniqueness/transaction behaviour for this scenario. It does not validate the application's full React lock UI, all BroadcastChannel races, concurrent network sync or server-side idempotency.
 
 The scenario uses synthetic test account and patient values only. CI verification is pending for the exact branch head; do not treat it as passed until the Chromium workflow completes.
+
+
+## Phase 3.5 — real-browser account isolation (6 November 2026)
+
+Added a Chromium scenario that creates encrypted queue entries for two synthetic account owners in the same browser profile. It verifies that each owner's queue count is scoped to that owner and that unlocking account A decrypts only account A's referral. This tests the actual browser IndexedDB owner index and the application queue read API. It is not a security boundary against same-origin script execution, browser profile access or a malicious extension; server-side authorization remains essential.
+
+Exact-HEAD CI is pending. The scenario uses synthetic records only.
