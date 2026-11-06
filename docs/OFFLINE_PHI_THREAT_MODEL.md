@@ -178,3 +178,17 @@ The queue module no longer has a plaintext write path through its legacy API:
 - Added source-contract tests for these fail-closed behaviours.
 
 These changes remove accidental plaintext bypasses from the module's public API. They do not replace browser-level IndexedDB tests, server-side authorization, or clinical/security approval. Legacy plaintext records remain available to the explicit migration path and are not silently deleted.
+
+
+## Phase 3.2 — IndexedDB integration test harness (6 November 2026)
+
+Added `tests/offlineQueueIndexedDb.test.js` using `fake-indexeddb` 6.2.5, a Node-compatible IndexedDB implementation. The tests exercise the queue module against IndexedDB request/transaction semantics rather than source-code regular expressions. Coverage includes:
+- Database v2-to-v3 upgrade and legacy queue owner-index migration.
+- Ciphertext-only persistence and decrypted round-trip for a synthetic referral.
+- Account-scoped queue reads and wrong-account decryption rejection.
+- Legacy plaintext migration and idempotent repeat migration.
+- Duplicate `client_id` rejection without overwriting the original queued referral.
+- Wrapped vault-envelope persistence across database close/reopen.
+- Creation and coexistence of queue, cache and vault object stores.
+
+**Testing boundary:** `fake-indexeddb` is an in-memory implementation, not Chromium, Firefox or Safari. These tests do not prove browser storage persistence across process restarts, quota/eviction behaviour, real multi-tab locking, browser-specific transaction scheduling, device loss, or browser compatibility. Those still require a real-browser test matrix with synthetic data. Do not describe this test harness as end-to-end browser validation or clinical acceptance.
