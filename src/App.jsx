@@ -3265,7 +3265,7 @@ function InvestigationResultEditor({ item, onChange, onFileChange }) {
   );
 }
 
-function NewReferralForm({ onBack }) {
+function NewReferralForm({ onBack, offlineVaultKey, offlineVaultOwner, onRequestVault }) {
   const { t } = useLanguage();
 
   const [form, setForm] = useState({
@@ -3331,6 +3331,29 @@ provisional_diagnosis: "",
   const [selectedInvestigations, setSelectedInvestigations] = useState([]);
   const [printDraft, setPrintDraft] = useState(null);
   const [savedReferralInfo, setSavedReferralInfo] = useState(null);
+  const [pendingOfflineReferral, setPendingOfflineReferral] = useState(null);
+
+  useEffect(() => {
+    if (!pendingOfflineReferral || !offlineVaultKey
+      || String(pendingOfflineReferral.referring_user_id) !== String(offlineVaultOwner)) return undefined;
+    let active = true;
+    const persistPendingReferral = async () => {
+      try {
+        await queueEncryptedReferral(pendingOfflineReferral, offlineVaultOwner, offlineVaultKey);
+        if (!active) return;
+        setMessage(`Saved securely in the offline queue. Referral ${pendingOfflineReferral.referral_number} will sync when connected.`);
+        setSavedReferralInfo({
+          referralNumber: pendingOfflineReferral.referral_number,
+          patientIdentifier: pendingOfflineReferral.patient_identifier,
+        });
+        setPendingOfflineReferral(null);
+      } catch (queueError) {
+        if (active) setError(queueError?.message || "The referral could not be encrypted and saved. It has not been stored.");
+      }
+    };
+    persistPendingReferral();
+    return () => { active = false; };
+  }, [pendingOfflineReferral, offlineVaultKey, offlineVaultOwner]);
 
   useEffect(() => {
     loadFacilities();
@@ -3652,7 +3675,7 @@ provisional_diagnosis: "",
           setSavedReferralInfo({ referralNumber: offlinePayload.referral_number, patientIdentifier: form.patient_identifier });
         } else {
           setPendingOfflineReferral(offlinePayload);
-          setOfflineVaultVisible(true);
+          onRequestVault?.();
           setMessage("Unlock or create your offline vault to encrypt and save this referral. The referral has not yet been stored.");
         }
         setLoading(false);
