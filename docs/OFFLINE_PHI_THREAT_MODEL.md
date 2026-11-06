@@ -59,3 +59,19 @@ Do not describe the current offline mode as encrypted, secure on shared devices,
 - Security review and clinical governance approve the endpoint and recovery model.
 
 This document is a design baseline, not evidence that current offline storage meets these criteria.
+
+
+## Source-only hardening implemented (6 November 2026)
+
+The browser queue now records an explicit `owner_user_id` for each newly queued referral and creates an IndexedDB index for that field. Existing queue entries are migrated using their original `payload.referring_user_id` value. Queue listing and deletion require the matching owner; the application badge counts only the current session user's queue. This is a client-side separation measure, not an authorization boundary.
+
+Automatic sync now:
+- Requires an online browser and a successful `supabase.auth.getUser()` verification before reading the user's queue.
+- Processes only records whose stored owner and payload referrer match the verified user.
+- Constrains duplicate reconciliation queries by both `offline_client_id` and `referring_user_id`.
+- Rechecks the authenticated user before deleting a locally queued record after server reconciliation.
+- Prevents overlapping sync runs in the same JavaScript runtime.
+
+Static unit tests cover owner matching and reject unowned records. They do not prove IndexedDB isolation against same-origin script execution, cross-tab races, RLS correctness or server-side role/facility authorization. Those controls remain mandatory.
+
+**Still outstanding:** queue payloads remain plaintext in IndexedDB; no application-layer encryption or key lifecycle has been implemented. Logout does not yet implement a reviewed purge/recovery policy. Device encryption, screen locks, managed endpoints, XSS mitigation, server-side sync authorization and clinical retention policy remain release gates.
