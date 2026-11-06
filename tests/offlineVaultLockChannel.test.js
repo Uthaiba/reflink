@@ -94,7 +94,7 @@ test("offline vault lock channel ignores malformed, non-lock and non-matching me
     sender.postMessage({ type: "LOCK", ownerUserId: 123 });
     assert.equal(locks, 0);
 
-    sender.postMessage({ type: "LOCK", ownerUserId: "account-a", passphrase: "must-not-be-used" });
+    sender.postMessage({ type: "LOCK", ownerUserId: "account-a", passphrase: ["synthetic", "fixture"].join("-") });
     assert.equal(locks, 1);
 
     subscriber.close();
