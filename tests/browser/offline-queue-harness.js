@@ -1,10 +1,12 @@
 import { createOfflineKeyVault, unlockOfflineKeyVault } from "../../src/lib/offlineQueueKeyVault.js";
 import {
   getOfflineKeyVaultEnvelope,
+  claimQueuedReferral,
   getQueueCount,
   listDecryptedQueuedReferrals,
   migratePlaintextQueueToEncrypted,
   queueEncryptedReferral,
+  releaseQueuedReferralClaim,
   saveOfflineKeyVaultEnvelope,
 } from "../../src/lib/offlineReferralQueue.js";
 
@@ -105,6 +107,14 @@ window.offlineQueueBrowserTests = {
     };
   },
 
+  async claimQueueRecord(token) {
+    return claimQueuedReferral("browser-reload-test", TEST_OWNER, { token });
+  },
+
+  async releaseQueueClaim(token) {
+    return releaseQueuedReferralClaim("browser-reload-test", TEST_OWNER, token);
+  },
+
   async queueSameIdAfterUnlock(id) {
     const envelope = await getOfflineKeyVaultEnvelope(TEST_OWNER);
     if (!envelope) throw new Error("Test vault is not available.");
@@ -131,6 +141,7 @@ window.offlineQueueBrowserTests = {
           hasPlaintextPayload: Object.hasOwn(record, "payload"),
           encrypted: record.payload_storage === "encrypted",
           hasCiphertext: typeof record.payload_envelope?.ciphertext === "string",
+          hasActiveSyncClaim: Boolean(record.sync_claim?.token),
         })));
         read.onerror = () => reject(read.error);
       });
