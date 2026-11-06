@@ -39,7 +39,6 @@ The latest read-only Supabase security advisor reported:
 
 The advisor findings are not proof of exploitation. Remediation must preserve required referral operations and be verified with synthetic users representing each role and facility.
 
-
 ## Follow-on development safeguards
 
 - Disclosure-control unit tests are implemented in `tests/rphiDisclosure.test.js` and run through `npm test` in the quality workflow.
@@ -47,3 +46,7 @@ The advisor findings are not proof of exploitation. Remediation must preserve re
 - `docs/NOTIFICATION_OUTBOX_DESIGN.md` defines a durable server-side notification architecture. The current browser SMS request remains best-effort; no outbox schema or worker has been deployed.
 - The `is_administrator()` helper has 12 recorded policy dependency entries in the connected production catalog. Do not revoke authenticated execution until every policy and function dependency is mapped and tested.
 - The proposed aggregate RPC uses `public.is_administrator()`; its own grants, SECURITY DEFINER owner, dependency and behavior must be tested in non-production before release.
+
+## Reconciliation workstream
+
+The detailed source migration inventory, dependency graph, read-only evidence, object-level review requirements and non-production acceptance gates are maintained in [MIGRATION_RECONCILIATION_PLAN.md](./MIGRATION_RECONCILIATION_PLAN.md). The current decision is **blocked pending baseline reconciliation and synthetic-data staging verification**. Do not apply any of the seven November 2026 source migrations to production or manually advance the remote migration ledger.
