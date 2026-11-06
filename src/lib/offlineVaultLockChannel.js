@@ -24,11 +24,10 @@ export function createOfflineVaultLockChannel(ownerUserId, onLock) {
   };
 
   return {
-    broadcastLock(targetOwnerUserId = owner) {
-      if (targetOwnerUserId == null || String(targetOwnerUserId).length === 0) return false;
+    broadcastLock() {
       channel.postMessage({
         type: "LOCK",
-        ownerUserId: String(targetOwnerUserId),
+        ownerUserId: owner,
       });
       return true;
     },
