@@ -160,3 +160,10 @@ The PHC application now imports the vault and encrypted queue APIs and exposes a
 - Browser-level IndexedDB tests (schema upgrade, persistence/reload, migration interruption, multi-tab transactions, quota/eviction and browser compatibility) are not yet implemented. The existing automated tests cover cryptographic helpers, ownership/classification and static contracts, not full browser behaviour.
 - Offline encryption does not replace server-side RLS, role/facility authorization, revalidation at sync, endpoint disk encryption, screen locks, CSP/XSS controls or a clinically approved retention policy.
 - Do not treat this as production approval for shared or unmanaged devices. PR release gates and clinical/security sign-off remain mandatory.
+
+
+## Latest CI record — 6 November 2026
+
+The integrated application revision at commit `f4c29fa0da2c1af45c4a297d8cd002493cade0bf` passed the GitHub Actions quality workflow: automated unit tests, lint and production bundle build all completed successfully (run #234, `42173481598`). A subsequent one-line change passes the active unlocked vault key to the online pre-submit sync call (commit `46dc349998d0b5581fda2631fe18f86df5f24710`); exact-HEAD CI has not yet been reported for that final adjustment.
+
+Vercel Preview returned a build-rate-limit failure for this branch. This is a platform quota failure, so there is no successful Preview build for the integrated revision. The source has not been deployed to production.
