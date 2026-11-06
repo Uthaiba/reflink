@@ -1,7 +1,8 @@
 const DB_NAME = "reflink-offline";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_QUEUE = "referral_queue";
 const STORE_CACHE = "cache";
+const STORE_KEY_VAULT = "offline_key_vault";
 
 let activeSyncPromise = null;
 
@@ -36,6 +37,9 @@ function openDb() {
         };
       }
       if (!db.objectStoreNames.contains(STORE_CACHE)) db.createObjectStore(STORE_CACHE, { keyPath: "key" });
+      if (!db.objectStoreNames.contains(STORE_KEY_VAULT)) {
+        db.createObjectStore(STORE_KEY_VAULT, { keyPath: "owner_user_id" });
+      }
     };
     request.onsuccess = () => {
       const db = request.result;
@@ -124,6 +128,107 @@ export async function removeQueuedReferral(clientId, ownerUserId) {
       tx.oncomplete = () => resolve(removed);
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error || new Error("Unable to update the offline queue."));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+
+/**
+ * Validate the public envelope shape before it is persisted. This store must
+ * contain only the passphrase-wrapped envelope, never a passphrase or raw key.
+ */
+export function isValidOfflineVaultEnvelope(envelope, ownerUserId) {
+  const owner = String(ownerUserId ?? "").trim();
+  return Boolean(
+    owner
+    && envelope
+    && typeof envelope === "object"
+    && !Array.isArray(envelope)
+    && envelope.version === 1
+    && envelope.owner_user_id === owner
+    && envelope.kdf === "PBKDF2"
+    && envelope.hash === "SHA-256"
+    && envelope.iterations === 600000
+    && envelope.algorithm === "AES-GCM"
+    && envelope.key_length === 256
+    && typeof envelope.salt === "string"
+    && /^[0-9a-f]{32}$/i.test(envelope.salt)
+    && typeof envelope.iv === "string"
+    && /^[0-9a-f]{24}$/i.test(envelope.iv)
+    && typeof envelope.wrapped_key === "string"
+    && /^[0-9a-f]{96}$/i.test(envelope.wrapped_key)
+  );
+}
+
+/**
+ * Persist only a passphrase-wrapped key envelope, scoped to its account.
+ * This does not persist the active CryptoKey or enable encrypted queue use.
+ */
+export async function saveOfflineKeyVaultEnvelope(envelope, ownerUserId) {
+  if (!isValidOfflineVaultEnvelope(envelope, ownerUserId)) {
+    throw new Error("A valid offline key vault envelope for this account is required.");
+  }
+  const db = await openDb();
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_KEY_VAULT, "readwrite");
+      tx.objectStore(STORE_KEY_VAULT).put({ ...envelope, owner_user_id: String(ownerUserId) });
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error("Unable to save the offline key vault."));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** Read the wrapped envelope for one authenticated account only. */
+export async function getOfflineKeyVaultEnvelope(ownerUserId) {
+  if (!ownerUserId) return null;
+  const owner = String(ownerUserId);
+  const db = await openDb();
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_KEY_VAULT, "readonly");
+      const request = tx.objectStore(STORE_KEY_VAULT).get(owner);
+      request.onsuccess = () => {
+        const envelope = request.result ?? null;
+        resolve(isValidOfflineVaultEnvelope(envelope, owner) ? envelope : null);
+      };
+      request.onerror = () => reject(request.error);
+      tx.onabort = () => reject(tx.error || new Error("Unable to read the offline key vault."));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Delete only the specified account's wrapped envelope. This deliberately
+ * does not delete queued referrals; callers must never use it as logout cleanup.
+ */
+export async function deleteOfflineKeyVaultEnvelope(ownerUserId) {
+  if (!ownerUserId) return false;
+  const owner = String(ownerUserId);
+  const db = await openDb();
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_KEY_VAULT, "readwrite");
+      const store = tx.objectStore(STORE_KEY_VAULT);
+      const request = store.get(owner);
+      let existed = false;
+      request.onsuccess = () => {
+        if (request.result?.owner_user_id === owner) {
+          store.delete(owner);
+          existed = true;
+        }
+      };
+      request.onerror = () => reject(request.error);
+      tx.oncomplete = () => resolve(existed);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error("Unable to delete the offline key vault."));
     });
   } finally {
     db.close();
