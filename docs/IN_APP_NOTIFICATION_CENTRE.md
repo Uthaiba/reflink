@@ -57,3 +57,7 @@ Delivery status in the outbox and user read state in the inbox are separate conc
 ## 6. Current limitations
 
 This is an isolated UI component and model-helper implementation only. It is not mounted in the application, does not have a live data source, does not mark anything read, and does not send messages. Do not connect it to production until migration baseline reconciliation and synthetic-data staging validation are complete.
+
+## Related backend security design
+
+The proposed inbox schema, owner-only RLS, mark-read contract, recipient eligibility blockers and release gates are documented in [NOTIFICATION_INBOX_SCHEMA_AND_ACCESS_DESIGN.md](./NOTIFICATION_INBOX_SCHEMA_AND_ACCESS_DESIGN.md).
