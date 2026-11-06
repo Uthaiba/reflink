@@ -65,6 +65,19 @@ export function isQueueRecordOwnedBy(record, userId) {
   return Boolean(userId && record?.owner_user_id && String(record.owner_user_id) === String(userId));
 }
 
+export function isEncryptedQueueRecord(record) {
+  return Boolean(
+    record
+    && record.payload_storage === "encrypted"
+    && record.payload_envelope
+    && record.payload_envelope.version === 1
+    && record.payload_envelope.algorithm === "AES-GCM"
+    && typeof record.payload_envelope.iv === "string"
+    && typeof record.payload_envelope.ciphertext === "string"
+    && !Object.prototype.hasOwnProperty.call(record, "payload")
+  );
+}
+
 export async function queueReferral(payload, ownerUserId) {
   if (!isValidQueueOwner(payload, ownerUserId)) {
     throw new Error("The offline referral must belong to the currently authenticated user.");
