@@ -458,10 +458,11 @@ async function syncOwnedQueue(supabaseClient, userId, key) {
   let synced = 0;
   let failed = 0;
   for (const storedItem of queued) {
-    const claimToken = await claimQueuedReferral(storedItem.client_id, userId);
-    if (!claimToken) continue;
+    let claimToken = null;
     let item = storedItem;
     try {
+      claimToken = await claimQueuedReferral(storedItem.client_id, userId);
+      if (!claimToken) continue;
       if (!isEncryptedQueueRecord(storedItem)) { failed += 1; await releaseQueuedReferralClaim(storedItem.client_id, userId, claimToken); continue; }
       item = await decryptQueuedReferralRecord(storedItem, userId, key);
       if (!isQueueRecordOwnedBy(item, userId) || !isValidQueueOwner(item.payload, userId)) { failed += 1; continue; }
@@ -534,7 +535,7 @@ async function syncOwnedQueue(supabaseClient, userId, key) {
       else failed += 1;
     } catch {
       failed += 1;
-      try { await releaseQueuedReferralClaim(storedItem.client_id, userId, claimToken); } catch {
+      try { if (claimToken) await releaseQueuedReferralClaim(storedItem.client_id, userId, claimToken); } catch {
         // An expired/replaced claim must not be cleared by this stale worker.
       }
     }
