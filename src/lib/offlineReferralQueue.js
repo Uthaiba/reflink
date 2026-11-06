@@ -193,8 +193,93 @@ export async function listQueuedReferrals(ownerUserId) {
   }
 }
 
-export async function removeQueuedReferral(clientId, ownerUserId) {
-  if (!clientId || !ownerUserId) return false;
+/**
+ * Atomically claim one owner-scoped queue record for sync. IndexedDB serializes
+ * readwrite transactions for this object store across same-origin tabs.
+ * Claims contain no referral payload or patient information.
+ */
+export async function claimQueuedReferral(clientId, ownerUserId, {
+  leaseMs = 5 * 60 * 1000,
+  now = Date.now(),
+  token = createClientId(),
+} = {}) {
+  if (!clientId || !ownerUserId || !token || !Number.isFinite(leaseMs) || leaseMs <= 0) return null;
+  const owner = String(ownerUserId);
+  const db = await openDb();
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_QUEUE, "readwrite");
+      const store = tx.objectStore(STORE_QUEUE);
+      const request = store.get(clientId);
+      let claimed = false;
+      request.onsuccess = () => {
+        const record = request.result;
+        if (!isQueueRecordOwnedBy(record, owner)) return;
+        const currentClaim = record.sync_claim;
+        const claimIsActive = currentClaim
+          && currentClaim.owner_user_id === owner
+          && Number.isFinite(currentClaim.expires_at)
+          && currentClaim.expires_at > now;
+        if (claimIsActive) return;
+        store.put({
+          ...record,
+          sync_claim: {
+            owner_user_id: owner,
+            token: String(token),
+            expires_at: now + leaseMs,
+          },
+        });
+        claimed = true;
+      };
+      request.onerror = () => reject(request.error);
+      tx.oncomplete = () => resolve(claimed ? String(token) : null);
+      tx.onerror = () => reject(tx.error || new Error("Unable to claim the offline referral."));
+      tx.onabort = () => reject(tx.error || new Error("Unable to claim the offline referral."));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** Clear a claim only when the caller still owns its fencing token. */
+export async function releaseQueuedReferralClaim(clientId, ownerUserId, claimToken) {
+  if (!clientId || !ownerUserId || !claimToken) return false;
+  const owner = String(ownerUserId);
+  const db = await openDb();
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_QUEUE, "readwrite");
+      const store = tx.objectStore(STORE_QUEUE);
+      const request = store.get(clientId);
+      let released = false;
+      request.onsuccess = () => {
+        const record = request.result;
+        if (isQueueRecordOwnedBy(record, owner)
+          && record.sync_claim?.owner_user_id === owner
+          && record.sync_claim?.token === String(claimToken)) {
+          const next = { ...record };
+          delete next.sync_claim;
+          store.put(next);
+          released = true;
+        }
+      };
+      request.onerror = () => reject(request.error);
+      tx.oncomplete = () => resolve(released);
+      tx.onerror = () => reject(tx.error || new Error("Unable to release the offline referral claim."));
+      tx.onabort = () => reject(tx.error || new Error("Unable to release the offline referral claim."));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Remove a synced record only if the caller still holds its current claim.
+ * The token fences out stale workers after a lease expires and is reclaimed.
+ */
+export async function removeQueuedReferral(clientId, ownerUserId, claimToken) {
+  if (!clientId || !ownerUserId || !claimToken) return false;
+  const owner = String(ownerUserId);
   const db = await openDb();
   try {
     return await new Promise((resolve, reject) => {
@@ -203,14 +288,17 @@ export async function removeQueuedReferral(clientId, ownerUserId) {
       const request = store.get(clientId);
       let removed = false;
       request.onsuccess = () => {
-        if (isQueueRecordOwnedBy(request.result, ownerUserId)) {
+        const record = request.result;
+        if (isQueueRecordOwnedBy(record, owner)
+          && record.sync_claim?.owner_user_id === owner
+          && record.sync_claim?.token === String(claimToken)) {
           store.delete(clientId);
           removed = true;
         }
       };
       request.onerror = () => reject(request.error);
       tx.oncomplete = () => resolve(removed);
-      tx.onerror = () => reject(tx.error);
+      tx.onerror = () => reject(tx.error || new Error("Unable to update the offline queue."));
       tx.onabort = () => reject(tx.error || new Error("Unable to update the offline queue."));
     });
   } finally {
@@ -370,9 +458,11 @@ async function syncOwnedQueue(supabaseClient, userId, key) {
   let synced = 0;
   let failed = 0;
   for (const storedItem of queued) {
+    const claimToken = await claimQueuedReferral(storedItem.client_id, userId);
+    if (!claimToken) continue;
     let item = storedItem;
     try {
-      if (!isEncryptedQueueRecord(storedItem)) { failed += 1; continue; }
+      if (!isEncryptedQueueRecord(storedItem)) { failed += 1; await releaseQueuedReferralClaim(storedItem.client_id, userId, claimToken); continue; }
       item = await decryptQueuedReferralRecord(storedItem, userId, key);
       if (!isQueueRecordOwnedBy(item, userId) || !isValidQueueOwner(item.payload, userId)) { failed += 1; continue; }
       const { data: existing, error: lookupError } = await supabaseClient
@@ -439,10 +529,14 @@ async function syncOwnedQueue(supabaseClient, userId, key) {
           // Notification delivery has a separate server-side reliability design.
         }
       }
-      await removeQueuedReferral(item.client_id, userId);
-      synced += 1;
+      const removed = await removeQueuedReferral(item.client_id, userId, claimToken);
+      if (removed) synced += 1;
+      else failed += 1;
     } catch {
       failed += 1;
+      try { await releaseQueuedReferralClaim(storedItem.client_id, userId, claimToken); } catch {
+        // An expired/replaced claim must not be cleared by this stale worker.
+      }
     }
   }
   return { synced, failed, skipped: false };
