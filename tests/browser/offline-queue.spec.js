@@ -113,3 +113,34 @@ test("real browser queue reads remain isolated between two accounts", async ({ p
     clientId: "browser-reload-test",
   });
 });
+
+test("offline vault lock events coordinate across tabs without crossing account boundaries", async ({ page, context }) => {
+  await page.goto(BASE_URL);
+  await page.waitForFunction(() => Boolean(window.offlineQueueBrowserTests));
+  const secondTab = await context.newPage();
+  await secondTab.goto(BASE_URL);
+  await secondTab.waitForFunction(() => Boolean(window.offlineQueueBrowserTests));
+
+  const subscribe = async (targetPage, owner) => targetPage.evaluate(async (accountOwner) => {
+    const { createOfflineVaultLockChannel } = await import("/src/lib/offlineVaultLockChannel.js");
+    window.__vaultLockCount = 0;
+    window.__vaultLockChannel = createOfflineVaultLockChannel(accountOwner, () => {
+      window.__vaultLockCount += 1;
+    });
+  }, owner);
+
+  await subscribe(page, "browser-test-account-a");
+  await subscribe(secondTab, "browser-test-account-b");
+
+  await page.evaluate(() => window.__vaultLockChannel.broadcastLock("browser-test-account-b"));
+  await expect.poll(() => secondTab.evaluate(() => window.__vaultLockCount)).toBe(1);
+  expect(await page.evaluate(() => window.__vaultLockCount)).toBe(0);
+
+  await secondTab.evaluate(() => window.__vaultLockChannel.broadcastLock("browser-test-account-a"));
+  await expect.poll(() => page.evaluate(() => window.__vaultLockCount)).toBe(1);
+  expect(await secondTab.evaluate(() => window.__vaultLockCount)).toBe(1);
+
+  await page.evaluate(() => window.__vaultLockChannel.close());
+  await secondTab.evaluate(() => window.__vaultLockChannel.close());
+  await secondTab.close();
+});
