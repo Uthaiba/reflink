@@ -109,3 +109,17 @@ Added `tests/offlineQueueKeyVault.test.js` for vault creation, correct unlock, w
 **Not yet integrated with IndexedDB or the referral queue:** the vault envelope is not persisted by the application, no UI prompts for a passphrase, and the returned CryptoKey is not connected to queue reads/writes. Existing queue payloads remain plaintext. There is no recovery mechanism if the passphrase is lost; losing it makes wrapped key material and any data encrypted by it unrecoverable. A reset must never silently discard pending referrals.
 
 Before production integration, approve a passphrase/recovery policy, device and session threat model, rate-limiting/lockout approach, cross-tab coordination, account-disablement behaviour, key rotation workflow and unsynced-record recovery. A passphrase-derived wrapping key does not protect against malicious same-origin JavaScript while the vault is unlocked.
+
+
+## IndexedDB key-vault envelope persistence — 6 November 2026
+
+The offline database schema is now version 3 and creates a separate `offline_key_vault` object store keyed by `owner_user_id`. The queue module exposes account-scoped functions to save, retrieve and explicitly delete the wrapped vault envelope. Before saving, it validates the expected PBKDF2/AES-GCM envelope fields, owner binding, fixed cryptographic parameters and encoded field lengths; unexpected fields (including passphrases) are rejected. The active non-extractable CryptoKey is never written to IndexedDB by these functions.
+
+**Scope and limitations:**
+- This is persistence for the wrapped envelope only. It does not yet create or unlock a vault automatically, retain a CryptoKey across reloads, or add passphrase UI.
+- Existing referral queue payloads remain plaintext. The current `queueReferral`, `listQueuedReferrals` and `syncQueuedReferrals` behaviour has not been switched to encryption.
+- No existing referral records are rewritten or deleted by the version 3 database upgrade. The upgrade adds the separate vault store; queue ownership migration remains unchanged.
+- Logout does not delete the vault or queued referrals. The delete API is explicit and must not be used as a logout side effect.
+- The storage functions have unit coverage for envelope validation, but require real-browser IndexedDB tests for upgrade, persistence across reloads, blocked upgrades, multi-tab behaviour and interrupted writes before release.
+
+Do not represent the offline queue as encrypted or production-ready. The next integration step must add a deliberate unlock state, encrypt new queue writes, decrypt only for the authenticated owner, and implement an idempotent per-record migration that commits each ciphertext replacement atomically without losing pending referrals.
