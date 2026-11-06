@@ -61,7 +61,7 @@ test("each encryption operation generates a fresh IV", async () => {
     cryptoProvider,
   };
 
-  const first = await encryptOfflineReferralPayload({ value: "same" }, options);
+  const first = await encryptOfflineReferralPayload({ referring_user_id: "user-123", value: "same" }, options);
   const second = await encryptOfflineReferralPayload({ value: "same" }, options);
 
   assert.notEqual(first.iv, second.iv);
@@ -105,7 +105,7 @@ test("tampered ciphertext and a different key are rejected", async () => {
   const key = await createOfflineQueueCryptoKey(cryptoProvider);
   const otherKey = await createOfflineQueueCryptoKey(cryptoProvider);
   const envelope = await encryptOfflineReferralPayload(
-    { urgency: "emergency" },
+    { referring_user_id: "user-123", urgency: "emergency" },
     {
       key,
       ownerUserId: "user-123",
@@ -154,7 +154,7 @@ test("malformed envelopes, unsupported versions and invalid payloads are rejecte
     /payload must be an object/,
   );
   await assert.rejects(
-    encryptOfflineReferralPayload({ value: true }, { ...options, ownerUserId: "" }),
+    encryptOfflineReferralPayload({ referring_user_id: "user-123", value: true }, { ...options, ownerUserId: "" }),
     /valid owner and offline referral ID/,
   );
   await assert.rejects(
@@ -181,7 +181,7 @@ test("extractable AES keys are rejected by the offline queue encryption API", as
 
   await assert.rejects(
     encryptOfflineReferralPayload(
-      { urgency: "routine" },
+      { referring_user_id: "user-123", urgency: "routine" },
       {
         key: extractableKey,
         ownerUserId: "user-123",
@@ -190,5 +190,20 @@ test("extractable AES keys are rejected by the offline queue encryption API", as
       },
     ),
     /non-extractable AES-256-GCM key/,
+  );
+});
+
+test("payload owner must match the encryption owner", async () => {
+  const key = await createOfflineQueueCryptoKey(cryptoProvider);
+  const options = {
+    key,
+    ownerUserId: "user-123",
+    clientId: "offline-abc",
+    cryptoProvider,
+  };
+
+  await assert.rejects(
+    encryptOfflineReferralPayload({ referring_user_id: "user-456", urgency: "routine" }, options),
+    /payload owner must match/,
   );
 });
