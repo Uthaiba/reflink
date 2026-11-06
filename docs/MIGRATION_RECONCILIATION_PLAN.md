@@ -92,3 +92,10 @@ The dependency graph expresses source intent only. It is not an execution plan. 
 Safe work that may continue on the source branch includes documentation, static review and tests that do not connect to or mutate Supabase. The following remain prohibited without separate explicit approval: production migration application, migration-ledger edits, schema changes, RLS/grant/function changes, Edge Function deployment, worker scheduling, provider dispatch, and production release.
 
 No patient-level data was queried for this review. No database or Auth settings were changed.
+
+
+## 7. Static preflight coverage
+
+The repository now includes `tests/migrationGovernance.test.js`. It statically checks the seven migration versions, the explicit outbox-to-hook dependency, stored acknowledgement deadline and in-app-only queue behavior, service-role-only outbox function grants, administrator checks for reporting RPCs, and receiving-role/facility checks for counter-referral completion.
+
+These tests are not a SQL parser and do not compile or execute the migrations. A passing result is not evidence that the SQL applies cleanly or that PostgreSQL privileges/triggers behave correctly. Disposable-database validation remains mandatory.
