@@ -225,3 +225,44 @@ test("counter-referral RPC enforces receiving role and destination facility", as
   assert.match(sql, /for update/i);
   assert.match(sql, /grant execute on function public\.submit_counter_referral[\s\S]*?to authenticated/i);
 });
+
+
+test("notification recipient policy fails closed until an authoritative assignment source is approved", async () => {
+  const policy = await readFile(
+    new URL("../docs/NOTIFICATION_RECIPIENT_ELIGIBILITY.md", import.meta.url),
+    "utf8",
+  );
+  const hook = await migration(
+    "20261106000100",
+    "referral_acknowledgement_notification_hooks",
+  );
+
+  assert.match(policy, /no automatic user recipient is selected/i);
+  assert.match(policy, /Facility-wide recipient fan-out is not approved/i);
+  assert.match(policy, /must remain unapplied/i);
+  // The old proposal still has broad role/facility selection. This test makes
+  // the policy/migration mismatch visible so nobody mistakes it for approval.
+  assert.match(hook, /p\.role\s*=\s*'receiving_staff'/i);
+  assert.match(hook, /p\.facility_id\s*=\s*new\.receiving_facility_id/i);
+});
+
+test("authenticated notification inbox adapter stays owner-scoped and mutation-limited", async () => {
+  const adapter = await readFile(
+    new URL("../src/lib/notificationInbox.js", import.meta.url),
+    "utf8",
+  );
+  const contract = await readFile(
+    new URL("../docs/NOTIFICATION_INBOX_ADAPTER.md", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(adapter, /auth\.getUser\(\)/);
+  assert.match(adapter, /\.eq\("recipient_user_id",\s*userId\)/);
+  assert.match(adapter, /\.select\(NOTIFICATION_COLUMNS\)/);
+  assert.match(adapter, /ALLOWED_EVENT_TYPES/);
+  assert.match(adapter, /ALLOWED_TEMPLATE_KEYS/);
+  assert.match(adapter, /mark_notification_read/);
+  assert.doesNotMatch(adapter, /\.insert\(|\.update\(|\.delete\(/i);
+  assert.match(contract, /not mounted in the application/i);
+  assert.match(contract, /RLS remains the actual security boundary/i);
+});
