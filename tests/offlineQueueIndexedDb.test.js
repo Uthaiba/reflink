@@ -212,3 +212,29 @@ test("failed legacy encryption leaves the original queued record intact", async 
   assert.equal(stored.payload.patient_name, "Synthetic Test Patient");
   assert.equal(stored.payload_storage, undefined);
 });
+
+test("concurrent migration callers atomically replace a legacy record only once", async () => {
+  await seedVersionTwoPlaintextQueue({
+    client_id: "legacy-concurrent",
+    owner_user_id: "user-a",
+    created_at: "2026-11-06T10:00:00.000Z",
+    payload: referral("user-a", "legacy-concurrent"),
+    sync_status: "pending",
+    queued_at: "2026-11-06T10:00:00.000Z",
+  });
+
+  const key = await createOfflineQueueCryptoKey();
+  const results = await Promise.all([
+    migratePlaintextQueueToEncrypted("user-a", key),
+    migratePlaintextQueueToEncrypted("user-a", key),
+  ]);
+
+  assert.equal(results.reduce((total, result) => total + result.migrated, 0), 1);
+  assert.equal(results.reduce((total, result) => total + result.failed, 0), 0);
+  const stored = await readAllQueueRecords();
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].payload_storage, "encrypted");
+  assert.equal(Object.hasOwn(stored[0], "payload"), false);
+  const [decrypted] = await listDecryptedQueuedReferrals("user-a", key);
+  assert.equal(decrypted.payload.patient_name, "Synthetic Test Patient");
+});
