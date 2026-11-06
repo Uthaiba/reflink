@@ -2,6 +2,17 @@ const NOTIFICATION_COLUMNS = "id,event_type,template_key,referral_id,created_at,
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 50;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/;
+const ALLOWED_EVENT_TYPES = new Set([
+  "referral_sent",
+  "referral_acknowledged",
+  "referral_acknowledgement_due",
+]);
+const ALLOWED_TEMPLATE_KEYS = new Set([
+  "referral_sent.v1",
+  "referral_acknowledged.v1",
+  "referral_ack_due.v1",
+]);
 
 const ERROR_MESSAGES = Object.freeze({
   AUTH_REQUIRED: "Sign in again to view your notifications.",
@@ -40,6 +51,7 @@ function normalizeCursor(before) {
   if (
     typeof before !== "object"
     || typeof before.createdAt !== "string"
+    || !TIMESTAMP_PATTERN.test(before.createdAt)
     || typeof before.id !== "string"
     || !UUID_PATTERN.test(before.id)
   ) {
@@ -51,8 +63,10 @@ function normalizeCursor(before) {
     throw new NotificationInboxError("INVALID_INPUT");
   }
 
+  // Preserve PostgreSQL timestamp precision (up to microseconds). Converting
+  // through Date#toISOString would truncate sub-millisecond cursor precision.
   return {
-    createdAt: timestamp.toISOString(),
+    createdAt: before.createdAt,
     id: before.id.toLowerCase(),
   };
 }
@@ -65,6 +79,7 @@ function normalizeNotification(row) {
     || typeof row.event_type !== "string"
     || typeof row.template_key !== "string"
     || typeof row.created_at !== "string"
+    || !TIMESTAMP_PATTERN.test(row.created_at)
     || Number.isNaN(new Date(row.created_at).getTime())
     || (row.read_at != null && (
       typeof row.read_at !== "string"
@@ -76,8 +91,8 @@ function normalizeNotification(row) {
 
   return {
     id: row.id,
-    event_type: row.event_type,
-    template_key: row.template_key,
+    event_type: ALLOWED_EVENT_TYPES.has(row.event_type) ? row.event_type : "unknown",
+    template_key: ALLOWED_TEMPLATE_KEYS.has(row.template_key) ? row.template_key : "unknown.v1",
     referral_id: typeof row.referral_id === "string" && UUID_PATTERN.test(row.referral_id)
       ? row.referral_id
       : null,
