@@ -182,3 +182,23 @@ The baseline is not ready to reconstruct from the current seven proposal files. 
 Do not generate a squash/baseline migration from the current catalog summaries. The baseline must be reviewed against the exact live schema and then replayed only in a disposable synthetic-data environment. Preserve production as read-only until that package has passed staging validation and separate release approval.
 
 **Current decision remains blocked:** the single recorded migration has no corresponding source SQL in this branch, and all 16 live public routines are outside the tracked migration history. No migration replay, ledger reconciliation or schema mutation is authorized by this metadata export.
+
+
+## 11. Supabase security advisor snapshot — 7 November 2026
+
+A read-only security-advisor run returned the following findings:
+
+| Finding | Level | Count | Interpretation |
+|---|---|---:|---|
+| RLS enabled, no policy | INFO | 2 | `public.referral_events` and `public.referral_feedback` have RLS enabled and no policies. Ordinary API access is fail-closed; intended workflows must be defined before adding policies. |
+| Authenticated SECURITY DEFINER executable | WARN | 5 | The five legacy RPCs in the privileged-RPC review are executable by authenticated. They have internal authorization checks and anon EXECUTE is false; the warning requires direct-RPC tests and careful review, not blind revocation. |
+| Leaked password protection disabled | WARN | 1 | Supabase Auth leaked-password protection is disabled. Enabling it is an Auth configuration change and remains outside this read-only review. |
+
+The `profiles_role_check` constraint was also exported and restricts role values to exactly `phc_staff`, `receiving_staff`, and `administrator`. This establishes canonical role strings at the database constraint layer and resolves the immediate concern that case/whitespace variants could be stored through ordinary writes. Do not remove or weaken this constraint without an explicit role migration plan.
+
+Advisor remediation references:
+- [RLS enabled with no policies](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
+- [Authenticated SECURITY DEFINER function executable](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)
+- [Leaked password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
+
+No advisor finding was modified. No policy, grant, Auth setting, function, migration or table was changed.
