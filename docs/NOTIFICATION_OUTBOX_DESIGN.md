@@ -119,3 +119,11 @@ The separate user-facing inbox, ownership policy, restricted mark-read operation
 The source-level authenticated inbox adapter is documented in [NOTIFICATION_INBOX_ADAPTER.md](./NOTIFICATION_INBOX_ADAPTER.md) and implemented in `src/lib/notificationInbox.js` with isolated unit tests. It remains unwired because its inbox relation and mark-read RPC are not installed or integration-tested.
 
 Recipient selection is now explicitly fail-closed: no user is automatically selected until an approved roster/notification-duty assignment source exists; facility-wide fan-out to all receiving-staff profiles is not approved. See [NOTIFICATION_RECIPIENT_ELIGIBILITY.md](./NOTIFICATION_RECIPIENT_ELIGIBILITY.md). The existing acknowledgement-hook migration still contains broad fan-out and must remain unapplied.
+
+
+## Additional concurrency and idempotency review — 7 November 2026
+
+- Enqueue idempotency now compares the complete persisted event identity, including `expires_at`. Reusing an `event_key` with a different expiry is treated as conflicting metadata rather than silently returning the earlier row.
+- Queue lease cleanup and referral-trigger cancellation now lock matching outbox rows before touching attempt-ledger rows. Worker settlement already locks the outbox row before updating its attempt record; the consistent outbox-then-attempt order reduces deadlock risk during simultaneous settlement, expiry, lease reclamation and referral lifecycle changes.
+- The acknowledgement trigger now uses a row-level `WHEN` predicate so an UPDATE statement that names lifecycle columns but leaves their values unchanged does not cancel valid reminder work.
+- Static migration-governance tests cover these source contracts. They do not replace PostgreSQL concurrency tests; the migrations remain unapplied and these lock-order assumptions still require synthetic-data database validation.
