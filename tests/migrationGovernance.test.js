@@ -332,3 +332,64 @@ test("authenticated notification inbox adapter stays owner-scoped and mutation-l
   assert.match(contract, /not mounted in the application/i);
   assert.match(contract, /RLS remains the actual security boundary/i);
 });
+
+test("legacy privileged RPC source gaps and helper dependencies remain explicit release blockers", async () => {
+  const files = await readdir(migrationDirectory);
+  const sqlFiles = files.filter((file) => file.endsWith(".sql"));
+  const sql = (await Promise.all(sqlFiles.map((file) =>
+    readFile(new URL(file, migrationDirectory), "utf8"),
+  ))).join("\n");
+  for (const name of [
+    "get_facility_user_count",
+    "get_facility_user_counts",
+    "is_administrator",
+    "log_referral_print",
+    "log_referral_read",
+  ]) {
+    assert.doesNotMatch(
+      sql,
+      new RegExp(`create\\s+(?:or\\s+replace\\s+)?function\\s+public\\.${name}\\s*\\(`, "i"),
+      `Legacy function source must not be fabricated from catalog summaries: ${name}`,
+    );
+  }
+  const review = await readFile(
+    new URL("../docs/PRIVILEGED_RPC_SOURCE_RECONCILIATION.md", import.meta.url),
+    "utf8",
+  );
+  assert.match(review, /five existing SECURITY DEFINER functions/i);
+  assert.match(review, /12 policy dependency entries/i);
+  assert.match(review, /exact live function definitions/i);
+  assert.match(review, /cross-RPC, cross-period and cross-filter disclosure tests/i);
+  assert.match(review, /Blocked: exact legacy function source/i);
+});
+
+test("reporting SECURITY DEFINER RPCs pin search_path and require the administrator helper", async () => {
+  const files = [
+    ["20261105000100", "admin_aggregate_referral_volume"],
+    ["20261105000200", "admin_lga_referral_summary"],
+    ["20261105000300", "admin_facility_reporting_coverage"],
+    ["20261105000400", "admin_referral_pathway_intelligence"],
+    ["20261105000500", "admin_acknowledgement_delay_alerts"],
+  ];
+  for (const [version, suffix] of files) {
+    const sql = await migration(version, suffix);
+    assert.match(sql, /security definer/i);
+    assert.match(sql, /set search_path\\s*=\\s*''/i);
+    assert.match(sql, /auth\\.uid\\(\\)\\s+is\\s+null/i);
+    assert.match(sql, /public\\.is_administrator\\(\\)/i);
+  }
+});
+
+test("facility coverage documentation identifies current-registry versus historical-activity semantics", async () => {
+  const review = await readFile(
+    new URL("../docs/PRIVILEGED_RPC_SOURCE_RECONCILIATION.md", import.meta.url),
+    "utf8",
+  );
+  assert.match(review, /current-registry classification against a historical activity window/i);
+  const sql = await migration(
+    "20261105000300",
+    "admin_facility_reporting_coverage",
+  );
+  assert.match(sql, /from public\\.facilities f/i);
+  assert.match(sql, /from cohort c/i);
+});
