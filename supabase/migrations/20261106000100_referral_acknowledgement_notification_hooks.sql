@@ -48,6 +48,12 @@ create trigger trg_referral_ack_due_after_update
 after update of status, ack_due_at, acknowledged_at, receiving_facility_id
 on public.referrals
 for each row
+when (
+  old.status is distinct from new.status
+  or old.ack_due_at is distinct from new.ack_due_at
+  or old.acknowledged_at is distinct from new.acknowledged_at
+  or old.receiving_facility_id is distinct from new.receiving_facility_id
+)
 execute function private.cancel_referral_acknowledgement_reminders();
 
 drop trigger if exists trg_profile_ack_due_after_insert on public.profiles;
