@@ -7186,7 +7186,8 @@ const handleStartAssessment = async (referralId) => {
 
   const overdueIncomingAcknowledgements = referrals.filter(isAckOverdue).length;
   const emergencyIncomingReferrals = referrals.filter((referral) =>
-    referral.urgency === "emergency" && referral.status !== "completed"
+    String(referral.urgency || "").toLowerCase() === "emergency" &&
+    isOpenIncomingReferral(referral)
   ).length;
 
   const assessmentRequiredFields = [
