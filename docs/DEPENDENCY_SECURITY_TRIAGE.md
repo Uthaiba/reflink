@@ -27,6 +27,6 @@ The package-lock integrity values and package metadata were sourced from npm reg
 
 - Baseline audit: commit `9410ad4e55d1d40d98481b41518d07c540a37b03`, workflow run #42324087799.
 - Remediation commits: `77589bfabb650fad76d484c9835f1cd5518c613c` (manifest) and `36866f38adf0f1b91c0a2df8a6fc51ac61011649` (lockfile).
-- Exact-HEAD post-remediation npm audit and full CI result: pending until the workflow for the resulting branch head completes.
+- The post-remediation audit report on commit `cac6bae50e71e17c02746f7246799b67ea981c5f` returned zero vulnerabilities (0 critical, 0 high, 0 moderate, 0 low). That run was cancelled during the Chromium installation after the audit, unit tests, lint and production build had completed successfully; therefore it proves the audit result for the unchanged dependency tree, but not the complete suite on the final documentation/test head. Exact latest-head full CI remains pending.
 
 No production deployment, Supabase change, database migration or provider action was performed.
