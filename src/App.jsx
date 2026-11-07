@@ -6514,11 +6514,16 @@ setReferrals(
             "id",
             selectedInpatientReferral.id
           )
+          .eq("status", "admitted")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
+        }
+
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
         }
 
         setMessage(
@@ -6631,11 +6636,16 @@ setReferrals(
             "id",
             selectedInpatientReferral.id
           )
+          .eq("status", "admitted")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
+        }
+
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
         }
 
         setMessage(
@@ -6700,11 +6710,16 @@ setReferrals(
             "id",
             referralId
           )
+          .eq("status", "sent")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
+        }
+
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
         }
 
         setMessage(
@@ -6767,11 +6782,16 @@ setReferrals(
             "id",
             referralId
           )
+          .eq("status", "acknowledged")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
+        }
+
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
         }
 
         setMessage(
@@ -6819,13 +6839,17 @@ const handleStartAssessment = async (referralId) => {
         status: "under_assessment",
       })
       .eq("id", referralId)
+      .eq("status", "patient_arrived")
       .select()
-      .single();
+          .maybeSingle();
 
     if (error) {
-      console.error("START ASSESSMENT ERROR:", error);
-      throw error;
-    }
+          throw error;
+        }
+
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
+        }
 
     setMessage(
       `Clinical assessment started for ${data.referral_number}.`
@@ -6987,11 +7011,16 @@ const handleStartAssessment = async (referralId) => {
             "id",
             selectedReferral.id
           )
+          .eq("status", "under_assessment")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
+        }
+
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
         }
 
         setMessage(
