@@ -7,6 +7,17 @@ begin;
 revoke all privileges on table public.referral_notifications
   from anon, authenticated;
 
+-- Table-level REVOKE does not remove previously granted column-level privileges.
+-- Explicitly revoke every sensitive column so historical ACL grants cannot survive.
+revoke all privileges (
+  recipient_phone,
+  provider,
+  provider_message_id,
+  error_message
+)
+on table public.referral_notifications
+from anon, authenticated;
+
 grant select (
   id,
   referral_id,
