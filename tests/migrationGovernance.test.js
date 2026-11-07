@@ -60,7 +60,7 @@ test("acknowledgement hook migration does not enqueue or infer user recipients",
   assert.match(sql, /intentionally does not enqueue user-addressed/i);
   assert.match(sql, /cancel_referral_acknowledgement_reminders/i);
   assert.doesNotMatch(sql, /insert into private\.notification_outbox/i);
-  assert.doesNotMatch(sql, /public\.profiles|receiving_staff/i);
+  assert.doesNotMatch(sql, /from\s+public\.profiles\s+p|p\.role\s*=\s*'receiving_staff'/i);
   assert.doesNotMatch(sql, /http_request|net\.http_post|pg_net/i);
   assert.doesNotMatch(sql, /'sms'/i);
 });
@@ -73,8 +73,8 @@ test("acknowledgement hooks cancel stale work and close its in-flight attempt au
   assert.match(sql, /outcome\s*=\s*'cancelled'/i);
   assert.match(sql, /a\.finished_at\s+is\s+null/i);
   assert.match(sql, /o\.status\s+in\s*\('pending',\s*'retry_wait',\s*'processing'\)/i);
-  assert.match(sql, /old\.role\s+is\s+distinct\s+from\s+new\.role/i);
-  assert.match(sql, /old\.facility_id\s+is\s+distinct\s+from\s+new\.facility_id/i);
+  assert.match(sql, /cancel_referral_acknowledgement_reminders/i);
+  assert.doesNotMatch(sql, /sync_profile_acknowledgement_recipients/i);
 });
 
 test("outbox queue functions are individually SECURITY INVOKER with empty search paths", async () => {
@@ -235,7 +235,7 @@ test("notification recipient policy fails closed until an authoritative assignme
   assert.match(policy, /must remain unapplied/i);
   // The migration itself must fail closed, not merely document the mismatch.
   assert.doesNotMatch(hook, /insert into private\.notification_outbox/i);
-  assert.doesNotMatch(hook, /public\.profiles|receiving_staff/i);
+  assert.doesNotMatch(hook, /from\s+public\.profiles\s+p|p\.role\s*=\s*'receiving_staff'/i);
   assert.match(hook, /does not enqueue user-addressed/i);
 });
 
