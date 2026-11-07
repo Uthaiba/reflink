@@ -55,11 +55,15 @@ export default async function handler(req, res) {
     return json(res, 400, { error: "referralId and a supported notification type are required." });
   }
 
-  const { data: profile } = await adminClient
+  const { data: profile, error: profileError } = await adminClient
     .from("profiles")
     .select("id, role, facility_id")
     .eq("id", actorId)
     .single();
+
+  if (profileError || !profile) {
+    return json(res, 403, { error: "Not authorized to send this notification." });
+  }
 
   const { data: referral, error: referralError } = await adminClient
     .from("referrals")
