@@ -7,7 +7,7 @@ const TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:
 function isValidTimestamp(value) {
   if (typeof value !== "string" || !TIMESTAMP_PATTERN.test(value)) return false;
 
-  const match = value.match(/^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\\.[0-9]{1,6})?(Z|[+-]([0-9]{2}):([0-9]{2}))$/);
+  const match = value.match(/^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:[.][0-9]{1,6})?(Z|[+-]([0-9]{2}):([0-9]{2}))$/);
   if (!match) return false;
 
   const [, yearText, monthText, dayText, hourText, minuteText, secondText, , offsetHourText, offsetMinuteText] = match;
