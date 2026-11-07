@@ -48,6 +48,8 @@ Existing live schema baseline
 
 The dependency graph expresses source intent only. It is not an execution plan. The six November 5 migrations may have additional object-level dependencies on the exact production baseline and must not be assumed independent simply because their filenames are sequential.
 
+The `20261107000100` notification-log column-grant migration is a separate branch from the outbox chain: it depends on the pre-existing `public.referral_notifications` table, its RLS policies and the production role/grant baseline. It must not be treated as an outbox prerequisite, and it still requires synthetic PostgREST projection and service-role write validation.
+
 ## 4. Required reconciliation procedure
 
 1. **Freeze database writes from this branch.** Do not run `supabase db push`, `apply_migration`, or manual DDL against production.
@@ -119,9 +121,9 @@ For each candidate, determine whether an existing composite index already has th
 
 ## 9. Live migration ledger and source-baseline gap — 7 November 2026
 
-A fresh read-only migration-ledger query again returned exactly one recorded version: `20260928203447_reflink_v2_rural_first`. The branch's `supabase/migrations/` directory contains the seven November 5–6 proposal files listed above, but **does not contain the SQL file for the recorded 20260928203447 baseline**.
+A fresh read-only migration-ledger query again returned exactly one recorded version: `20260928203447_reflink_v2_rural_first`. The branch's `supabase/migrations/` directory contains the eight November 5–7 proposal files listed above, but **does not contain the SQL file for the recorded 20260928203447 baseline**.
 
-A metadata-only catalog inventory returned 16 live public routines. All 16 are owned by `postgres`; none is defined by the eight proposed November migrations. The seven files define new reporting, counter-referral and notification-outbox routines, not the missing historical baseline. Therefore, the branch cannot currently recreate the live public routine layer from its migration history.
+A metadata-only catalog inventory returned 16 live public routines. All 16 are owned by `postgres`; none is defined by the eight proposed November migrations. The seven routine-bearing files define new reporting, counter-referral and notification-outbox routines; the eighth file changes notification-log column grants. None is the missing historical baseline. Therefore, the branch cannot currently recreate the live public routine layer from its migration history.
 
 | Live routine | SECURITY DEFINER | Search path | Effective EXECUTE |
 |---|---:|---|---|
@@ -171,7 +173,7 @@ No rows from either view were queried. Their definitions and ACLs are catalog me
 
 ## 10. Required baseline reconstruction package
 
-The baseline is not ready to reconstruct from the current seven proposal files. The next source-control deliverable must be a separately reviewed, metadata-backed baseline package containing:
+The baseline is not ready to reconstruct from the current eight proposal files. The next source-control deliverable must be a separately reviewed, metadata-backed baseline package containing:
 
 1. The exact SQL migration file (or an approved historical source export) corresponding to recorded ledger version `20260928203447`.
 2. Definitions, owner, ACL, security mode, search_path and volatility for all 16 live public routines listed above.
@@ -244,7 +246,7 @@ The previous evidence gap about the exact FK list is now closed. This does **not
 
 ## 13. Application-to-database RPC dependency cross-check
 
-A source-only search of the current branch confirms that the React application already contains callers for proposed functions that are defined only in the seven unrecorded November migrations:
+A source-only search of the current branch confirms that the React application already contains callers for proposed functions that are defined only in the unrecorded November migrations:
 
 - `src/App.jsx` calls `submit_counter_referral` from the receiving-side counter-referral submission flow (around line 8395 in the reviewed snapshot).
 - `src/components/dashboards/AdminDashboard.jsx` calls all six reporting functions: `get_admin_referral_volume`, `get_admin_facility_referral_summary`, `get_admin_lga_referral_summary`, `get_admin_facility_reporting_coverage`, `get_admin_referral_pathway_summary`, and `get_admin_acknowledgement_delay_alerts`.
