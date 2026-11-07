@@ -57,9 +57,11 @@ test("receiving referral query selects the acknowledgement deadline used by over
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const dashboardStart = app.indexOf("function ReceivingDashboard()");
   assert.notEqual(dashboardStart, -1);
-  const queryStart = app.indexOf('.from("referrals")', dashboardStart);
+  const loadIncomingStart = app.indexOf("LOAD INCOMING REFERRALS", dashboardStart);
+  const queryStart = app.indexOf('.from("referrals")', loadIncomingStart);
   const queryEnd = app.indexOf('          .eq(\n            "receiving_facility_id"', queryStart);
-  assert.ok(queryStart > dashboardStart);
+  assert.ok(loadIncomingStart > dashboardStart);
+  assert.ok(queryStart > loadIncomingStart);
   assert.ok(queryEnd > queryStart);
   const projection = app.slice(queryStart, queryEnd);
   assert.match(projection, /urgency,\s*status,\s*ack_due_at,\s*created_at/i);
