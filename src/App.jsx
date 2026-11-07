@@ -4,6 +4,7 @@ import { supabase } from "./lib/supabase.js";
 import { cacheValue, createClientId, getCachedValue, getQueueCount, getOfflineKeyVaultEnvelope, saveOfflineKeyVaultEnvelope, queueEncryptedReferral, migratePlaintextQueueToEncrypted, syncQueuedReferrals } from "./lib/offlineReferralQueue.js";
 import { createOfflineKeyVault, unlockOfflineKeyVault } from "./lib/offlineQueueKeyVault.js";
 import { createOfflineVaultLockChannel } from "./lib/offlineVaultLockChannel.js";
+import { isAcknowledgementOverdue as isAckOverdue, isOpenIncomingReferral, sortIncomingReferralsByPriority } from "./lib/referralPriority.js";
 import { LanguageSwitcher, useLanguage } from "./lib/i18n.jsx";
 import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
 import "./App.css";
@@ -1460,11 +1461,6 @@ function urgencyMeta(urgency) {
   if (value === "urgent") return { label: "Urgent", className: "urgency-urgent", sla: "Acknowledgement target: 2 hours" };
   return { label: "Routine", className: "urgency-routine", sla: "Acknowledgement target: 24 hours" };
 }
-
-function isAckOverdue(referral) {
-  return referral?.status === "sent" && referral?.ack_due_at && new Date(referral.ack_due_at).getTime() < Date.now();
-}
-
 
 function OfflineVaultPanel({ ownerUserId, onUnlocked, onClose }) {
   const [envelope, setEnvelope] = useState(null);
@@ -6231,6 +6227,7 @@ if (
             referral_reason,
             urgency,
             status,
+            ack_due_at,
             created_at,
             acknowledged_at,
             patient_arrived_at,
@@ -7167,8 +7164,7 @@ const handleStartAssessment = async (referralId) => {
   const receivingQuery = receivingSearch.trim().toLocaleLowerCase();
   const filteredReferrals = referrals
     .filter((referral) => {
-      const isOpen = referral.status !== "completed" &&
-        (referral.status !== "discharged" || !referral.counter_referral);
+      const isOpen = isOpenIncomingReferral(referral);
       const matchesStatus = receivingStatusFilter === "all" ||
         (receivingStatusFilter === "active" ? isOpen : referral.status === receivingStatusFilter);
       const matchesUrgency = receivingUrgencyFilter === "all" ||
@@ -7186,15 +7182,7 @@ const handleStartAssessment = async (referralId) => {
       );
       return matchesStatus && matchesUrgency && matchesSearch;
     })
-    .sort((a, b) => {
-      const urgencyRank = { emergency: 0, urgent: 1, routine: 2 };
-      const urgencyDifference = (urgencyRank[String(a.urgency || "routine").toLowerCase()] ?? 2) -
-        (urgencyRank[String(b.urgency || "routine").toLowerCase()] ?? 2);
-      if (urgencyDifference !== 0) return urgencyDifference;
-      const overdueDifference = Number(isAckOverdue(b)) - Number(isAckOverdue(a));
-      if (overdueDifference !== 0) return overdueDifference;
-      return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
-    });
+    .sort((a, b) => sortIncomingReferralsByPriority([a, b])[0] === a ? -1 : 1);
 
   const overdueIncomingAcknowledgements = referrals.filter(isAckOverdue).length;
   const emergencyIncomingReferrals = referrals.filter((referral) =>
