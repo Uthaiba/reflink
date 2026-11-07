@@ -7135,27 +7135,30 @@ const handleStartAssessment = async (referralId) => {
         "sent"
     ).length;
 
-  const awaitingAssessment =
+  const awaitingPatientArrival =
     referrals.filter(
-      (referral) =>
-        referral.status ===
-        "acknowledged"
+      (referral) => referral.status === "acknowledged"
     ).length;
 
   const patientsReceived =
     referrals.filter(
+      (referral) => referral.status === "patient_arrived"
+    ).length;
+
+  const underAssessment =
+    referrals.filter(
+      (referral) => referral.status === "under_assessment"
+    ).length;
+
+  const counterReferralPending =
+    referrals.filter(
       (referral) =>
-        referral.status ===
-        "patient_arrived"
+        referral.status === "discharged" && !referral.counter_referral
     ).length;
 
   const completed =
     referrals.filter(
-      (referral) =>
-        referral.status ===
-          "completed" ||
-        referral.status ===
-          "discharged"
+      (referral) => referral.status === "completed"
     ).length;
       /* =======================================================
      FILTERED REFERRALS
@@ -7266,11 +7269,11 @@ const handleStartAssessment = async (referralId) => {
 
         <div className="stat-card">
           <span>
-            Awaiting Assessment
+            Awaiting Patient Arrival
           </span>
 
           <strong>
-            {awaitingAssessment}
+            {awaitingPatientArrival}
           </strong>
         </div>
 
@@ -7282,6 +7285,11 @@ const handleStartAssessment = async (referralId) => {
           <strong>
             {patientsReceived}
           </strong>
+        </div>
+
+        <div className="stat-card">
+          <span>Under Assessment</span>
+          <strong>{underAssessment}</strong>
         </div>
 
         <div className="stat-card">
@@ -7304,6 +7312,12 @@ const handleStartAssessment = async (referralId) => {
           <strong>
             {completed}
           </strong>
+        </div>
+
+        <div className="stat-card">
+          <span>Counter-Referral Pending</span>
+          <strong>{counterReferralPending}</strong>
+          <small>Discharged referrals awaiting structured feedback</small>
         </div>
 
       </div>
