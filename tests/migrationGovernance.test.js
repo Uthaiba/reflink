@@ -506,6 +506,7 @@ test("notification log migration grants exactly the intended metadata columns", 
   ]);
 
   assert.match(sql, /revoke all privileges on table public\.referral_notifications\s+from anon, authenticated/i);
+  assert.match(sql, /revoke all privileges \([\s\S]*?recipient_phone,[\s\S]*?provider,[\s\S]*?provider_message_id,[\s\S]*?error_message[\s\S]*?\)\s+on table public\.referral_notifications\s+from anon, authenticated/i);
   assert.match(grant, /on table public\.referral_notifications\s+to authenticated/i);
   assert.doesNotMatch(grant, /recipient_phone|provider_message_id|error_message/i);
   assert.doesNotMatch(sql, /grant\s+[\s\S]*?to anon/i);
