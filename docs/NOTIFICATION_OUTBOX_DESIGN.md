@@ -136,23 +136,34 @@ A source-only review of `api/referral-sms.js` confirms that the endpoint validat
 ### Findings and constraints
 
 1. **No durable pre-send idempotency.** Each authorized request can reach Twilio again. A caller retry, double submission or replay can create duplicate SMS messages. The `referral_notifications` insert occurs after provider dispatch, so it cannot act as a reliable pre-send claim.
-2. **Acknowledgement is not bound to a verified lifecycle transition.** The `referral_acknowledged` path checks that the actor is receiving staff at the receiving facility, but the endpoint does not verify the referral's current status or prove that this request corresponds to a newly committed acknowledgement transition. A facility staff member can therefore request an acknowledgement SMS for a referral without this endpoint establishing that the acknowledgement event just occurred.
-3. **Provider failure details are persisted and returned.** The catch path stores the provider's error message and returns it to the caller. Provider diagnostics should be normalized to bounded internal error codes; raw provider responses must not be exposed or retained.
-4. **Recipient phone is copied into the notification history.** This is facility contact data, not referral clinical content, but it remains personal/contact information and requires a defined access and retention policy.
+2. **Lifecycle-state guard added, but not a unique transition proof.** The current branch now requires `status='sent'` for referral-sent dispatch and `status='acknowledged'` plus a non-null `acknowledged_at` for acknowledgement dispatch. This prevents requests for referrals in unrelated states, but repeated requests while the referral remains in that state can still send duplicates; it does not prove a newly committed unique transition.
+3. **Provider error sanitization added.** The current branch no longer stores or returns the raw provider error message and no longer returns the provider message ID to the caller. It records and returns generic delivery-failure text. The full provider ID remains stored for service-role diagnostics only.
+4. **Recipient phone is copied into the notification history.** A live catalog review also found authenticated users had broad table-level privileges and the participant RLS policy allowed selection of recipient phone, provider IDs and raw error fields. The current branch adds migration `20261107000100_restrict_notification_log_column_access.sql`, which revokes all anon/authenticated table privileges and re-grants authenticated SELECT only on non-sensitive status columns. This is source-only and unapplied; phone, provider ID and raw error remain in the table for service-role operations.
 5. **Profile lookup errors are fail-closed in practice** because a missing profile prevents the role/facility equality checks from passing; however, the error is not explicitly handled or logged as a controlled authorization failure.
 
 ### Required remediation before changing the endpoint
 
-- Move event authorization to a trusted server-side lifecycle operation or verify a committed, uniquely identified transition before dispatch.
 - Establish a durable event idempotency key and atomic pre-send claim. Define the expected semantics for provider timeouts, where provider acceptance may be unknown.
-- Restrict acknowledgement dispatch to a verified eligible status/transition and an approved recipient routing rule.
-- Replace raw provider error persistence/response with bounded internal codes and sanitized operational diagnostics.
-- Define access controls and retention for facility phone numbers in notification history.
-- Add endpoint tests for unauthorized roles/facilities, missing profiles, invalid lifecycle states, duplicate/replayed requests, provider timeout, and provider error sanitization.
+- Bind dispatch to a uniquely identified committed lifecycle event, not merely a current status snapshot.
+- Validate the column-level grant migration against PostgREST and confirm service-role inserts still work in synthetic staging.
+- Define access controls and retention for facility phone numbers and provider identifiers in notification history.
+- Add endpoint tests for unauthorized roles/facilities, missing profiles, invalid lifecycle states, duplicate/replayed requests, provider timeout, and generic error handling.
 
-**Decision:** keep `api/referral-sms.js` and its call sites unchanged for now. A superficial status check or application-only duplicate guard would not provide transactional event authenticity or durable idempotency. Do not send test SMS or activate the outbox worker until recipient routing, migration reconciliation and synthetic-data staging validation are complete.
+**Decision:** source-only hardening is now present in the PR branch: minimal referral projection, committed-state checks, generic provider errors, no provider message ID in the HTTP response, and a proposed least-privilege notification-log grant migration. Durable idempotency and event-level exactly-once semantics remain unresolved. These changes are not deployed; do not send test SMS or activate the outbox worker until recipient routing, migration reconciliation and synthetic-data staging validation are complete.
 
 
 ### Correction — acknowledgement hook source verified (7 November 2026)
 
 The migration `20261106000100_referral_acknowledgement_notification_hooks.sql` was re-read directly. It defines only `private.cancel_referral_acknowledgement_reminders()`, an AFTER UPDATE trigger that cancels pending/retry/processing reminder rows and closes the matching in-flight attempt when referral status, acknowledgement deadline, acknowledgement timestamp or receiving facility changes. It does not select recipients, insert inbox/outbox work, or fan out to staff profiles. Earlier wording in this document that said the migration “still contains broad fan-out” was inaccurate and is superseded by the corrected statement above. The migration remains unapplied because the baseline/staging blockers remain, not because it contains recipient fan-out.
+
+
+### Source-only SMS hardening update — 7 November 2026
+
+The branch changes in `api/referral-sms.js` now:
+- selects only referral ID, urgency, current status, acknowledgement timestamp, actor/facility IDs and the designated notification phone; it no longer selects `patient_identifier` or `referral_number`;
+- requires the referral to remain in `sent` state for a sent event;
+- requires `acknowledged` state and a non-null `acknowledged_at` for an acknowledgement event;
+- stores a generic provider-failure message and returns a generic HTTP error rather than the provider's raw message;
+- returns only `{ status: "sent" }`, not the Twilio message ID.
+
+Static source-contract tests were added in `tests/referralSmsSecurity.test.js`. These are not provider integration tests and no SMS was sent. The changes do not solve duplicate dispatch: a repeated request for a still-sent/still-acknowledged referral can still send again because there is no durable pre-send event claim or provider idempotency contract. The direct endpoint must remain a transitional path until the outbox and event-idempotency design is validated in synthetic staging.
