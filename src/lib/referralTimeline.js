@@ -3,6 +3,16 @@ export function getReferralTimelineSteps(referral = {}) {
     ? referral.counter_referral[0]
     : referral.counter_referral;
 
+  const activeStepByStatus = {
+    sent: "acknowledged",
+    acknowledged: "patient-arrived",
+    patient_arrived: "assessment",
+    under_assessment: "assessment",
+    admitted: "discharge",
+    discharged: "counter-referral",
+  };
+  const activeStep = activeStepByStatus[referral.status];
+
   return [
     {
       key: "created",
@@ -48,5 +58,8 @@ export function getReferralTimelineSteps(referral = {}) {
       label: "Referral Completed",
       timestamp: referral.completed_at,
     },
-  ];
+  ].map((step) => ({
+    ...step,
+    current: step.key === activeStep && !step.timestamp,
+  }));
 }
