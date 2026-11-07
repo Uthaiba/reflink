@@ -25,6 +25,14 @@ Verified against the live schema:
 
 These checks reduce schema-assumption risk but do not prove that the proposed migration compiles, that the function owner/privileges are correct, or that the transaction works under concurrent authenticated requests. Those tests still require a non-production database and synthetic accounts/referrals.
 
+## Verified baseline and branch re-check (7 November 2026)
+
+- Git tree inspection of `v2.0-release` and `main` found no historical `supabase/migrations/` directory. The remediation branch contains only the eight November proposal migrations; the source for recorded production version `20260928203447_reflink_v2_rural_first` remains absent.
+- A fresh read-only migration-ledger query returned only `20260928203447_reflink_v2_rural_first`.
+- The only listed Supabase branch is named `main`, non-persistent and data-free, but its `project_ref` is the production project reference. It is not an isolated synthetic integration environment and must not be used for synthetic referral testing.
+- The project catalog includes existing production records. No test records were created or changed.
+- Added a migration-governance regression test to ensure the missing historical migration is not fabricated and that the baseline reconciliation gate remains explicit.
+
 ## Environment constraint
 
 Supabase database branching was unavailable for the connected Free-plan organisation. No branch was created. A separate development project is the alternative under consideration; it must be created only after the project owner confirms the target organisation and the project-creation process confirms its cost. Do not use the production project as a test environment.
