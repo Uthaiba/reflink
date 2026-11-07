@@ -13,6 +13,15 @@ security definer
 set search_path = ''
 as $function$
 begin
+  -- Use the same outbox-then-attempt lock order as worker settlement and lease
+  -- reclamation. This prevents a trigger/worker lock-order deadlock.
+  perform o.id
+    from private.notification_outbox o
+   where o.referral_id = new.id
+     and o.event_type = 'referral_acknowledgement_due'
+     and o.status in ('pending', 'retry_wait', 'processing')
+   for update;
+
   -- Close the matching in-flight attempt before releasing its outbox lease.
   update private.notification_attempts a
      set finished_at = pg_catalog.now(),
