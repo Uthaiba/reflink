@@ -1,12 +1,18 @@
 # REFLINK Offline PHI Threat Model
 
-**Status:** Design specification; implementation and security validation outstanding.
+**Status:** Implemented encrypted offline queue foundation with Chromium CI coverage; production release approval remains blocked by the limitations and validation gates below.
 
-## Scope and current position
+## Current implementation status — 7 November 2026
 
-The current browser queue stores referral payloads in IndexedDB. The queue retry logic now reconciles a previously committed `offline_client_id` before retrying an insert, but the payload remains readable to code executing in the same browser origin. Service-worker cache restrictions do not encrypt IndexedDB.
+The current source branch integrates AES-256-GCM encryption into the IndexedDB referral queue. New queue writes require an unlocked account key and persist ciphertext rather than a plaintext referral payload. A passphrase-wrapped key envelope is stored separately; the active non-extractable CryptoKey remains in application memory. Legacy plaintext records have an explicit per-record migration path, and the application attempts migration after vault unlock before syncing. Queue ownership, account-scoped vault locking, per-record cross-tab sync claims and stale-worker fencing are implemented.
 
-Do not describe the current offline mode as encrypted, secure on shared devices, or suitable for unmanaged endpoints.
+The Chromium CI suite exercises real browser Web Crypto and IndexedDB, including vault persistence/reload, encrypted queue round trips, legacy migration, duplicate writes, account isolation, cross-tab vault locking and competing sync claims. The latest branch commit `ed623eb7be1dbbde02cbf1cf99bb3d8469d25197` passed the GitHub Actions quality workflow, including the Chromium browser suite (run #42321066495).
+
+**This is not production approval.** The queue is encrypted at rest at the application layer, but same-origin malicious JavaScript/XSS can access data while unlocked. The passphrase has no recovery/reset workflow. Firefox/WebKit, browser eviction/crash behaviour, managed-device controls, CSP/XSS assurance, server-side sync authorization, endpoint governance, clinical retention and recovery policy remain release gates. The queue must not be described as secure on shared or unmanaged endpoints.
+
+## Scope and historical position
+
+The sections below retain dated design decisions and implementation milestones. Statements in earlier dated sections describe the state at that point in the project and are superseded only where a later dated implementation section explicitly records the change. Service-worker cache restrictions do not encrypt IndexedDB.
 
 ## Assets
 
