@@ -30,9 +30,8 @@ async function sendTwilioSms(to, body) {
       body: form,
     }
   );
-  const data = await response.json();
   if (!response.ok) throw new Error("SMS provider delivery failed.");
-  return data;
+  return response.json();
 }
 
 export default async function handler(req, res) {
@@ -58,42 +57,45 @@ export default async function handler(req, res) {
 
   const { data: profile } = await adminClient
     .from("profiles")
-    .select("id, role, facility_id, full_name")
+    .select("id, role, facility_id")
     .eq("id", actorId)
     .single();
 
   const { data: referral, error: referralError } = await adminClient
     .from("referrals")
-    .select(`id, referral_number, patient_identifier, urgency, referring_user_id, referring_facility_id, receiving_facility_id, status,
-      receiving_facility:facilities!referrals_receiving_facility_id_fkey(name, referral_notification_phone),
-      referring_facility:facilities!referrals_referring_facility_id_fkey(name, referral_notification_phone)`)
+    .select(`id, urgency, status, acknowledged_at, referring_user_id, referring_facility_id, receiving_facility_id,
+      receiving_facility:facilities!referrals_receiving_facility_id_fkey(referral_notification_phone),
+      referring_facility:facilities!referrals_referring_facility_id_fkey(referral_notification_phone)`)
     .eq("id", referralId)
     .single();
 
   if (referralError || !referral) return json(res, 404, { error: "Referral not found." });
 
   if (type === "referral_sent") {
-  const authorized =
-    referral.referring_user_id === actorId &&
-    profile?.role === "phc_staff" &&
-    profile?.facility_id === referral.referring_facility_id &&\n    referral.status === "sent";
+    const authorized =
+      referral.referring_user_id === actorId &&
+      profile?.role === "phc_staff" &&
+      profile?.facility_id === referral.referring_facility_id &&
+      referral.status === "sent";
 
-  if (!authorized) {
-    return json(res, 403, {
-      error: "Not authorized to send this referral notification."
-    });
-  }
-} else {
-  const authorized =
-    profile?.role === "receiving_staff" &&
-    profile?.facility_id === referral.receiving_facility_id &&\n    referral.status === "acknowledged" &&\n    Boolean(referral.acknowledged_at);
+    if (!authorized) {
+      return json(res, 403, {
+        error: "Not authorized to send this referral notification.",
+      });
+    }
+  } else {
+    const authorized =
+      profile?.role === "receiving_staff" &&
+      profile?.facility_id === referral.receiving_facility_id &&
+      referral.status === "acknowledged" &&
+      Boolean(referral.acknowledged_at);
 
-  if (!authorized) {
-    return json(res, 403, {
-      error: "Not authorized to send this acknowledgement notification."
-    });
+    if (!authorized) {
+      return json(res, 403, {
+        error: "Not authorized to send this acknowledgement notification.",
+      });
+    }
   }
-}
 
   if (type === "referral_sent" && String(referral.urgency || "routine").toLowerCase() === "routine") {
     await adminClient.from("referral_notifications").insert({
@@ -150,7 +152,7 @@ export default async function handler(req, res) {
       sent_at: new Date().toISOString(),
     });
     return json(res, 200, { status: "sent" });
-  } catch (error) {
+  } catch {
     await adminClient.from("referral_notifications").insert({
       referral_id: referral.id,
       notification_type: type,
