@@ -374,9 +374,9 @@ test("reporting SECURITY DEFINER RPCs pin search_path and require the administra
   for (const [version, suffix] of files) {
     const sql = await migration(version, suffix);
     assert.match(sql, /security definer/i);
-    assert.match(sql, /set search_path\\s*=\\s*''/i);
-    assert.match(sql, /auth\\.uid\\(\\)\\s+is\\s+null/i);
-    assert.match(sql, /public\\.is_administrator\\(\\)/i);
+    assert.match(sql, /set search_path\s*=\s*''/i);
+    assert.match(sql, /auth\.uid\(\)\s+is\s+null/i);
+    assert.match(sql, /public\.is_administrator\(\)/i);
   }
 });
 
@@ -390,6 +390,6 @@ test("facility coverage documentation identifies current-registry versus histori
     "20261105000300",
     "admin_facility_reporting_coverage",
   );
-  assert.match(sql, /from public\\.facilities f/i);
+  assert.match(sql, /from public\.facilities f/i);
   assert.match(sql, /from cohort c/i);
 });
