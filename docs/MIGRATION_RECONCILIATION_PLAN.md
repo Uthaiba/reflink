@@ -339,3 +339,16 @@ A source-only review of all eight proposal files was completed. This is a depend
 - No production or shared-project database was used for synthetic testing.
 - The eight files remain proposals. The only database-safe next step is owner-approved schema-only baseline evidence plus a genuinely isolated synthetic database.
 - The first SQL execution review should start with migration 001's drop/recreate behavior and the authoritative `is_administrator()` helper, then validate the independent reporting RPCs, outbox foundation, cancellation hook, and notification-log ACL change in their dependency order.
+
+### Frontend RPC contract cross-check
+
+The current `AdminDashboard.jsx` call sites were compared with the proposal RPC return columns. The displayed field names are aligned at source level:
+
+- Volume: `referral_count`, `small_cell_suppressed`, lifecycle counts and their suppression flags.
+- Facility summary: `facility_label`, `referral_count`, `small_cell_suppressed`, `complementary_suppressed`.
+- LGA summary: `lga_label`, `referral_count` and suppression flags.
+- Coverage: `coverage_group`, `facility_count` and suppression flags.
+- Pathway: `referral_count`, acknowledgement/arrival medians and p90 values, plus interval suppression flags.
+- Delay alerts: `alert_label`, `alert_count` and suppression flags.
+
+This confirms only the current source-level property contract; it does not validate PostgREST schema-cache visibility, SQL return metadata, RPC execute grants, role authorization, or runtime rendering against a database. The frontend currently handles RPC errors with explicit “not yet available” messages, which is appropriate while these migrations remain unapplied.
