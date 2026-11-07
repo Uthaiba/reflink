@@ -203,3 +203,13 @@ test("vault lock messages are account-scoped and ignore malformed or unrelated e
     else delete globalThis.BroadcastChannel;
   }
 });
+
+
+test("offline sync serialization is scoped per authenticated account", () => {
+  assert.match(queueSource, /const activeSyncPromises = new Map\(\)/);
+  assert.match(queueSource, /const owner = String\(user\.id\)/);
+  assert.match(queueSource, /activeSyncPromises\.get\(owner\)/);
+  assert.match(queueSource, /activeSyncPromises\.set\(owner, syncPromise\)/);
+  assert.match(queueSource, /activeSyncPromises\.delete\(owner\)/);
+  assert.doesNotMatch(queueSource, /let activeSyncPromise = null/);
+});
