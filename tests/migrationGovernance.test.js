@@ -11,6 +11,7 @@ const migrationVersions = [
   "20261105000500",
   "20261105000600",
   "20261106000100",
+  "20261107000100",
 ];
 
 async function migration(version, suffix) {
@@ -476,4 +477,17 @@ test("dependency remediation pins patched Vite and source-map-js versions", asyn
   assert.match(workflow, /totals\.high[\s\S]*totals\.critical|totals\.critical[\s\S]*totals\.high/);
   assert.match(workflow, /High or critical dependency vulnerabilities block this workflow/);
   assert.match(workflow, /fixAvailable/);
+});
+
+
+test("notification log grants only RLS-scoped non-sensitive columns to authenticated users", async () => {
+  const sql = await readFile(
+    new URL("../supabase/migrations/20261107000100_restrict_notification_log_column_access.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(sql, /revoke all privileges on table public\.referral_notifications[\s\S]*from anon, authenticated/i);
+  assert.match(sql, /grant select \([\s\S]*id,[\s\S]*referral_id,[\s\S]*notification_type,[\s\S]*channel,[\s\S]*status,[\s\S]*created_at,[\s\S]*sent_at[\s\S]*\)\s*on table public\.referral_notifications\s*to authenticated/i);
+  assert.doesNotMatch(sql, /grant select\s*\([\s\S]*recipient_phone|provider_message_id|error_message/i);
+  assert.doesNotMatch(sql, /to anon/i);
+  assert.doesNotMatch(sql, /drop policy|disable row level security/i);
 });
