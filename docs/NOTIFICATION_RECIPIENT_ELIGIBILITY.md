@@ -80,4 +80,4 @@ Required reviewers: product owner, receiving-facility operational leadership, cl
 
 ## 7. Current source status
 
-The proposed acknowledgement trigger in `20261106000100_referral_acknowledgement_notification_hooks.sql` still contains broad `receiving_staff` fan-out and must remain unapplied. It is not approved for staging or production execution. The migration baseline and synthetic-data staging environment are separate mandatory release gates; this policy decision does not waive them.
+The acknowledgement hook migration in `20261106000100_referral_acknowledgement_notification_hooks.sql` is intentionally fail-closed: it only cancels stale reminder work after referral lifecycle changes. It does not enqueue notifications, query profiles or infer recipients. User-addressed notification enqueue remains blocked until an authoritative notification-duty assignment source and recipient policy are approved. The migration baseline and synthetic-data staging environment remain mandatory release gates.
