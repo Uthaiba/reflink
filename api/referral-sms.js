@@ -31,7 +31,7 @@ async function sendTwilioSms(to, body) {
     }
   );
   const data = await response.json();
-  if (!response.ok) throw new Error(data?.message || "Twilio SMS failed.");
+  if (!response.ok) throw new Error("SMS provider delivery failed.");
   return data;
 }
 
@@ -76,7 +76,7 @@ export default async function handler(req, res) {
   const authorized =
     referral.referring_user_id === actorId &&
     profile?.role === "phc_staff" &&
-    profile?.facility_id === referral.referring_facility_id;
+    profile?.facility_id === referral.referring_facility_id &&\n    referral.status === "sent";
 
   if (!authorized) {
     return json(res, 403, {
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
 } else {
   const authorized =
     profile?.role === "receiving_staff" &&
-    profile?.facility_id === referral.receiving_facility_id;
+    profile?.facility_id === referral.receiving_facility_id &&\n    referral.status === "acknowledged" &&\n    Boolean(referral.acknowledged_at);
 
   if (!authorized) {
     return json(res, 403, {
@@ -149,7 +149,7 @@ export default async function handler(req, res) {
       status: "sent",
       sent_at: new Date().toISOString(),
     });
-    return json(res, 200, { status: "sent", provider_message_id: result.sid });
+    return json(res, 200, { status: "sent" });
   } catch (error) {
     await adminClient.from("referral_notifications").insert({
       referral_id: referral.id,
@@ -158,8 +158,8 @@ export default async function handler(req, res) {
       recipient_phone: recipientPhone,
       provider: "twilio",
       status: "failed",
-      error_message: error?.message || "SMS provider error",
+      error_message: "SMS provider delivery failed.",
     });
-    return json(res, 502, { error: error?.message || "SMS provider error." });
+    return json(res, 502, { error: "SMS notification could not be delivered." });
   }
 }
