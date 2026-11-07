@@ -83,6 +83,7 @@ function normalizeNotification(row) {
     || Number.isNaN(new Date(row.created_at).getTime())
     || (row.read_at != null && (
       typeof row.read_at !== "string"
+      || !TIMESTAMP_PATTERN.test(row.read_at)
       || Number.isNaN(new Date(row.read_at).getTime())
     ))
   ) {
