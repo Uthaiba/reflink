@@ -20,6 +20,19 @@ The prior read-only catalog inspection confirmed these live objects/columns rele
 
 These observations do not establish the full schema baseline or prove that the proposed SQL compiles against the remote database.
 
+## 1A. Repository baseline and environment re-check (7 November 2026)
+
+A fresh Git object-tree inspection was performed against the PR base commit (`v2.0-release`), the `main` branch, and the current remediation branch:
+
+- The `v2.0-release` base tree contains no `supabase/migrations/` directory.
+- The `main` branch tree also contains no `supabase/migrations/` directory.
+- The remediation branch contains exactly the eight November 2026 proposal migrations listed below; it does not contain a source file for `20260928203447_reflink_v2_rural_first`.
+- A fresh read-only Supabase migration-ledger call still returns exactly one applied version: `20260928203447_reflink_v2_rural_first`.
+- A fresh branch inventory returns one branch named `main`, marked non-persistent and data-free, with `project_ref` equal to the production project reference. It is not an isolated synthetic integration database and must not be treated as one.
+- The fresh table inventory confirms production tables contain records. Do not use this project or branch to create synthetic referral fixtures or exercise live workflows.
+
+**Decision:** the historical migration source cannot be recovered from either Git release baseline. No reconstruction, placeholder migration, migration-ledger edit, or migration replay is authorised. The next acceptable evidence is an owner-approved schema-only export and migration-history evidence, excluding patient rows, auth records, secrets and storage contents. Until a genuinely isolated synthetic database is approved, validation remains source-only.
+
 ## 2. Source migration inventory
 
 | Version | Source file | Intended change | Reconciliation requirement |
