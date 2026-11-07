@@ -33,7 +33,7 @@ function functionDefinition(sql, schema, name) {
 test("proposed migration files exist exactly once and are chronologically ordered", async () => {
   const files = await readdir(migrationDirectory);
   const proposedVersions = files
-    .filter((file) => /^2026110[56]\d{6}_/.test(file))
+    .filter((file) => /^2026110[567]\d{6}_/.test(file))
     .map((file) => file.slice(0, 14))
     .sort();
 
