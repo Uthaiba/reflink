@@ -480,14 +480,36 @@ test("dependency remediation pins patched Vite and source-map-js versions", asyn
 });
 
 
-test("notification log grants only RLS-scoped non-sensitive columns to authenticated users", async () => {
+test("notification log migration grants exactly the intended metadata columns", async () => {
   const sql = await readFile(
     new URL("../supabase/migrations/20261107000100_restrict_notification_log_column_access.sql", import.meta.url),
     "utf8",
   );
-  assert.match(sql, /revoke all privileges on table public\.referral_notifications[\s\S]*from anon, authenticated/i);
-  assert.match(sql, /grant select \([\s\S]*id,[\s\S]*referral_id,[\s\S]*notification_type,[\s\S]*channel,[\s\S]*status,[\s\S]*created_at,[\s\S]*sent_at[\s\S]*\)\s*on table public\.referral_notifications\s*to authenticated/i);
-  assert.doesNotMatch(sql, /grant select\s*\([\s\S]*recipient_phone|provider_message_id|error_message/i);
-  assert.doesNotMatch(sql, /to anon/i);
+  const grantStatements = sql.match(/grant\\s+[\\s\\S]*?;/gi) ?? [];
+  const selectGrant = grantStatements.filter((statement) =>
+    /grant select/i.test(statement) && /referral_notifications/i.test(statement),
+  );
+  assert.equal(selectGrant.length, 1, "exactly one authenticated SELECT grant is expected");
+
+  const grant = selectGrant[0];
+  const columnList = grant.match(/grant select\\s*\\(([\\s\\S]*?)\\)\\s*on table/i)?.[1];
+  assert.ok(columnList, "column-level SELECT grant must be explicit");
+  const columns = columnList.split(",").map((column) => column.trim().toLowerCase()).sort();
+  assert.deepEqual(columns, [
+    "channel",
+    "created_at",
+    "id",
+    "notification_type",
+    "referral_id",
+    "sent_at",
+    "status",
+  ]);
+
+  assert.match(sql, /revoke all privileges on table public\\.referral_notifications\\s+from anon, authenticated/i);
+  assert.match(grant, /on table public\\.referral_notifications\\s+to authenticated/i);
+  assert.doesNotMatch(grant, /recipient_phone|provider_message_id|error_message/i);
+  assert.doesNotMatch(sql, /grant\\s+[\\s\\S]*?to anon/i);
+  assert.doesNotMatch(sql, /to service_role|from service_role/i);
   assert.doesNotMatch(sql, /drop policy|disable row level security/i);
+  assert.match(sql, /begin;[\\s\\S]*commit;/i);
 });
