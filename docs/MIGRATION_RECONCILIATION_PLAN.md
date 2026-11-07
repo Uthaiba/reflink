@@ -8,7 +8,7 @@ The connected Supabase project's last read-only migration-ledger inspection retu
 
 - `20260928203447_reflink_v2_rural_first`
 
-The current source branch contains seven later SQL files. Their absence from the remote ledger means they must be treated as **not recorded as applied**. It does not, by itself, prove that every object referenced by those files is absent from the live schema: some objects may predate the ledger entry, have been created manually, or be represented by a differently named migration.
+The current source branch contains eight later SQL files. Their absence from the remote ledger means they must be treated as **not recorded as applied**. It does not, by itself, prove that every object referenced by those files is absent from the live schema: some objects may predate the ledger entry, have been created manually, or be represented by a differently named migration.
 
 The prior read-only catalog inspection confirmed these live objects/columns relevant to the latest work:
 
@@ -31,6 +31,7 @@ These observations do not establish the full schema baseline or prove that the p
 | `20261105000500` | `20261105000500_admin_acknowledgement_delay_alerts.sql` | Aggregate acknowledgement-delay snapshot | Verify urgency vocabulary and stored `ack_due_at` semantics. This is a snapshot RPC, not a notification dispatcher. |
 | `20261105000600` | `20261105000600_notification_outbox_foundation.sql` | Private notification outbox, attempt ledger and service-role queue functions | Verify whether `private` schema or similarly named objects already exist, table/constraint definitions, function signatures, service-role grants, function owners and RLS posture. |
 | `20261106000100` | `20261106000100_referral_acknowledgement_notification_hooks.sql` | Referral lifecycle trigger to cancel stale acknowledgement reminder work | Explicitly depends on `20261105000600`. It does not select recipients or enqueue reminders. Do not apply before the outbox objects and all trigger dependencies are verified. Review SECURITY DEFINER ownership and trigger interactions. |
+| `20261107000100` | `20261107000100_restrict_notification_log_column_access.sql` | Remove broad authenticated privileges from the legacy notification log and re-grant SELECT on non-sensitive status columns only | Verify column-level ACL semantics, RLS participant/admin policies, PostgREST projections, and service-role SMS writes in synthetic staging. This migration preserves the existing RLS policies and does not grant phone/provider/error fields. |
 
 ## 3. Dependency graph
 
@@ -96,7 +97,7 @@ No patient-level data was queried for this review. No database or Auth settings 
 
 ## 7. Static preflight coverage
 
-The repository now includes `tests/migrationGovernance.test.js`. It statically checks the seven migration versions, the explicit outbox-to-hook dependency, stored acknowledgement deadline and in-app-only queue behavior, service-role-only outbox function grants, administrator checks for reporting RPCs, and receiving-role/facility checks for counter-referral completion.
+The repository now includes `tests/migrationGovernance.test.js`. It statically checks the eight migration versions, the explicit outbox-to-hook dependency, stored acknowledgement deadline and in-app-only queue behavior, service-role-only outbox function grants, administrator checks for reporting RPCs, and receiving-role/facility checks for counter-referral completion.
 
 These tests are not a SQL parser and do not compile or execute the migrations. A passing result is not evidence that the SQL applies cleanly or that PostgreSQL privileges/triggers behave correctly. Disposable-database validation remains mandatory.
 
@@ -120,7 +121,7 @@ For each candidate, determine whether an existing composite index already has th
 
 A fresh read-only migration-ledger query again returned exactly one recorded version: `20260928203447_reflink_v2_rural_first`. The branch's `supabase/migrations/` directory contains the seven November 5–6 proposal files listed above, but **does not contain the SQL file for the recorded 20260928203447 baseline**.
 
-A metadata-only catalog inventory returned 16 live public routines. All 16 are owned by `postgres`; none is defined by the seven proposed November migrations. The seven files define new reporting, counter-referral and notification-outbox routines, not the missing historical baseline. Therefore, the branch cannot currently recreate the live public routine layer from its migration history.
+A metadata-only catalog inventory returned 16 live public routines. All 16 are owned by `postgres`; none is defined by the eight proposed November migrations. The seven files define new reporting, counter-referral and notification-outbox routines, not the missing historical baseline. Therefore, the branch cannot currently recreate the live public routine layer from its migration history.
 
 | Live routine | SECURITY DEFINER | Search path | Effective EXECUTE |
 |---|---:|---|---|
@@ -263,3 +264,16 @@ The read-only catalog evidence has now been preserved in two clearly labelled do
 These files are metadata evidence, **not executable migrations or a complete restore dump**. They exclude application rows and do not replace the missing source migration for `20260928203447`, nor do they capture every extension-managed object or every non-public schema dependency. A full schema-only export and exact baseline source are still required before a disposable database can be reconstructed.
 
 The two snapshots were generated from read-only catalog queries. No database object, policy, grant, migration ledger entry, Auth setting or deployment was changed.
+
+
+## 15. Legacy notification-log column exposure — 7 November 2026
+
+A metadata-only privilege check found that `authenticated` has all table-level privileges on `public.referral_notifications`: SELECT, INSERT, UPDATE, DELETE, TRUNCATE, TRIGGER and REFERENCES. Effective column checks confirmed authenticated can select `recipient_phone`, `provider_message_id` and `error_message`. The table has RLS policies that permit referral participants to select notification-log rows, so RLS does not prevent those sensitive columns from being returned to an authenticated participant with access to the referral.
+
+A repository-wide source scan of all 18 JavaScript/TypeScript files under `src/` and `api/` found only service-role inserts in `api/referral-sms.js`; no current frontend code reads `referral_notifications`. The endpoint writes the recipient phone, Twilio provider message ID and raw provider error into the table. This makes the current authenticated table grant broader than the application's observed need.
+
+**Source-only remediation added:** `20261107000100_restrict_notification_log_column_access.sql` revokes all table-level privileges from anon/authenticated and re-grants authenticated SELECT only on `id`, `referral_id`, `notification_type`, `channel`, `status`, `created_at` and `sent_at`. Existing RLS policies remain in place; service_role grants and endpoint writes are untouched. Phone numbers, provider IDs and raw provider errors are not in the authenticated projection.
+
+This migration is a proposal only. It has not been applied. Before approval, verify PostgREST column-level projection behavior, any external consumers not present in this repository, and service-role write behavior in a synthetic non-production environment. If future administrative workflows require provider diagnostics, expose them through a separately authorized admin-only server path rather than broadening participant table SELECT.
+
+**Risk disposition:** potential sensitive metadata overexposure is documented and a least-privilege source migration is proposed. Production grant changes remain prohibited pending baseline reconciliation and staging validation.
