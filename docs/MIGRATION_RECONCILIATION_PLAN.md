@@ -352,3 +352,19 @@ The current `AdminDashboard.jsx` call sites were compared with the proposal RPC 
 - Delay alerts: `alert_label`, `alert_count` and suppression flags.
 
 This confirms only the current source-level property contract; it does not validate PostgREST schema-cache visibility, SQL return metadata, RPC execute grants, role authorization, or runtime rendering against a database. The frontend currently handles RPC errors with explicit “not yet available” messages, which is appropriate while these migrations remain unapplied.
+
+## 10. Aggregate disclosure review — overlapping-window differencing risk
+
+A focused source review of the five reporting RPCs found that the facility, LGA, coverage and pathway summaries require exactly one complete Africa/Lagos calendar month. Their source applies primary suppression to groups with 1–4 records and complementary suppression when exactly one small group exists within a reporting direction/grouping.
+
+The referral-volume RPC is different: `get_admin_referral_volume(p_start_date, p_end_date)` accepts any valid date range up to 366 days. It suppresses individual counts from 1–4, but it does not require a fixed, non-overlapping reporting period. An administrator able to issue repeated overlapping date-range requests could subtract one returned aggregate from another and potentially recover a count that was suppressed in one of the responses. This is a query-composition/differencing risk; the single-response small-cell rule does not by itself prevent it.
+
+**Decision: disclosure control not yet sufficient for approval.** Before the volume RPC is approved, choose and test a consistent period policy. Preferred options are:
+- constrain the RPC to one complete calendar month, matching the other aggregate RPCs; or
+- expose only server-defined, non-overlapping time buckets and prevent arbitrary overlapping ranges.
+
+If the dashboard requires a custom date range, implement the aggregation as a sum of fixed protected buckets only if the API cannot expose bucket-level combinations that reintroduce differencing. Do not rely solely on client-side date-picker restrictions. Add synthetic tests for adjacent, nested, shifted and boundary-crossing date windows, including cases where a hidden 1–4 count can be recovered by subtraction.
+
+The existing complementary suppression rule also needs formal test cases for multiple small groups, one small group plus a visible complement, zero-count groups, and combinations across separate reporting RPCs. It is a basic disclosure-control measure, not a formal privacy guarantee. Administrator-only access reduces the audience but does not eliminate the risk.
+
+No SQL or frontend behavior was changed as part of this review. This is a source-level finding requiring a design decision and synthetic database validation before any migration is applied.
