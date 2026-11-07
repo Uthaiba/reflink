@@ -30,7 +30,7 @@ These observations do not establish the full schema baseline or prove that the p
 | `20261105000400` | `20261105000400_admin_referral_pathway_intelligence.sql` | Aggregate facility-type pathways and interval distributions | Verify facility type fields and referral timestamp semantics; test small-cell and complementary suppression across multiple groups. |
 | `20261105000500` | `20261105000500_admin_acknowledgement_delay_alerts.sql` | Aggregate acknowledgement-delay snapshot | Verify urgency vocabulary and stored `ack_due_at` semantics. This is a snapshot RPC, not a notification dispatcher. |
 | `20261105000600` | `20261105000600_notification_outbox_foundation.sql` | Private notification outbox, attempt ledger and service-role queue functions | Verify whether `private` schema or similarly named objects already exist, table/constraint definitions, function signatures, service-role grants, function owners and RLS posture. |
-| `20261106000100` | `20261106000100_referral_acknowledgement_notification_hooks.sql` | Referral/profile triggers to enqueue due-time in-app reminders | Explicitly depends on `20261105000600`. Do not apply before the outbox objects and all trigger dependencies are verified. Review SECURITY DEFINER ownership and trigger interactions. |
+| `20261106000100` | `20261106000100_referral_acknowledgement_notification_hooks.sql` | Referral lifecycle trigger to cancel stale acknowledgement reminder work | Explicitly depends on `20261105000600`. It does not select recipients or enqueue reminders. Do not apply before the outbox objects and all trigger dependencies are verified. Review SECURITY DEFINER ownership and trigger interactions. |
 
 ## 3. Dependency graph
 
