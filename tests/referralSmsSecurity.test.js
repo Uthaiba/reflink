@@ -41,3 +41,16 @@ test("legacy SMS dispatch binds each event to the required role and facility bef
   assert.match(acknowledgedBranch, /referral\.status === "acknowledged"/);
   assert.ok(source.indexOf("await sendTwilioSms(") > source.indexOf('if (type === "referral_sent")'));
 });
+
+test("legacy SMS endpoint stops before referral lookup when the actor profile is missing or errors", async () => {
+  const source = await readFile(new URL("../api/referral-sms.js", import.meta.url), "utf8");
+  const profileLookup = source.indexOf('.from("profiles")');
+  const profileGuard = source.indexOf("if (profileError || !profile)");
+  const referralLookup = source.indexOf('.from("referrals")');
+
+  assert.notEqual(profileLookup, -1);
+  assert.ok(profileGuard > profileLookup);
+  assert.ok(referralLookup > profileGuard);
+  assert.match(source.slice(profileGuard, referralLookup), /return json\(res, 403/);
+  assert.match(source, /const \{ data: profile, error: profileError \}/);
+});
