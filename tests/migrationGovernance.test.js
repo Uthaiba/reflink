@@ -107,13 +107,12 @@ test("outbox idempotency compares every event field, including expiry", async ()
     "template_key",
     "expires_at",
   ]) {
-    assert.match(
-      definition,
-      new RegExp(`v_existing\\\\.${field}\\\\s+is\\\\s+distinct\\\\s+from\\\\s+p_${field}`, "i"),
+    assert.ok(
+      definition.toLowerCase().includes(`v_existing.${field} is distinct from p_${field}`),
       `Idempotency key reuse must reject changed ${field}`,
     );
   }
-  assert.match(definition, /on conflict \\(event_key\\) do nothing/i);
+  assert.ok(definition.toLowerCase().includes("on conflict (event_key) do nothing"));
 });
 
 test("acknowledgement hook ignores updates that do not change lifecycle fields", async () => {
@@ -121,10 +120,15 @@ test("acknowledgement hook ignores updates that do not change lifecycle fields",
     "20261106000100",
     "referral_acknowledgement_notification_hooks",
   );
-  assert.match(
-    sql,
-    /when \\(\\s*old\\.status is distinct from new\\.status[\\s\\S]*old\\.ack_due_at is distinct from new\\.ack_due_at[\\s\\S]*old\\.acknowledged_at is distinct from new\\.acknowledged_at[\\s\\S]*old\\.receiving_facility_id is distinct from new\\.receiving_facility_id\\s*\\)/i,
-  );
+  const trigger = sql.slice(sql.indexOf("create trigger trg_referral_ack_due_after_update"));
+  for (const field of ["status", "ack_due_at", "acknowledged_at", "receiving_facility_id"]) {
+    assert.ok(
+      trigger.toLowerCase().includes(`old.${field} is distinct from new.${field}`),
+      `Reminder cancellation must be conditional on a changed ${field}`,
+    );
+  }
+  assert.ok(trigger.toLowerCase().includes("for each row"));
+  assert.ok(trigger.toLowerCase().includes("when ("));
 });
 
 test("outbox queue functions have exact service-role-only execute grants", async () => {
