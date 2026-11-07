@@ -6964,3 +6964,65 @@
   "is_grantable": "NO"
 }
 ```
+
+
+## Public sequences (2 records)
+
+```json
+{
+  "schema": "public",
+  "sequence": "audit_log_id_seq",
+  "data_type": "bigint",
+  "start": 1,
+  "minimum": 1,
+  "maximum": "9223372036854775807",
+  "increment": 1,
+  "cycle": false,
+  "owner": "postgres",
+  "owned_by": "public.audit_log.id"
+}
+```
+
+```json
+{
+  "schema": "public",
+  "sequence": "referral_print_events_id_seq",
+  "data_type": "bigint",
+  "start": 1,
+  "minimum": 1,
+  "maximum": "9223372036854775807",
+  "increment": 1,
+  "cycle": false,
+  "owner": "postgres",
+  "owned_by": "public.referral_print_events.id"
+}
+```
+
+## Non-system schema inventory
+
+The catalog contained these non-system schemas and object counts. These counts are for boundary identification only; Supabase-managed schemas are not part of the REFLINK public-schema baseline and must not be recreated or modified as part of an application baseline migration.
+
+| Schema | Tables | Views | Sequences | Routines | User-defined enum/domain/range types |
+|---|---:|---:|---:|---:|---:|
+| auth | 27 | 0 | 1 | 4 | 9 |
+| extensions | 0 | 2 | 0 | 55 | 0 |
+| graphql | 0 | 0 | 0 | 0 | 0 |
+| graphql_public | 0 | 0 | 0 | 1 | 0 |
+| pgbouncer | 0 | 0 | 0 | 1 | 0 |
+| public | 14 | 2 | 2 | 16 | 0 |
+| realtime | 9 | 0 | 1 | 18 | 2 |
+| storage | 10 | 0 | 0 | 24 | 1 |
+| supabase_migrations | 1 | 0 | 0 | 0 | 0 |
+| vault | 1 | 1 | 0 | 5 | 0 |
+
+## Installed extensions
+
+| Extension | Version | Schema | Owner |
+|---|---:|---|---|
+| pg_stat_statements | 1.11 | extensions | postgres |
+| pgcrypto | 1.3 | extensions | postgres |
+| plpgsql | 1.0 | pg_catalog | supabase_admin |
+| supabase_vault | 0.3.1 | vault | supabase_admin |
+| uuid-ossp | 1.1 | extensions | postgres |
+
+The Supabase-managed `auth`, `storage`, `realtime`, `vault`, `extensions`, `graphql`, `graphql_public`, `pgbouncer` and `supabase_migrations` schemas must be treated as platform-managed dependencies. The REFLINK baseline package should describe its dependencies on them, not attempt to recreate their objects.
