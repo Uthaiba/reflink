@@ -40,8 +40,9 @@ jobs:
           node --input-type=commonjs -e '
             const fs = require("node:fs");
             const report = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/reflink-npm-audit.json", "utf8"));
+            const totals = report.metadata?.vulnerabilities ?? {};
             console.log(JSON.stringify({
-              totals: report.metadata?.vulnerabilities ?? null,
+              totals,
               findings: Object.entries(report.vulnerabilities ?? {}).map(([name, item]) => ({
                 name,
                 severity: item.severity,
@@ -56,6 +57,10 @@ jobs:
                 })
               }))
             }, null, 2));
+            if ((totals.high ?? 0) > 0 || (totals.critical ?? 0) > 0) {
+              console.error("High or critical dependency vulnerabilities block this workflow.");
+              process.exitCode = 1;
+            }
           '
       - name: Run automated unit tests
         run: npm test
