@@ -130,7 +130,7 @@ The explicit ACLs include the owner, authenticated and service_role; effective p
 
 - **`get_facility_user_count(uuid)`:** requires non-null `auth.uid()`; loads the caller's profile role and facility; non-administrators can only request their own non-null facility ID; administrators can request any facility ID. The function normalizes role using `lower(trim(role))`. It uses an empty search path. The query counts profiles assigned to the requested facility.
 - **`get_facility_user_counts()`:** loads the caller's normalized role and rejects unless it is `administrator`; returns grouped user counts by non-null facility. It uses `search_path=public`. There is no explicit `auth.uid() IS NOT NULL` statement, but a null identity produces no matching profile and a null role, which is rejected.
-- **`is_administrator()`:** returns whether a profile exists for `auth.uid()` with role exactly equal to `administrator`. It uses `search_path=public`. The role comparison is case-sensitive and does not normalize whitespace, unlike the two facility-count functions. Confirm that the profile role constraint and stored values enforce a canonical role before changing this semantic.
+- **`is_administrator()`:** returns whether a profile exists for `auth.uid()` with role exactly equal to `administrator`. It uses `search_path=public`. The role comparison is case-sensitive and does not normalize whitespace, unlike the two facility-count functions. The live `profiles_role_check` constraint restricts role values to exactly `phc_staff`, `receiving_staff`, and `administrator`, so canonical values are enforced for ordinary table writes. Preserve this invariant and test it before changing helper semantics.
 - **`log_referral_print(uuid,text)`:** permits the administrator, the referral's `referring_user_id`, or a user whose profile facility equals the referral's `receiving_facility_id`. It then calculates `max(print_number)+1`, inserts the print event and returns the number. The table's catalog indexes show a primary key on `id` and a non-unique index on `(referral_id, created_at DESC)`; there is no unique index on `(referral_id, print_number)`. Concurrent calls can therefore allocate duplicate print numbers. The copy label is not length-bounded or allowlisted in the function.
 - **`log_referral_read(uuid)`:** uses the same administrator/referrer/receiving-facility authorization predicate and inserts a READ audit event. It uses `search_path=public`. It does not return an audit identifier or prove to the client that the write succeeded.
 
@@ -169,3 +169,16 @@ The catalog shows `public` CREATE privilege is false for anon, authenticated and
 8. Test the SECURITY DEFINER owner and BYPASSRLS behavior explicitly in a disposable synthetic-data database; do not assume RLS protects privileged function internals.
 
 **Current disposition:** the metadata gap is now closed for these five live functions, but remediation is not authorized by this evidence export. Migration baseline reconciliation, role/assignment semantics, synthetic staging and direct RPC authorization tests remain release blockers. No production changes were made.
+
+
+### 8.5 Security advisor snapshot
+
+The Supabase security advisor returned five warnings for the five authenticated-callable SECURITY DEFINER RPCs documented above. These warnings identify privileged RPC exposure, not proof of an authorization bypass; each function has an internal caller check and anon EXECUTE is false. The advisor also returned:
+- two INFO findings for `public.referral_events` and `public.referral_feedback`: RLS is enabled but neither table has a policy. This is fail-closed for ordinary roles, but the intended future read/write workflows must be documented before policies are added.
+- one WARN finding: Supabase Auth leaked-password protection is disabled. This requires a separately reviewed Auth configuration change; it was not changed during this source/metadata review.
+
+Remediation links:
+- [Authenticated SECURITY DEFINER RPC advisor](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)
+- [RLS enabled with no policies advisor](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
+- [Leaked-password protection guidance](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
+
