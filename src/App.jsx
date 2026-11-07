@@ -5,6 +5,7 @@ import { cacheValue, createClientId, getCachedValue, getQueueCount, getOfflineKe
 import { createOfflineKeyVault, unlockOfflineKeyVault } from "./lib/offlineQueueKeyVault.js";
 import { createOfflineVaultLockChannel } from "./lib/offlineVaultLockChannel.js";
 import { compareIncomingReferralPriority, isAcknowledgementOverdue as isAckOverdue, isOpenIncomingReferral } from "./lib/referralPriority.js";
+import { getReceivingReferralMetrics } from "./lib/receivingReferralMetrics.js";
 import { LanguageSwitcher, useLanguage } from "./lib/i18n.jsx";
 import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
 import "./App.css";
@@ -7128,38 +7129,16 @@ const handleStartAssessment = async (referralId) => {
      DASHBOARD STATISTICS
      ======================================================= */
 
-  const newReferrals =
-    referrals.filter(
-      (referral) =>
-        referral.status ===
-        "sent"
-    ).length;
-
-  const awaitingPatientArrival =
-    referrals.filter(
-      (referral) => referral.status === "acknowledged"
-    ).length;
-
-  const patientsReceived =
-    referrals.filter(
-      (referral) => referral.status === "patient_arrived"
-    ).length;
-
-  const underAssessment =
-    referrals.filter(
-      (referral) => referral.status === "under_assessment"
-    ).length;
-
-  const counterReferralPending =
-    referrals.filter(
-      (referral) =>
-        referral.status === "discharged" && !referral.counter_referral
-    ).length;
-
-  const completed =
-    referrals.filter(
-      (referral) => referral.status === "completed"
-    ).length;
+  const {
+    newReferrals,
+    awaitingPatientArrival,
+    patientsReceived,
+    underAssessment,
+    counterReferralPending,
+    completed,
+    emergencyIncomingReferrals,
+    overdueIncomingAcknowledgements,
+  } = getReceivingReferralMetrics(referrals);
       /* =======================================================
      FILTERED REFERRALS
      ======================================================= */
@@ -7186,12 +7165,6 @@ const handleStartAssessment = async (referralId) => {
       return matchesStatus && matchesUrgency && matchesSearch;
     })
     .sort((a, b) => compareIncomingReferralPriority(a, b));
-
-  const overdueIncomingAcknowledgements = referrals.filter(isAckOverdue).length;
-  const emergencyIncomingReferrals = referrals.filter((referral) =>
-    String(referral.urgency || "").toLowerCase() === "emergency" &&
-    isOpenIncomingReferral(referral)
-  ).length;
 
   const assessmentRequiredFields = [
     { key: "assessment_findings", label: "Assessment findings" },
