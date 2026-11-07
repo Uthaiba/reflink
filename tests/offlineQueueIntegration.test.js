@@ -110,3 +110,12 @@ test("cross-tab sync claims use owner-scoped atomic IndexedDB transactions and f
   assert.match(queueSource, /removeQueuedReferral\(item\.client_id, userId, claimToken\)/);
   assert.match(queueSource, /releaseQueuedReferralClaim\(storedItem\.client_id, userId, claimToken\)/);
 });
+
+test("invalid decrypted queue ownership releases its claim before continuing", () => {
+  const validationIndex = queueSource.indexOf("if (!isQueueRecordOwnedBy(item, userId) || !isValidQueueOwner(item.payload, userId))");
+  const releaseIndex = queueSource.indexOf("await releaseQueuedReferralClaim(storedItem.client_id, userId, claimToken)", validationIndex);
+  const continueIndex = queueSource.indexOf("continue;", validationIndex);
+  assert.ok(validationIndex >= 0, "decrypted record ownership must be checked");
+  assert.ok(releaseIndex > validationIndex, "the active claim must be released after validation failure");
+  assert.ok(continueIndex > releaseIndex, "the worker must release before continuing");
+});
