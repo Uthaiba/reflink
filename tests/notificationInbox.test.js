@@ -195,3 +195,45 @@ test("read timestamps must use the same strict timestamp contract as creation an
     (error) => error.code === "INBOX_UNAVAILABLE",
   );
 });
+
+
+test("timestamps reject impossible calendar dates and out-of-range clock or offset fields", async () => {
+  const invalidCursor = makeClient();
+  await assert.rejects(
+    createNotificationInboxAdapter(invalidCursor.client).listMyNotifications({
+      before: { createdAt: "2026-02-30T08:00:00.000Z", id: NOTIFICATION_1 },
+    }),
+    (error) => error.code === "INVALID_INPUT",
+  );
+  assert.equal(invalidCursor.calls.from.length, 0);
+
+  for (const invalidTimestamp of [
+    "2026-02-30T08:00:00.000Z",
+    "2026-11-06T24:00:00.000Z",
+    "2026-11-06T08:00:00+25:00",
+  ]) {
+    const { client } = makeClient({
+      rows: [{ ...notification(), created_at: invalidTimestamp }],
+    });
+    await assert.rejects(
+      createNotificationInboxAdapter(client).listMyNotifications(),
+      (error) => error.code === "INBOX_UNAVAILABLE",
+    );
+  }
+});
+
+test("calendar validation accepts leap days only in leap years", async () => {
+  const valid = makeClient({
+    rows: [{ ...notification(), created_at: "2024-02-29T08:00:00.000Z" }],
+  });
+  const result = await createNotificationInboxAdapter(valid.client).listMyNotifications();
+  assert.equal(result.notifications[0].created_at, "2024-02-29T08:00:00.000Z");
+
+  const invalid = makeClient({
+    rows: [{ ...notification(), read_at: "2025-02-29T08:00:00.000Z" }],
+  });
+  await assert.rejects(
+    createNotificationInboxAdapter(invalid.client).listMyNotifications(),
+    (error) => error.code === "INBOX_UNAVAILABLE",
+  );
+});
