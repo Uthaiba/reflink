@@ -239,3 +239,15 @@ The comparison correctly recognizes composite indexes whose first key column is 
 ### 12.2 Decision
 
 The previous evidence gap about the exact FK list is now closed. This does **not** automatically authorize creating 16 indexes. Before any index migration, assess table size, write frequency, common join/filter patterns, delete/update behavior, existing query plans and index maintenance overhead in a disposable database with synthetic data. Prioritize indexes by measured workload and cascade/parent-row maintenance impact; avoid blindly adding every candidate. No production index DDL or redundant-index removal was performed.
+
+
+## 13. Application-to-database RPC dependency cross-check
+
+A source-only search of the current branch confirms that the React application already contains callers for proposed functions that are defined only in the seven unrecorded November migrations:
+
+- `src/App.jsx` calls `submit_counter_referral` from the receiving-side counter-referral submission flow (around line 8395 in the reviewed snapshot).
+- `src/components/dashboards/AdminDashboard.jsx` calls all six reporting functions: `get_admin_referral_volume`, `get_admin_facility_referral_summary`, `get_admin_lga_referral_summary`, `get_admin_facility_reporting_coverage`, `get_admin_referral_pathway_summary`, and `get_admin_acknowledgement_delay_alerts`.
+
+None of these seven proposed RPCs appears in the live 16-routine public catalog inventory. The Admin Dashboard catches RPC failures and displays explicit “migration must be applied and tested” messages; the counter-referral submission flow catches RPC failure and does not claim completion without a returned completion record.
+
+This is an expected source/database dependency gap while PR #1 remains draft and unmerged, but it is a release blocker: deploying the frontend without the reviewed, validated migration set leaves these features unavailable. Conversely, applying the migrations before the baseline, function-owner, grant, trigger and synthetic-data staging checks would be unsafe. Keep the frontend and database release sequence coordinated.
