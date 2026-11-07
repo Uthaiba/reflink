@@ -182,3 +182,14 @@ Remediation links:
 - [RLS enabled with no policies advisor](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
 - [Leaked-password protection guidance](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
 
+
+
+### 8.6 Audit trigger stores full row snapshots
+
+The live `public.audit_referral_mutation()` function is SECURITY DEFINER, owned by postgres, has `search_path=public`, and is attached to INSERT/UPDATE/DELETE triggers on both `public.referrals` and `public.counter_referrals`. It writes `to_jsonb(NEW)` and/or `to_jsonb(OLD)` into `public.audit_log.new_data` and `old_data`.
+
+This means the audit table stores full row snapshots, including any patient identifiers and clinical fields present in the referral/counter-referral records. The live `audit_log` SELECT policy is administrator-only; authenticated has table SELECT privilege but ordinary non-admin rows are filtered by RLS. The function owner has BYPASSRLS, and the trigger's SECURITY DEFINER execution is what allows audit writes to proceed independently of caller table policies.
+
+No audit-log rows were queried. The catalog evidence establishes the storage behavior, not the actual patient data contained in existing audit rows.
+
+**Required privacy governance:** define the minimum fields needed for clinical/legal audit, access logging for audit-log reads, retention and secure deletion periods, backup retention, encryption at rest/in transit, export controls, and the process for handling patient access/deletion requests where legally applicable. Do not remove full snapshots or alter the audit trigger without clinical governance and legal-retention review. The function's `search_path=public` should be hardened to an empty path in the reconciled source baseline after validating all references and trigger behavior in synthetic staging.
