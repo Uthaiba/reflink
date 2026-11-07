@@ -277,3 +277,17 @@ A repository-wide source scan of all 18 JavaScript/TypeScript files under `src/`
 This migration is a proposal only. It has not been applied. Before approval, verify PostgREST column-level projection behavior, any external consumers not present in this repository, and service-role write behavior in a synthetic non-production environment. If future administrative workflows require provider diagnostics, expose them through a separately authorized admin-only server path rather than broadening participant table SELECT.
 
 **Risk disposition:** potential sensitive metadata overexposure is documented and a least-privilege source migration is proposed. Production grant changes remain prohibited pending baseline reconciliation and staging validation.
+
+
+## 16. Sequence, extension and managed-schema boundary inventory
+
+The public schema also contains two bigint sequences, both owned by `postgres` and owned by their corresponding table identity columns:
+
+- `public.audit_log_id_seq` → `public.audit_log.id`
+- `public.referral_print_events_id_seq` → `public.referral_print_events.id`
+
+Installed extensions are `pg_stat_statements 1.11`, `pgcrypto 1.3`, `plpgsql 1.0`, `supabase_vault 0.3.1` and `uuid-ossp 1.1`. The catalog snapshot records their schemas and owners.
+
+The database also contains Supabase-managed schemas (`auth`, `storage`, `realtime`, `vault`, `extensions`, `graphql`, `graphql_public`, `pgbouncer` and `supabase_migrations`). These are platform dependencies, not application-owned baseline objects. The REFLINK baseline should declare required extension/schema dependencies and must not recreate or mutate Supabase-managed objects.
+
+The public catalog snapshot now includes 14 tables/162 columns, 2 sequences, 30 policies, 52 constraints, 28 indexes, 16 routines, 9 triggers, 2 views and 305 table-grant records. It remains a metadata inventory rather than a complete `pg_dump --schema-only` artifact. The missing recorded baseline SQL and a verified full schema-only export remain outstanding.
