@@ -47,27 +47,20 @@ test("acknowledgement hooks explicitly depend on the outbox foundation", async (
     "referral_acknowledgement_notification_hooks",
   );
   assert.match(sql, /Depends on 20261105000600_notification_outbox_foundation\.sql/);
-  for (const trigger of [
-    "trg_referral_ack_due_after_insert",
-    "trg_referral_ack_due_after_update",
-    "trg_profile_ack_due_after_insert",
-    "trg_profile_ack_due_after_update",
-  ]) {
-    assert.match(sql, new RegExp(`create trigger ${trigger}`, "i"));
-  }
+  assert.match(sql, /create trigger trg_referral_ack_due_after_update/i);
+  assert.doesNotMatch(sql, /create trigger trg_referral_ack_due_after_insert/i);
+  assert.doesNotMatch(sql, /create trigger trg_profile_ack_due_after_/i);
 });
 
-test("acknowledgement reminders use the stored deadline and assigned receiving staff", async () => {
+test("acknowledgement hook migration does not enqueue or infer user recipients", async () => {
   const sql = await migration(
     "20261106000100",
     "referral_acknowledgement_notification_hooks",
   );
-  assert.match(sql, /'in_app'/);
-  assert.match(sql, /'pending',\s*new\.ack_due_at/i);
-  assert.match(sql, /p\.role\s*=\s*'receiving_staff'/i);
-  assert.match(sql, /p\.facility_id\s*=\s*new\.receiving_facility_id/i);
-  assert.match(sql, /r\.status\s*=\s*'sent'/i);
-  assert.match(sql, /r\.acknowledged_at\s+is\s+null/i);
+  assert.match(sql, /intentionally does not enqueue user-addressed/i);
+  assert.match(sql, /cancel_referral_acknowledgement_reminders/i);
+  assert.doesNotMatch(sql, /insert into private\.notification_outbox/i);
+  assert.doesNotMatch(sql, /public\.profiles|receiving_staff/i);
   assert.doesNotMatch(sql, /http_request|net\.http_post|pg_net/i);
   assert.doesNotMatch(sql, /'sms'/i);
 });
@@ -240,10 +233,10 @@ test("notification recipient policy fails closed until an authoritative assignme
   assert.match(policy, /no automatic user recipient is selected/i);
   assert.match(policy, /Facility-wide recipient fan-out is not approved/i);
   assert.match(policy, /must remain unapplied/i);
-  // The old proposal still has broad role/facility selection. This test makes
-  // the policy/migration mismatch visible so nobody mistakes it for approval.
-  assert.match(hook, /p\.role\s*=\s*'receiving_staff'/i);
-  assert.match(hook, /p\.facility_id\s*=\s*new\.receiving_facility_id/i);
+  // The migration itself must fail closed, not merely document the mismatch.
+  assert.doesNotMatch(hook, /insert into private\.notification_outbox/i);
+  assert.doesNotMatch(hook, /public\.profiles|receiving_staff/i);
+  assert.match(hook, /does not enqueue user-addressed/i);
 });
 
 test("authenticated notification inbox adapter stays owner-scoped and mutation-limited", async () => {
