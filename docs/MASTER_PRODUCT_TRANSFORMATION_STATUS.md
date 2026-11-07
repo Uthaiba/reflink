@@ -105,3 +105,13 @@ A data-projection defect was found during this review: the receiving referral qu
 - Do not create billable Supabase branches or paid infrastructure.
 - Use synthetic data for all tests and demonstrations.
 - Report CI, Preview and production states separately and only when verified.
+
+## Latest continuation — migration dependency review (7 November 2026)
+
+- Corrected the migration-governance regression assertion to check the explicit no-reconstruction/no-ledger-edit safeguard in the reconciliation plan.
+- Corrected the synthetic referral lifecycle fixture so the expected active timeline milestone is undated at each state.
+- The latest CI run for commit `0376cb2852cbe165cd85fcdd812c0f54cfbdcbd1` reported automated unit tests, lint and production bundle build passing; Chromium installation completed and browser test server startup was still in progress at the last check. This is not yet a complete CI pass.
+- Added a source-only dependency and preflight review to `docs/MIGRATION_RECONCILIATION_PLAN.md`.
+- Key finding: migration 001 drops and recreates `public.get_admin_referral_volume(date, date)`; dependent objects, callers, owner and grants must be inventoried and validated before execution. Five reporting RPCs also rely on the existing `public.is_administrator()` helper, which is not defined by the proposal migrations.
+- Migration 007 explicitly depends on outbox migration 006. The notification-log ACL migration is a separate sensitive permission change requiring exact privilege and frontend-query validation.
+- No SQL was executed, no production or shared-project database was used for testing, and no migration or deployment was applied.
