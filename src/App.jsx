@@ -1292,8 +1292,6 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
 function ReferralTimeline({ referral }) {
   const steps = getReferralTimelineSteps(referral);
 
-  let activeFound = false;
-
   return (
     <section className="referral-timeline" aria-label="Referral journey">
       <div className="referral-timeline-header">
@@ -1317,8 +1315,7 @@ function ReferralTimeline({ referral }) {
       <div className="timeline-track">
         {steps.map((step) => {
           const completed = Boolean(step.timestamp);
-          const current = !completed && !activeFound;
-          if (current) activeFound = true;
+          const current = step.current;
 
           return (
             <div
