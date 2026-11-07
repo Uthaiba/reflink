@@ -68,7 +68,7 @@ The connected Supabase project currently lists one non-persistent, data-free dev
 ## 8. Decisions and next safe steps
 
 1. Keep all seven unrecorded migrations unapplied to production.
-2. Keep the broad receiving-staff fan-out trigger unapplied; the profile schema does not provide authoritative notification-duty eligibility.
+2. Do not enable user-addressed notification enqueue until an authoritative notification-duty roster/assignment source and eligibility rule are approved. The current acknowledgement-hook migration is cancellation-only; it does not fan out to receiving-staff profiles. Keep it unapplied until migration-baseline reconciliation and synthetic-data staging validation are complete.
 3. Do not mount the inbox adapter until an approved inbox migration, owner-only RLS and mark-read RPC have passed isolated database tests.
 4. Do not deploy a worker until recipient identity, consent/contact policy, retry/timeout semantics, provider sandbox and schedule are approved and tested.
 5. Review the five SECURITY DEFINER findings and two RLS-without-policy findings independently; preserve current application behavior while proving authorization requirements.
