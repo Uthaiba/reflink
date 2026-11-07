@@ -184,6 +184,23 @@ begin
     raise exception 'Batch size must be between 1 and 50.' using errcode = '22023';
   end if;
 
+  -- Lock queue rows before attempt-ledger rows. Settlement uses the same
+  -- outbox-then-attempt lock order; keeping one order avoids deadlocks when a
+  -- worker finishes while another worker reclaims or expires a lease.
+  perform o.id
+    from private.notification_outbox o
+   where o.status = 'processing'
+     and (
+       (o.expires_at is not null and o.expires_at <= pg_catalog.now())
+       or (o.attempt_count >= 8 and o.claimed_until <= pg_catalog.now())
+       or (
+         o.attempt_count < 8
+         and o.claimed_until <= pg_catalog.now()
+         and (o.expires_at is null or o.expires_at > pg_catalog.now())
+       )
+     )
+   for update;
+
   -- Close the active attempt ledger row before changing or reclaiming its lease.
   update private.notification_attempts a
      set finished_at = pg_catalog.now(),
