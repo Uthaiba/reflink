@@ -63,7 +63,7 @@ test("historical production baseline remains an explicit blocker and is never fa
 
   assert.match(plan, /20260928203447_reflink_v2_rural_first/);
   assert.match(plan, /restore missing historical migrations|create a reviewed baseline\/squash/i);
-  assert.match(plan, /Do not mark migrations applied merely to silence a mismatch/i);
+  assert.match(governance, /Do not mark migrations applied merely to silence a mismatch/i);
   assert.match(governance, /complete source-controlled migration baseline/i);
   assert.match(governance, /Do not run `supabase db push`/i);
 });
