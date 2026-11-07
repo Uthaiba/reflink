@@ -32,6 +32,9 @@ test("synthetic referral lifecycle advances through every intended milestone", (
       ...base,
       status,
       // Keep future milestones absent until the relevant state is reached.
+      assessment_completed_at: ["admitted", "discharged", "completed"].includes(status)
+        ? base.assessment_completed_at
+        : null,
       admission_at: ["admitted", "discharged", "completed"].includes(status) ? base.admission_at : null,
       discharged_at: ["discharged", "completed"].includes(status) ? base.discharged_at : null,
       counter_referral: status === "completed" ? base.counter_referral : null,
