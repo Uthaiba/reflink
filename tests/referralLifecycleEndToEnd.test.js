@@ -73,7 +73,7 @@ test("counter-referral UI confirms the transactional completion contract and val
   assert.ok(start >= 0);
   const source = app.slice(start);
 
-  assert.ok(source.includes('supabase.rpc("submit_counter_referral"'));
+  assert.match(source, /supabase\\.rpc\\(\\s*"submit_counter_referral"/);
   assert.ok(source.includes("!form.final_diagnosis.trim()"));
   assert.ok(source.includes("!form.outcome"));
   assert.ok(source.includes('form.outcome === "referred_further" && !form.referred_further_to.trim()'));
