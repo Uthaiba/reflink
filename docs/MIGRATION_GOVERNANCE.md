@@ -49,7 +49,7 @@ The advisor findings are not proof of exploitation. Remediation must preserve re
 
 ## Reconciliation workstream
 
-The detailed source migration inventory, dependency graph, read-only evidence, object-level review requirements and non-production acceptance gates are maintained in [MIGRATION_RECONCILIATION_PLAN.md](./MIGRATION_RECONCILIATION_PLAN.md). The current decision is **blocked pending baseline reconciliation and synthetic-data staging verification**. Do not apply any of the seven November 2026 source migrations to production or manually advance the remote migration ledger.
+The detailed source migration inventory, dependency graph, read-only evidence, object-level review requirements and non-production acceptance gates are maintained in [MIGRATION_RECONCILIATION_PLAN.md](./MIGRATION_RECONCILIATION_PLAN.md). The current decision is **blocked pending baseline reconciliation and synthetic-data staging verification**. Do not apply any of the eight November 2026 source migrations to production or manually advance the remote migration ledger.
 
 ## Source-level migration contract tests
 
