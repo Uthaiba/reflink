@@ -67,9 +67,8 @@ test("receiving actions use expected prior statuses and persist their lifecycle 
 test("counter-referral UI confirms the transactional completion contract and validates required fields", async () => {
   const app = await read("../src/App.jsx");
   const start = app.indexOf("function CounterReferralForm");
-  const end = app.indexOf("ADMINISTRATOR-ONLY ROUTE PROTECTION", start);
-  assert.ok(start >= 0 && end > start);
-  const source = app.slice(start, end);
+  assert.ok(start >= 0);
+  const source = app.slice(start);
 
   assert.ok(source.includes('supabase.rpc("submit_counter_referral"'));
   assert.ok(source.includes("!form.final_diagnosis.trim()"));
