@@ -3,6 +3,32 @@ const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 50;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/;
+
+function isValidTimestamp(value) {
+  if (typeof value !== "string" || !TIMESTAMP_PATTERN.test(value)) return false;
+
+  const match = value.match(/^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.\\d{1,6})?(Z|[+-](\\d{2}):(\\d{2}))$/);
+  if (!match) return false;
+
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, , offsetHourText, offsetMinuteText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const offsetHour = offsetHourText == null ? 0 : Number(offsetHourText);
+  const offsetMinute = offsetMinuteText == null ? 0 : Number(offsetMinuteText);
+
+  return month >= 1 && month <= 12
+    && day >= 1 && day <= daysInMonth[month - 1]
+    && Number(hourText) <= 23
+    && Number(minuteText) <= 59
+    && Number(secondText) <= 59
+    && offsetHour <= 23
+    && offsetMinute <= 59
+    && !Number.isNaN(new Date(value).getTime());
+}
+
 const ALLOWED_EVENT_TYPES = new Set([
   "referral_sent",
   "referral_acknowledged",
@@ -51,7 +77,7 @@ function normalizeCursor(before) {
   if (
     typeof before !== "object"
     || typeof before.createdAt !== "string"
-    || !TIMESTAMP_PATTERN.test(before.createdAt)
+    || !isValidTimestamp(before.createdAt)
     || typeof before.id !== "string"
     || !UUID_PATTERN.test(before.id)
   ) {
@@ -79,12 +105,10 @@ function normalizeNotification(row) {
     || typeof row.event_type !== "string"
     || typeof row.template_key !== "string"
     || typeof row.created_at !== "string"
-    || !TIMESTAMP_PATTERN.test(row.created_at)
-    || Number.isNaN(new Date(row.created_at).getTime())
+    || !isValidTimestamp(row.created_at)
     || (row.read_at != null && (
       typeof row.read_at !== "string"
-      || !TIMESTAMP_PATTERN.test(row.read_at)
-      || Number.isNaN(new Date(row.read_at).getTime())
+      || !isValidTimestamp(row.read_at)
     ))
   ) {
     throw new NotificationInboxError("INBOX_UNAVAILABLE");
