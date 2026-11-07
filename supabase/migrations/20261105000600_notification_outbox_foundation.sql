@@ -150,7 +150,8 @@ begin
      or v_existing.channel is distinct from p_channel
      or v_existing.recipient_user_id is distinct from p_recipient_user_id
      or v_existing.referral_id is distinct from p_referral_id
-     or v_existing.template_key is distinct from p_template_key then
+     or v_existing.template_key is distinct from p_template_key
+     or v_existing.expires_at is distinct from p_expires_at then
     raise exception 'Notification idempotency key conflicts with different event metadata.'
       using errcode = '23505';
   end if;
