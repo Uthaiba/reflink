@@ -11,7 +11,7 @@ import {
 } from "../../src/lib/offlineReferralQueue.js";
 
 const TEST_OWNER = "browser-test-account";
-const TEST_PASSPHRASE = "Synthetic-browser-test-passphrase-2026";
+const TEST_PASSPHRASE = "p".repeat(32);
 const DB_NAME = "reflink-offline";
 
 function syntheticReferral(id = "browser-reload-test") {
@@ -91,7 +91,7 @@ window.offlineQueueBrowserTests = {
 
   async createSecondAccountQueueRecord() {
     const owner = "browser-test-account-b";
-    const passphrase = "Second-synthetic-account-passphrase-2026";
+    const passphrase = "s".repeat(32);
     const { envelope, key } = await createOfflineKeyVault({ ownerUserId: owner, passphrase });
     await saveOfflineKeyVaultEnvelope(envelope, owner);
     await queueEncryptedReferral({
