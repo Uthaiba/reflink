@@ -17,6 +17,7 @@ test("legacy SMS endpoint does not expose provider diagnostics or message identi
   assert.match(source, /error_message: "SMS provider delivery failed\."/);
   assert.match(source, /error: "SMS notification could not be delivered\."/);
   assert.doesNotMatch(source, /data\?\.message|error\?\.message/);
-  assert.doesNotMatch(source, /provider_message_id:\s*result\.sid/);
+  assert.match(source, /provider_message_id:\s*result\.sid/);
+  assert.doesNotMatch(source, /return json\(res, 200, \{ status: "sent", provider_message_id:/);
   assert.match(source, /return json\(res, 200, \{ status: "sent" \}\)/);
 });
