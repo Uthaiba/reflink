@@ -31,7 +31,9 @@ test("synthetic referral lifecycle advances through every intended milestone", (
     const steps = getReferralTimelineSteps({
       ...base,
       status,
-      // Keep future milestones absent until the relevant state is reached.
+      // Keep the active milestone undated and future milestones absent.
+      acknowledged_at: status === "sent" ? null : base.acknowledged_at,
+      patient_arrived_at: status === "acknowledged" ? null : base.patient_arrived_at,
       assessment_completed_at: ["admitted", "discharged", "completed"].includes(status)
         ? base.assessment_completed_at
         : null,
