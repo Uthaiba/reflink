@@ -3,7 +3,7 @@
 **Last reviewed:** 7 November 2026  
 **Production baseline:** `v2.0-release` at `cce730ec64aa8be568021f16de4de47c110f81d5`  
 **Working branch:** `reflink/phase-1-security-remediation`  
-**Current reviewed HEAD:** `ae516a0604fe1f91cede38abcb0d682a8512f687`  
+**Current reviewed HEAD:** `f99bf38e006547bf02e501cae4b62983edfdabaf`  
 **Pull request:** #1, open and draft; target `v2.0-release`.
 
 This register distinguishes source implementation, automated verification, live database validation and production release. A source file or passing unit test is not evidence that a database migration is safe or that a feature is live in production.
@@ -49,9 +49,9 @@ A data-projection defect was found during this review: the receiving referral qu
 - Emergency KPI now counts open emergency referrals only.
 - Added `tests/referralPriority.test.js` for deadline handling, priority ordering, active/closed status and query projection.
 
-**Current validation:** source committed on the working branch. Exact-HEAD GitHub Actions and Vercel checks are pending at the time of this register update. Do not describe this correction as CI-verified until the exact HEAD passes.
+**Validation:** the preceding receiving-queue commit `5098ee1b3fc58ff6e976d6ff73fab63dcda1b71a` passed GitHub Actions workflow #625, including unit tests, lint, production bundle build and Chromium offline-queue browser tests. Vercel's status check was successful for that commit. The subsequent lifecycle compare-and-set changes documented below are newer and require their own exact-HEAD CI run; no Preview deployment is inferred from the earlier status.
 
-## Hard release blockers
+## Receiving lifecycle concurrency protection — latest source changes\n\n- Added expected-current-status filters to all six receiving-facility update handlers: acknowledgement (`sent`), patient arrival (`acknowledged`), assessment start (`patient_arrived`), assessment save (`under_assessment`), admission save (`admitted`) and discharge (`admitted`).\n- Changed these update responses to `maybeSingle()` and treat a no-match as a stale referral rather than reporting success. The user receives a clear instruction to refresh and review the current status before retrying.\n- Added `tests/referralLifecycleConcurrency.test.js` to assert each handler's expected-status guard, no-match handling and stale-state message. These are source-contract tests, not concurrent PostgreSQL integration tests; server-side atomicity and trigger behavior still require synthetic-database validation.\n\n## Hard release blockers
 
 1. The connected production Supabase migration ledger records `20260928203447_reflink_v2_rural_first`, but its historical SQL source is missing from the current branch. The November proposal migrations are not recorded as applied.
 2. No approved non-production Supabase environment with synthetic facilities, users and referrals is available. Do not create a billable branch or use production as a test database.
