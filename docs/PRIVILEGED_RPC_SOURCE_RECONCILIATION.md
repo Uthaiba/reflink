@@ -81,3 +81,21 @@ Before any privileged RPC remediation or deployment:
 **Blocked: exact legacy function source and dependency evidence are not in this branch; migration baseline and staging validation remain unresolved.**
 
 This is a source-only review finding. No production object was read or changed in this turn. No SQL migration, grant, RLS policy, Auth setting, worker, provider dispatch or deployment was performed.
+
+
+## 6. Application call-site inventory — 7 November 2026
+
+A source-only search of the current branch at `ed623eb7be1dbbde02cbf1cf99bb3d8469d25197` located the following direct application callers:
+
+| Legacy RPC | Source call site | Observed caller behaviour | Required validation |
+|---|---|---|---|
+| `get_facility_user_count(uuid)` | `src/App.jsx` around lines 4818 and 6183 | Called after loading the signed-in user's profile and requiring a non-null `facility_id`; the returned count populates facility user-count state. | Confirm the RPC independently binds non-admin callers to their own facility, does not disclose counts for arbitrary facility IDs, and defines treatment of inactive users. Both application paths need role/facility regression coverage. |
+| `get_facility_user_counts()` | `src/components/dashboards/AdminDashboard.jsx` around line 100 | Called by the Admin Dashboard loader; results are mapped by facility ID into dashboard state. | Confirm administrator-only authorization in the function itself. UI placement or dashboard visibility is not an authorization control. |
+| `log_referral_print(uuid,text)` | `src/App.jsx` around line 981 | Called before browser printing; failures are caught and printing proceeds without a print number. | Confirm caller role and referral relationship/receiving assignment, allowed copy-label values and length, and concurrent print-number allocation. Test direct RPC invocation for unauthorized and wrong-facility identities. |
+| `log_referral_read(uuid)` | `src/App.jsx` around lines 5123 and 6356 | Called when opening referral details; the returned promise is not awaited and errors are not surfaced to the user. | Confirm the function rejects wrong-facility and unauthorized roles, and that audit failures are observable through safe telemetry without blocking clinical access unexpectedly. Test audit event duplication/volume and direct RPC calls. |
+
+The two `get_facility_user_count` calls are in separate application flows and both require a profile facility assignment before invoking the RPC. This client-side precondition does not replace the function's own caller authorization. The two read-event calls use the same referral-open interaction in separate UI paths; neither client call is proof that a valid audit row was written. The print flow deliberately degrades to ordinary printing if the audit RPC fails, which should be an explicit operationally approved behaviour.
+
+The inventory is a source search, not a proof that no dynamic, generated, external or older client calls exist. Before changing grants or definitions, supplement it with repository-wide search, database dependency metadata and any deployed-client inventory available through the approved process.
+
+**No legacy RPC definition or grant was changed.** This inventory only narrows the application dependency map and records test requirements; exact live definitions, ownership, ACLs, policy dependencies and staging validation remain blockers.
