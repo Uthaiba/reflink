@@ -251,3 +251,15 @@ A source-only search of the current branch confirms that the React application a
 None of these seven proposed RPCs appears in the live 16-routine public catalog inventory. The Admin Dashboard catches RPC failures and displays explicit “migration must be applied and tested” messages; the counter-referral submission flow catches RPC failure and does not claim completion without a returned completion record.
 
 This is an expected source/database dependency gap while PR #1 remains draft and unmerged, but it is a release blocker: deploying the frontend without the reviewed, validated migration set leaves these features unavailable. Conversely, applying the migrations before the baseline, function-owner, grant, trigger and synthetic-data staging checks would be unsafe. Keep the frontend and database release sequence coordinated.
+
+
+## 14. Source-controlled metadata snapshots
+
+The read-only catalog evidence has now been preserved in two clearly labelled documentation snapshots:
+
+- `docs/catalog_exports/20261107_live_public_routines.md` — exact `pg_get_functiondef` output and owner, SECURITY DEFINER, function settings and ACL for all 16 live public routines.
+- `docs/catalog_exports/20261107_live_public_schema_catalog.md` — 162 public table-column records, 30 RLS policy records, 52 constraints, 28 indexes, 9 public triggers, 2 public views and 305 table-grant records.
+
+These files are metadata evidence, **not executable migrations or a complete restore dump**. They exclude application rows and do not replace the missing source migration for `20260928203447`, nor do they capture every extension-managed object or every non-public schema dependency. A full schema-only export and exact baseline source are still required before a disposable database can be reconstructed.
+
+The two snapshots were generated from read-only catalog queries. No database object, policy, grant, migration ledger entry, Auth setting or deployment was changed.
