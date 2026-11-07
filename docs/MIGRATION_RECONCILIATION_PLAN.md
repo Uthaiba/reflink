@@ -202,3 +202,40 @@ Advisor remediation references:
 - [Leaked password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
 
 No advisor finding was modified. No policy, grant, Auth setting, function, migration or table was changed.
+
+
+## 12. Exact foreign-key/index inventory — 7 November 2026
+
+A fresh catalog-only comparison enumerated every public foreign-key constraint and compared its ordered referencing columns with the leading key columns of every valid, non-partial index on the referencing table. All current public foreign keys are single-column. The query found **16 foreign-key columns without a supporting valid, non-partial leading index**:
+
+| Table | Foreign-key column | Constraint | Referenced table |
+|---|---|---|---|
+| `counter_referrals` | `receiving_user_id` | `counter_referrals_receiving_user_id_fkey` | `auth.users(id)` |
+| `feedback` | `provided_by` | `feedback_provided_by_fkey` | `profiles(id)` |
+| `feedback` | `referral_id` | `feedback_referral_id_fkey` | `referrals(id)` |
+| `profiles` | `facility_id` | `profiles_facility_id_fkey` | `facilities(id)` |
+| `referral_events` | `performed_by` | `referral_events_performed_by_fkey` | `profiles(id)` |
+| `referral_events` | `referral_id` | `referral_events_referral_id_fkey` | `referrals(id)` |
+| `referral_feedback` | `receiving_facility_id` | `referral_feedback_receiving_facility_id_fkey` | `facilities(id)` |
+| `referral_feedback` | `referral_id` | `referral_feedback_referral_id_fkey` | `referrals(id)` |
+| `referral_feedback` | `submitted_by` | `referral_feedback_submitted_by_fkey` | `profiles(id)` |
+| `referral_print_events` | `printed_by` | `referral_print_events_printed_by_fkey` | `auth.users(id)` |
+| `referral_updates` | `referral_id` | `referral_updates_referral_id_fkey` | `referrals(id)` |
+| `referral_updates` | `updated_by` | `referral_updates_updated_by_fkey` | `profiles(id)` |
+| `referrals` | `receiving_facility_id` | `referrals_receiving_facility_id_fkey` | `facilities(id)` |
+| `referrals` | `referring_facility_id` | `referrals_referring_facility_id_fkey` | `facilities(id)` |
+| `referrals` | `referring_user_id` | `referrals_referring_user_id_fkey` | `profiles(id)` |
+| `users` | `facility_id` | `users_facility_id_fkey` | `facilities(id)` |
+
+The comparison correctly recognizes composite indexes whose first key column is the FK column, including `audit_log(actor_user_id, created_at DESC)`, `referral_print_events(referral_id, created_at DESC)`, `referral_notifications(referral_id, created_at DESC)`, and the unique `counter_referrals(referral_id)` index. It does not count partial indexes as general FK coverage.
+
+### 12.1 Existing index inventory observations
+
+- `counter_referrals.referral_id` has both a unique constraint/index and a separate non-unique `counter_referrals_referral_idx` on the same single column. The non-unique index is a redundancy candidate, but do not drop it without query-plan and workload review.
+- `referral_print_events.referral_id` is already supported by its composite index with `created_at` as the second key. Its separate `printed_by` FK remains unindexed.
+- `audit_log.actor_user_id` is already supported by `audit_log_actor_idx(actor_user_id, created_at DESC)`; it is not part of the 16 missing-index list.
+- The two referral facility FKs and the referral-user FK have no leading-key support in the current public index inventory.
+
+### 12.2 Decision
+
+The previous evidence gap about the exact FK list is now closed. This does **not** automatically authorize creating 16 indexes. Before any index migration, assess table size, write frequency, common join/filter patterns, delete/update behavior, existing query plans and index maintenance overhead in a disposable database with synthetic data. Prioritize indexes by measured workload and cascade/parent-row maintenance impact; avoid blindly adding every candidate. No production index DDL or redundant-index removal was performed.
