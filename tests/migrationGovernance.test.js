@@ -93,6 +93,40 @@ test("outbox queue functions are individually SECURITY INVOKER with empty search
   }
 });
 
+test("outbox idempotency compares every event field, including expiry", async () => {
+  const sql = await migration(
+    "20261105000600",
+    "notification_outbox_foundation",
+  );
+  const definition = functionDefinition(sql, "private", "enqueue_notification");
+  for (const field of [
+    "event_type",
+    "channel",
+    "recipient_user_id",
+    "referral_id",
+    "template_key",
+    "expires_at",
+  ]) {
+    assert.match(
+      definition,
+      new RegExp(`v_existing\\\\.${field}\\\\s+is\\\\s+distinct\\\\s+from\\\\s+p_${field}`, "i"),
+      `Idempotency key reuse must reject changed ${field}`,
+    );
+  }
+  assert.match(definition, /on conflict \\(event_key\\) do nothing/i);
+});
+
+test("acknowledgement hook ignores updates that do not change lifecycle fields", async () => {
+  const sql = await migration(
+    "20261106000100",
+    "referral_acknowledgement_notification_hooks",
+  );
+  assert.match(
+    sql,
+    /when \\(\\s*old\\.status is distinct from new\\.status[\\s\\S]*old\\.ack_due_at is distinct from new\\.ack_due_at[\\s\\S]*old\\.acknowledged_at is distinct from new\\.acknowledged_at[\\s\\S]*old\\.receiving_facility_id is distinct from new\\.receiving_facility_id\\s*\\)/i,
+  );
+});
+
 test("outbox queue functions have exact service-role-only execute grants", async () => {
   const sql = await migration(
     "20261105000600",
