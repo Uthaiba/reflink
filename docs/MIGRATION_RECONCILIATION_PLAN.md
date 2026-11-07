@@ -114,3 +114,71 @@ Before proposing indexes, obtain a metadata-only export of:
 For each candidate, determine whether an existing composite index already has the foreign-key columns as a usable leading prefix. Do not add a redundant index merely because a single-column index is absent. Check whether the constraint is multi-column and preserve its column order. Confirm the candidate benefits real joins, deletes/updates or common application queries.
 
 **Decision:** no index migration is proposed from the currently available evidence. Add an index only after the exact catalog export and query/workload review are attached to the source change, then validate it against a disposable database with representative synthetic data. No production index DDL is authorised by this review.
+
+
+## 9. Live migration ledger and source-baseline gap — 7 November 2026
+
+A fresh read-only migration-ledger query again returned exactly one recorded version: `20260928203447_reflink_v2_rural_first`. The branch's `supabase/migrations/` directory contains the seven November 5–6 proposal files listed above, but **does not contain the SQL file for the recorded 20260928203447 baseline**.
+
+A metadata-only catalog inventory returned 16 live public routines. All 16 are owned by `postgres`; none is defined by the seven proposed November migrations. The seven files define new reporting, counter-referral and notification-outbox routines, not the missing historical baseline. Therefore, the branch cannot currently recreate the live public routine layer from its migration history.
+
+| Live routine | SECURITY DEFINER | Search path | Effective EXECUTE |
+|---|---:|---|---|
+| `audit_referral_mutation()` | Yes | public | service_role |
+| `get_facility_user_count(uuid)` | Yes | empty | authenticated, service_role |
+| `get_facility_user_counts()` | Yes | public | authenticated, service_role |
+| `get_referral_analytics_summary()` | Yes | public | service_role |
+| `guard_profile_security_fields()` | No | empty | service_role |
+| `handle_new_user()` | Yes | public | service_role |
+| `is_administrator()` | Yes | public | authenticated, service_role |
+| `is_current_user_administrator()` | Yes | public | service_role |
+| `log_referral_print(uuid,text)` | Yes | public | authenticated, service_role |
+| `log_referral_read(uuid)` | Yes | public | authenticated, service_role |
+| `log_referral_status_change()` | Yes | public | service_role |
+| `require_counter_referral_before_completion()` | No | public | service_role |
+| `set_referral_ack_due_at()` | No | public | service_role |
+| `update_referral_draft_timestamp()` | No | empty | service_role |
+| `validate_referral_entry()` | No | public | service_role |
+| `validate_referral_status_transition()` | No | empty | service_role |
+
+Catalog privilege checks confirmed anon has no EXECUTE privilege on these 16 routines. Authenticated has EXECUTE on the five user-facing legacy RPCs above; service_role has EXECUTE on all 16. The owner role `postgres` has BYPASSRLS, so every SECURITY DEFINER routine owned by it executes with row-level security bypass. Do not infer that underlying table RLS protects a privileged routine.
+
+### 9.1 Existing public trigger inventory
+
+Nine non-internal triggers were returned for public tables:
+
+- `counter_referrals.counter_referrals_audit_mutation` — AFTER INSERT/UPDATE/DELETE, calls `audit_referral_mutation()`.
+- `profiles.guard_profile_security_fields` — BEFORE UPDATE, calls `guard_profile_security_fields()`.
+- `referral_drafts.referral_draft_updated_at` — BEFORE UPDATE, calls `update_referral_draft_timestamp()`.
+- `referrals.referral_ack_due_at_trigger` — BEFORE INSERT or UPDATE OF urgency/created_at, calls `set_referral_ack_due_at()`.
+- `referrals.referral_counter_referral_guard` — BEFORE UPDATE OF status, calls `require_counter_referral_before_completion()`.
+- `referrals.referral_entry_validation_trigger` — BEFORE INSERT/UPDATE, calls `validate_referral_entry()`.
+- `referrals.referral_status_audit_trigger` — AFTER UPDATE OF status, calls `log_referral_status_change()`.
+- `referrals.referral_status_transition_validation` — BEFORE UPDATE OF status, calls `validate_referral_status_transition()`.
+- `referrals.referrals_audit_mutation` — AFTER INSERT/UPDATE/DELETE, calls `audit_referral_mutation()`.
+
+The live `handle_new_user()` function exists, but the catalog query over non-internal triggers across schemas found no trigger currently referencing it. Treat this as an orphan/unattached function requiring historical baseline investigation; do not recreate or attach an auth trigger based on the function name alone.
+
+### 9.2 Existing analytics views
+
+Two public views exist, both owned by postgres, with no `security_invoker=true` reloption. Effective SELECT privileges are service_role only; anon and authenticated cannot SELECT either view.
+
+- `referral_analytics` includes patient identifiers, diagnosis fields, referral IDs, status and lifecycle timestamps. It is not exposed to anon/authenticated.
+- `referral_analytics_summary` aggregates operational referral metrics and is also service_role-only.
+
+No rows from either view were queried. Their definitions and ACLs are catalog metadata only. Any future grant change must account for their default view-owner/RLS behavior and the sensitive columns in `referral_analytics`.
+
+## 10. Required baseline reconstruction package
+
+The baseline is not ready to reconstruct from the current seven proposal files. The next source-control deliverable must be a separately reviewed, metadata-backed baseline package containing:
+
+1. The exact SQL migration file (or an approved historical source export) corresponding to recorded ledger version `20260928203447`.
+2. Definitions, owner, ACL, security mode, search_path and volatility for all 16 live public routines listed above.
+3. The nine public trigger definitions and their trigger-function definitions, plus the auth-schema trigger inventory.
+4. The two public view definitions, owner, reloptions and effective grants.
+5. All public table definitions, constraints, indexes, RLS enablement, policies and grants, with dependencies.
+6. The complete migration ledger and an object-by-object explanation of anything present in the live schema but absent from the recorded migration chain.
+
+Do not generate a squash/baseline migration from the current catalog summaries. The baseline must be reviewed against the exact live schema and then replayed only in a disposable synthetic-data environment. Preserve production as read-only until that package has passed staging validation and separate release approval.
+
+**Current decision remains blocked:** the single recorded migration has no corresponding source SQL in this branch, and all 16 live public routines are outside the tracked migration history. No migration replay, ledger reconciliation or schema mutation is authorized by this metadata export.
