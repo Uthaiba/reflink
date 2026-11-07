@@ -99,3 +99,18 @@ No patient-level data was queried for this review. No database or Auth settings 
 The repository now includes `tests/migrationGovernance.test.js`. It statically checks the seven migration versions, the explicit outbox-to-hook dependency, stored acknowledgement deadline and in-app-only queue behavior, service-role-only outbox function grants, administrator checks for reporting RPCs, and receiving-role/facility checks for counter-referral completion.
 
 These tests are not a SQL parser and do not compile or execute the migrations. A passing result is not evidence that the SQL applies cleanly or that PostgreSQL privileges/triggers behave correctly. Disposable-database validation remains mandatory.
+
+
+## 8. Foreign-key index review evidence gap
+
+A prior read-only catalog review reported 16 foreign-key columns without a supporting index. The exact constraint/table/column list and full index definitions are not preserved in the current source-controlled review evidence. The count alone is not sufficient to generate index DDL safely.
+
+Before proposing indexes, obtain a metadata-only export of:
+- each foreign-key constraint name, referencing table and ordered referencing columns;
+- all existing indexes on each referencing table, including key-column order, included columns, uniqueness, expressions and partial predicates;
+- table sizes and representative query plans/workload evidence where available;
+- write volume and maintenance implications for the affected tables.
+
+For each candidate, determine whether an existing composite index already has the foreign-key columns as a usable leading prefix. Do not add a redundant index merely because a single-column index is absent. Check whether the constraint is multi-column and preserve its column order. Confirm the candidate benefits real joins, deletes/updates or common application queries.
+
+**Decision:** no index migration is proposed from the currently available evidence. Add an index only after the exact catalog export and query/workload review are attached to the source change, then validate it against a disposable database with representative synthetic data. No production index DDL is authorised by this review.
