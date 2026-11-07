@@ -361,6 +361,9 @@ test("legacy privileged RPC source gaps and helper dependencies remain explicit 
   assert.match(review, /exact live function definitions/i);
   assert.match(review, /cross-RPC, cross-period and cross-filter disclosure tests/i);
   assert.match(review, /Blocked: exact legacy function source/i);
+  assert.match(review, /reviewed source snapshot `d3c6c24e22eb426760065754bfef842911880542`/i);
+  assert.match(review, /src\\/App\\.jsx` at lines 4821 and 6186/i);
+  assert.match(review, /src\\/components\\/dashboards\\/AdminDashboard\\.jsx` at line 100/i);
 });
 
 test("reporting SECURITY DEFINER RPCs pin search_path and require the administrator helper", async () => {
