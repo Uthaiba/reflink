@@ -4,7 +4,7 @@ import { supabase } from "./lib/supabase.js";
 import { cacheValue, createClientId, getCachedValue, getQueueCount, getOfflineKeyVaultEnvelope, saveOfflineKeyVaultEnvelope, queueEncryptedReferral, migratePlaintextQueueToEncrypted, syncQueuedReferrals } from "./lib/offlineReferralQueue.js";
 import { createOfflineKeyVault, unlockOfflineKeyVault } from "./lib/offlineQueueKeyVault.js";
 import { createOfflineVaultLockChannel } from "./lib/offlineVaultLockChannel.js";
-import { isAcknowledgementOverdue as isAckOverdue, isOpenIncomingReferral, sortIncomingReferralsByPriority } from "./lib/referralPriority.js";
+import { compareIncomingReferralPriority, isAcknowledgementOverdue as isAckOverdue, isOpenIncomingReferral } from "./lib/referralPriority.js";
 import { LanguageSwitcher, useLanguage } from "./lib/i18n.jsx";
 import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
 import "./App.css";
@@ -7182,7 +7182,7 @@ const handleStartAssessment = async (referralId) => {
       );
       return matchesStatus && matchesUrgency && matchesSearch;
     })
-    .sort((a, b) => sortIncomingReferralsByPriority([a, b])[0] === a ? -1 : 1);
+    .sort((a, b) => compareIncomingReferralPriority(a, b));
 
   const overdueIncomingAcknowledgements = referrals.filter(isAckOverdue).length;
   const emergencyIncomingReferrals = referrals.filter((referral) =>
