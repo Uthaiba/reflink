@@ -182,3 +182,16 @@ test("unknown event and template keys are normalized to generic allowlist values
   assert.equal(result.notifications[0].event_type, "unknown");
   assert.equal(result.notifications[0].template_key, "unknown.v1");
 });
+
+
+test("read timestamps must use the same strict timestamp contract as creation and cursors", async () => {
+  const invalidRow = {
+    ...notification(),
+    read_at: "not-a-timestamp",
+  };
+  const { client } = makeClient({ rows: [invalidRow] });
+  await assert.rejects(
+    createNotificationInboxAdapter(client).listMyNotifications(),
+    (error) => error.code === "INBOX_UNAVAILABLE",
+  );
+});
