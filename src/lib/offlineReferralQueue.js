@@ -465,7 +465,11 @@ async function syncOwnedQueue(supabaseClient, userId, key) {
       if (!claimToken) continue;
       if (!isEncryptedQueueRecord(storedItem)) { failed += 1; await releaseQueuedReferralClaim(storedItem.client_id, userId, claimToken); continue; }
       item = await decryptQueuedReferralRecord(storedItem, userId, key);
-      if (!isQueueRecordOwnedBy(item, userId) || !isValidQueueOwner(item.payload, userId)) { failed += 1; continue; }
+      if (!isQueueRecordOwnedBy(item, userId) || !isValidQueueOwner(item.payload, userId)) {
+        failed += 1;
+        await releaseQueuedReferralClaim(storedItem.client_id, userId, claimToken);
+        continue;
+      }
       const { data: existing, error: lookupError } = await supabaseClient
         .from("referrals")
         .select("id, urgency")
