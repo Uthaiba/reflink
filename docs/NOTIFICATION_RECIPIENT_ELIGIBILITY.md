@@ -8,7 +8,7 @@ REFLINK must not infer notification eligibility solely from a profile having `ro
 
 The verified profile contract currently establishes `profiles.id`, `profiles.role` and `profiles.facility_id`. It does not establish active membership, shift/on-call status, notification duty, user preference, or a verified notification contact. A profile's existence is therefore insufficient evidence that the person is currently responsible for acknowledging referrals.
 
-**Default behavior: no automatic user recipient is selected until an approved assignment/roster source and eligibility rule are available.** Do not broadcast to all receiving-staff profiles, select the first profile, or fall back to an arbitrary facility user. Referral creation and acknowledgement must continue normally when no notification recipient can be resolved.
+**Default behavior: no automatic user recipient is selected until an approved assignment/roster source and eligibility rule are available.** The notification enqueue migration must remain unapplied until that recipient policy and the database migration baseline are approved. Do not broadcast to all receiving-staff profiles, select the first profile, or fall back to an arbitrary facility user. Referral creation and acknowledgement must continue normally when no notification recipient can be resolved.
 
 This is a safe implementation boundary, not a claim that no current staff member is responsible for a referral.
 
