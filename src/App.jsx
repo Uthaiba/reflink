@@ -1,11 +1,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
-import { cacheValue, createClientId, getCachedValue, getQueueCount, queueReferral, syncQueuedReferrals } from "./lib/offlineReferralQueue.js";
+import { cacheValue, createClientId, getCachedValue, getQueueCount, getOfflineKeyVaultEnvelope, saveOfflineKeyVaultEnvelope, queueEncryptedReferral, migratePlaintextQueueToEncrypted, syncQueuedReferrals } from "./lib/offlineReferralQueue.js";
+import { createOfflineKeyVault, unlockOfflineKeyVault } from "./lib/offlineQueueKeyVault.js";
+import { createOfflineVaultLockChannel } from "./lib/offlineVaultLockChannel.js";
+import { compareIncomingReferralPriority, isAcknowledgementOverdue as isAckOverdue, isOpenIncomingReferral } from "./lib/referralPriority.js";
+import { getReceivingReferralMetrics } from "./lib/receivingReferralMetrics.js";
+import { getReferralTimelineSteps } from "./lib/referralTimeline.js";
 import { LanguageSwitcher, useLanguage } from "./lib/i18n.jsx";
 import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
-import AnalyticsDashboard from "./components/dashboards/AnalyticsDashboard.jsx";
-import AnalysisHub from "./components/dashboards/AnalysisHub.jsx";
 import "./App.css";
 import "./reflink-theme-professional.css";
 import "./reflink-branding.css";
@@ -13,6 +16,7 @@ import "./reflink-human-centered-ux.css";
 import "./reflink-dashboard-refinement.css";
 import "./reflink-referral-detail-ux.css";
 import "./reflink-investigation-results-ux.css";
+import "./reflink-workspace-quality.css";
 
 function formatPatientAge(ageInMonths) {
   const months = Number(ageInMonths);
@@ -1286,39 +1290,7 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
 }
 
 function ReferralTimeline({ referral }) {
-  const steps = [
-    {
-      key: "created",
-      label: "Referral Created",
-      timestamp: referral.created_at,
-    },
-    {
-      key: "acknowledged",
-      label: "Referral Acknowledged",
-      timestamp: referral.acknowledged_at,
-    },
-    {
-      key: "patient-arrived",
-      label: "Patient Arrived",
-      timestamp: referral.patient_arrived_at,
-    },
-    {
-      key: "assessment",
-      label: referral.assessment_completed_at
-  ? "Assessment Completed"
-  : referral.status === "under_assessment"
-    ? "Assessment in Progress"
-    : "Assessment",
-      timestamp: referral.assessment_completed_at,
-    },
-    {
-      key: "completed",
-      label: "Referral Completed",
-      timestamp: referral.completed_at || referral.discharged_at,
-    },
-  ];
-
-  let activeFound = false;
+  const steps = getReferralTimelineSteps(referral);
 
   return (
     <section className="referral-timeline" aria-label="Referral journey">
@@ -1343,8 +1315,7 @@ function ReferralTimeline({ referral }) {
       <div className="timeline-track">
         {steps.map((step) => {
           const completed = Boolean(step.timestamp);
-          const current = !completed && !activeFound;
-          if (current) activeFound = true;
+          const current = step.current;
 
           return (
             <div
@@ -1404,14 +1375,30 @@ function OfflineStatusBadge() {
   const [online, setOnline] = useState(navigator.onLine);
   const [queued, setQueued] = useState(0);
   useEffect(() => {
-    const refresh = async () => setQueued(await getQueueCount());
+    let active = true;
+    const refresh = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const count = session?.user?.id ? await getQueueCount(session.user.id) : 0;
+        if (active) setQueued(count);
+      } catch {
+        if (active) setQueued(0);
+      }
+    };
     const onOnline = () => { setOnline(true); refresh(); };
     const onOffline = () => setOnline(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => { Promise.resolve().then(refresh); });
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     refresh();
     const timer = window.setInterval(refresh, 5000);
-    return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); window.clearInterval(timer); };
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      window.clearInterval(timer);
+    };
   }, []);
   return (
     <span className={`reflink-connectivity-badge ${online ? "is-online" : "is-offline"}`} aria-live="polite">
@@ -1444,8 +1431,105 @@ function urgencyMeta(urgency) {
   return { label: "Routine", className: "urgency-routine", sla: "Acknowledgement target: 24 hours" };
 }
 
-function isAckOverdue(referral) {
-  return referral?.status === "sent" && referral?.ack_due_at && new Date(referral.ack_due_at).getTime() < Date.now();
+function OfflineVaultPanel({ ownerUserId, onUnlocked, onClose }) {
+  const [envelope, setEnvelope] = useState(null);
+  const [vaultLoading, setVaultLoading] = useState(true);
+  const [passphrase, setPassphrase] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    getOfflineKeyVaultEnvelope(ownerUserId)
+      .then((stored) => { if (active) setEnvelope(stored); })
+      .catch(() => { if (active) setError("Unable to read the offline vault from this browser."); })
+      .finally(() => { if (active) setVaultLoading(false); });
+    return () => { active = false; };
+  }, [ownerUserId]);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      let result;
+      if (envelope) {
+        result = await unlockOfflineKeyVault(envelope, { ownerUserId, passphrase });
+      } else {
+        if (passphrase !== confirmation) throw new Error("The passphrases do not match.");
+        result = await createOfflineKeyVault({ ownerUserId, passphrase });
+        await saveOfflineKeyVaultEnvelope(result.envelope, ownerUserId);
+        setEnvelope(result.envelope);
+      }
+      setPassphrase("");
+      setConfirmation("");
+      await onUnlocked(result.key, ownerUserId);
+    } catch (unlockError) {
+      if (unlockError?.name === "ConstraintError") {
+        const existing = await getOfflineKeyVaultEnvelope(ownerUserId).catch(() => null);
+        if (existing) {
+          setEnvelope(existing);
+          setError("An offline vault already exists for this account. Enter its passphrase to unlock it.");
+        } else {
+          setError("Another tab may be creating the vault. Close other REFLINK tabs and try again.");
+        }
+      } else {
+        setError(unlockError?.message || "Unable to unlock the offline vault.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="reflink-offline-vault-panel" aria-labelledby="offline-vault-title">
+      <div className="reflink-offline-vault-panel__header">
+        <div>
+          <h3 id="offline-vault-title">Offline referral protection</h3>
+          <p>{envelope ? "Unlock your account's offline vault to access and synchronise pending referrals." : "Create a passphrase-protected vault before saving referrals while offline."}</p>
+        </div>
+        {onClose && <button type="button" className="secondary-button" onClick={onClose}>Close</button>}
+      </div>
+      <form onSubmit={submit}>
+        <label htmlFor="offline-vault-passphrase">Vault passphrase</label>
+        <input
+          id="offline-vault-passphrase"
+          type="password"
+          autoComplete="current-password"
+          minLength={12}
+          maxLength={1024}
+          required
+          value={passphrase}
+          onChange={(event) => setPassphrase(event.target.value)}
+          placeholder="At least 12 characters"
+        />
+        {!envelope && (
+          <>
+            <label htmlFor="offline-vault-confirm">Confirm passphrase</label>
+            <input
+              id="offline-vault-confirm"
+              type="password"
+              autoComplete="new-password"
+              minLength={12}
+              maxLength={1024}
+              required
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+              placeholder="Re-enter passphrase"
+            />
+          </>
+        )}
+        {error && <p className="error-message" role="alert">{error}</p>}
+        <p className="reflink-offline-vault-panel__notice">
+          Keep this passphrase safe. It cannot be recovered by REFLINK. Signing out locks the vault but does not delete pending referrals.
+        </p>
+        <button type="submit" disabled={busy || vaultLoading}>
+          {vaultLoading ? "Checking existing vault…" : busy ? "Please wait…" : envelope ? "Unlock offline vault" : "Create offline vault"}
+        </button>
+      </form>
+    </section>
+  );
 }
 
 function App() {
@@ -1474,22 +1558,92 @@ function App() {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [offlineSyncMessage, setOfflineSyncMessage] = useState("");
+  const [offlineVaultKey, setOfflineVaultKey] = useState(null);
+  const [offlineVaultOwner, setOfflineVaultOwner] = useState(null);
+  const [offlineVaultVisible, setOfflineVaultVisible] = useState(false);
+  const offlineVaultOwnerRef = useRef(null);
+  const offlineVaultChannelRef = useRef(null);
+  offlineVaultOwnerRef.current = offlineVaultOwner;
+
 
   useEffect(() => {
+    const channel = createOfflineVaultLockChannel(offlineVaultOwner, () => {
+      setOfflineVaultKey(null);
+      setOfflineVaultOwner(null);
+    });
+    offlineVaultChannelRef.current = channel;
+    return () => {
+      channel.close();
+      if (offlineVaultChannelRef.current === channel) offlineVaultChannelRef.current = null;
+    };
+  }, [offlineVaultOwner]);
+
+  const handleOfflineVaultUnlocked = async (key, ownerUserId) => {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user?.id || String(user.id) !== String(ownerUserId)) {
+      throw new Error("The signed-in account changed. Unlock the vault again for the active account.");
+    }
+    const migration = await migratePlaintextQueueToEncrypted(ownerUserId, key);
+    const { data: { user: verifiedUser }, error: verificationError } = await supabase.auth.getUser();
+    if (verificationError || !verifiedUser?.id || String(verifiedUser.id) !== String(ownerUserId)) {
+      throw new Error("The signed-in account changed while the offline vault was unlocking. Unlock the vault again for the active account.");
+    }
+    setOfflineVaultKey(key);
+    setOfflineVaultOwner(String(ownerUserId));
+    setOfflineVaultVisible(false);
+    if (migration.failed > 0) {
+      setOfflineSyncMessage(`${migration.failed} older offline referral(s) could not be encrypted. They remain stored and were not synchronised.`);
+    }
+    if (navigator.onLine) {
+      const result = await syncQueuedReferrals(supabase, key);
+      if (result.synced > 0) setOfflineSyncMessage(`${result.synced} offline referral${result.synced === 1 ? "" : "s"} synced successfully.`);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
     const sync = async () => {
-      if (!navigator.onLine) return;
+      if (!navigator.onLine || !offlineVaultKey || !offlineVaultOwner) return;
       try {
-        const result = await syncQueuedReferrals(supabase);
-        if (result.synced > 0) setOfflineSyncMessage(`${result.synced} offline referral${result.synced === 1 ? "" : "s"} synced successfully.`);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user?.id || String(user.id) !== String(offlineVaultOwner)) return;
+        const result = await syncQueuedReferrals(supabase, offlineVaultKey);
+        if (active && result.synced > 0) setOfflineSyncMessage(`${result.synced} offline referral${result.synced === 1 ? "" : "s"} synced successfully.`);
       } catch (error) {
-        console.warn("REFLINK offline sync", error);
+        if (active) console.warn("REFLINK offline sync", error);
       }
     };
     sync();
     window.addEventListener("online", sync);
     const timer = window.setInterval(sync, 15000);
-    return () => { window.removeEventListener("online", sync); window.clearInterval(timer); };
-  }, []);
+    return () => { active = false; window.removeEventListener("online", sync); window.clearInterval(timer); };
+  }, [offlineVaultKey, offlineVaultOwner]);
+
+  useEffect(() => {
+    if (offlineVaultOwner && profile?.id && String(offlineVaultOwner) !== String(profile.id)) {
+      offlineVaultChannelRef.current?.broadcastLock();
+      setOfflineVaultKey(null);
+      setOfflineVaultOwner(null);
+      setOfflineVaultVisible(true);
+    }
+  }, [profile?.id, offlineVaultOwner]);
+
+  useEffect(() => {
+    let active = true;
+    const inspectQueue = async () => {
+      if (!profile?.id) return;
+      try {
+        const count = await getQueueCount(profile.id);
+        const envelope = await getOfflineKeyVaultEnvelope(profile.id);
+        if (active && count > 0 && !offlineVaultKey && !offlineVaultVisible) setOfflineVaultVisible(true);
+        if (active && count > 0 && !envelope) setOfflineVaultVisible(true);
+      } catch {
+        if (active) setOfflineVaultVisible(true);
+      }
+    };
+    inspectQueue();
+    return () => { active = false; };
+  }, [profile?.id]);
 
   /* =========================================================
    LOGIN / AUTHENTICATION
@@ -1758,11 +1912,22 @@ const handleSignIn = async () => {
 
       if (event === "SIGNED_IN" && session?.user) {
         currentSessionUser = session.user;
+        const activeVaultOwner = offlineVaultOwnerRef.current;
+        if (activeVaultOwner && String(activeVaultOwner) !== String(session.user.id)) {
+          offlineVaultChannelRef.current?.broadcastLock();
+          setOfflineVaultKey(null);
+          setOfflineVaultOwner(null);
+          setOfflineVaultVisible(true);
+        }
       }
 
       if (event === "SIGNED_OUT") {
         restoreSequence += 1;
         currentSessionUser = null;
+        if (offlineVaultOwnerRef.current) offlineVaultChannelRef.current?.broadcastLock();
+        setOfflineVaultKey(null);
+        setOfflineVaultOwner(null);
+        setOfflineVaultVisible(false);
         setProfile(null);
         setRole(null);
         setDashboardView("overview");
@@ -1920,6 +2085,10 @@ const handleSignIn = async () => {
   setLoading(true);
 
   try {
+    offlineVaultChannelRef.current?.broadcastLock();
+    setOfflineVaultKey(null);
+    setOfflineVaultOwner(null);
+    setOfflineVaultVisible(false);
     await supabase.auth.signOut();
   } finally {
     setRole(null);
@@ -1938,6 +2107,26 @@ const handleSignIn = async () => {
     <div className="app">
 
       <OfflineStatusBadge />
+      {profile?.id && !offlineVaultVisible && (
+        <button type="button" className="secondary-button reflink-offline-vault-open" onClick={() => {
+          if (offlineVaultKey) {
+            offlineVaultChannelRef.current?.broadcastLock();
+            setOfflineVaultKey(null);
+            setOfflineVaultOwner(null);
+          } else {
+            setOfflineVaultVisible(true);
+          }
+        }}>
+          {offlineVaultKey ? "Lock offline vault" : "Unlock offline referrals"}
+        </button>
+      )}
+      {profile?.id && offlineVaultVisible && (
+        <OfflineVaultPanel
+          ownerUserId={profile.id}
+          onUnlocked={handleOfflineVaultUnlocked}
+          onClose={() => setOfflineVaultVisible(false)}
+        />
+      )}
       {offlineSyncMessage && (
         <div className="success-message reflink-offline-sync-banner">
           {offlineSyncMessage}
@@ -2042,12 +2231,12 @@ const handleSignIn = async () => {
           <div className="trust-row">
             <div>
               <strong>01</strong>
-              <span>Secure Referral</span>
+              <span>Controlled Referral</span>
             </div>
 
             <div>
               <strong>02</strong>
-              <span>Real-Time Tracking</span>
+              <span>Referral Tracking</span>
             </div>
 
             <div>
@@ -2072,11 +2261,11 @@ const handleSignIn = async () => {
             <div className="network-header">
               <div>
                 <span className="live-dot"></span>
-                LIVE REFERRAL NETWORK
+                REFERRAL WORKFLOW PREVIEW
               </div>
 
               <span className="network-status">
-                ACTIVE
+                ILLUSTRATIVE
               </span>
             </div>
 
@@ -2138,10 +2327,10 @@ const handleSignIn = async () => {
             <div className="network-footer">
               <div>
                 <small>REFERRAL STATUS</small>
-                <strong>Connected & Tracked</strong>
+                <strong>Example referral journey</strong>
               </div>
 
-              <span>ACTIVE</span>
+              <span>DEMO</span>
             </div>
 
           </div>
@@ -2740,8 +2929,6 @@ const handleSignIn = async () => {
               <AdministratorRoute>
                 <AdminDashboard
                   profile={profile}
-                  AnalyticsDashboard={AnalyticsDashboard}
-                  AnalysisHub={AnalysisHub}
                   formatPatientAge={formatPatientAge}
                   getStatusLabel={getStatusLabel}
                 />
@@ -2787,6 +2974,9 @@ const handleSignIn = async () => {
 
             <NewReferralForm
               onBack={() => setScreen("dashboard")}
+              offlineVaultKey={offlineVaultKey}
+              offlineVaultOwner={offlineVaultOwner}
+              onRequestVault={() => setOfflineVaultVisible(true)}
             />
 
           </main>
@@ -3045,7 +3235,7 @@ function InvestigationResultEditor({ item, onChange, onFileChange }) {
   );
 }
 
-function NewReferralForm({ onBack }) {
+function NewReferralForm({ onBack, offlineVaultKey, offlineVaultOwner, onRequestVault }) {
   const { t } = useLanguage();
 
   const [form, setForm] = useState({
@@ -3111,6 +3301,29 @@ provisional_diagnosis: "",
   const [selectedInvestigations, setSelectedInvestigations] = useState([]);
   const [printDraft, setPrintDraft] = useState(null);
   const [savedReferralInfo, setSavedReferralInfo] = useState(null);
+  const [pendingOfflineReferral, setPendingOfflineReferral] = useState(null);
+
+  useEffect(() => {
+    if (!pendingOfflineReferral || !offlineVaultKey
+      || String(pendingOfflineReferral.referring_user_id) !== String(offlineVaultOwner)) return undefined;
+    let active = true;
+    const persistPendingReferral = async () => {
+      try {
+        await queueEncryptedReferral(pendingOfflineReferral, offlineVaultOwner, offlineVaultKey);
+        if (!active) return;
+        setMessage(`Saved securely in the offline queue. Referral ${pendingOfflineReferral.referral_number} will sync when connected.`);
+        setSavedReferralInfo({
+          referralNumber: pendingOfflineReferral.referral_number,
+          patientIdentifier: pendingOfflineReferral.patient_identifier,
+        });
+        setPendingOfflineReferral(null);
+      } catch (queueError) {
+        if (active) setError(queueError?.message || "The referral could not be encrypted and saved. It has not been stored.");
+      }
+    };
+    persistPendingReferral();
+    return () => { active = false; };
+  }, [pendingOfflineReferral, offlineVaultKey, offlineVaultOwner]);
 
   useEffect(() => {
     loadFacilities();
@@ -3426,14 +3639,20 @@ provisional_diagnosis: "",
           referring_user_id: session.user.id,
           status: "sent",
         };
-        await queueReferral(offlinePayload);
-        setMessage(`Saved offline. Referral ${offlinePayload.referral_number} will be sent automatically when connected.`);
-        setSavedReferralInfo({ referralNumber: offlinePayload.referral_number, patientIdentifier: form.patient_identifier });
+        if (offlineVaultKey && String(offlineVaultOwner) === String(session.user.id)) {
+          await queueEncryptedReferral(offlinePayload, session.user.id, offlineVaultKey);
+          setMessage(`Saved securely in the offline queue. Referral ${offlinePayload.referral_number} will sync when connected.`);
+          setSavedReferralInfo({ referralNumber: offlinePayload.referral_number, patientIdentifier: form.patient_identifier });
+        } else {
+          setPendingOfflineReferral(offlinePayload);
+          onRequestVault?.();
+          setMessage("Unlock or create your offline vault to encrypt and save this referral. The referral has not yet been stored.");
+        }
         setLoading(false);
         return;
       }
 
-      try { await syncQueuedReferrals(supabase); } catch (syncError) { console.warn("REFLINK pre-submit offline sync", syncError); }
+      try { await syncQueuedReferrals(supabase, offlineVaultKey); } catch (syncError) { console.warn("REFLINK pre-submit offline sync", syncError); }
 
       const {
         data: {
@@ -4515,6 +4734,8 @@ function PHCStaffDashboard({ onNewReferral }) {
   const [activeFilter, setActiveFilter] =
     useState("all");
 
+  const [searchQuery, setSearchQuery] = useState("");
+
   /* =========================================================
      LOAD MY REFERRALS
      ========================================================= */
@@ -4635,6 +4856,7 @@ function PHCStaffDashboard({ onNewReferral }) {
           discharge_medications,
           follow_up_plan,
           discharged_at,
+          completed_at,
 
           referring_facility_id,
           receiving_facility_id,
@@ -4655,12 +4877,7 @@ function PHCStaffDashboard({ onNewReferral }) {
         throw referralError;
       }
 
-      console.log(
-        "PHC REFERRALS:",
-        data
-      );
-
-      setReferrals(data || []);
+setReferrals(data || []);
     } catch (err) {
       console.error(
         "PHC DASHBOARD ERROR:",
@@ -4738,20 +4955,11 @@ function PHCStaffDashboard({ onNewReferral }) {
                 `referring_facility_id=eq.${profile.facility_id}`,
             },
             (payload) => {
-              console.log(
-                "PHC REALTIME REFERRAL UPDATE:",
-                payload
-              );
-
-              loadMyReferrals();
+loadMyReferrals();
             }
           )
           .subscribe((status) => {
-            console.log(
-              "PHC REALTIME STATUS:",
-              status
-            );
-          });
+});
       } catch (err) {
         console.error(
           "PHC REALTIME ERROR:",
@@ -4825,14 +5033,25 @@ function PHCStaffDashboard({ onNewReferral }) {
      FILTERED REFERRALS
      ========================================================= */
 
-  const filteredReferrals =
-    activeFilter === "all"
-      ? referrals
-      : referrals.filter(
-          (referral) =>
-            referral.status ===
-            activeFilter
-        );
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+  const filteredReferrals = referrals.filter((referral) => {
+    const matchesStatus = activeFilter === "all" || referral.status === activeFilter;
+    if (!matchesStatus) return false;
+    if (!normalizedSearch) return true;
+
+    const searchableValues = [
+      referral.referral_number,
+      referral.patient_identifier,
+      referral.chief_complaint,
+      referral.provisional_diagnosis,
+      formatDiagnosisRecords(referral.diagnosis_records),
+      referral.urgency,
+      getStatusLabel(referral.status),
+    ];
+    return searchableValues.some((value) =>
+      String(value || "").toLocaleLowerCase().includes(normalizedSearch)
+    );
+  });
 
   /* =========================================================
      FILTER LABEL
@@ -5123,6 +5342,17 @@ function PHCStaffDashboard({ onNewReferral }) {
 
           <div className="dashboard-card-header-actions">
 
+            <label className="referral-search-field">
+              <span className="sr-only">Search your referrals</span>
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search referral ID, patient or complaint"
+                aria-label="Search your referrals by referral ID, patient identifier, complaint or diagnosis"
+              />
+            </label>
+
             <strong>
               {
                 filteredReferrals.length
@@ -5163,10 +5393,11 @@ function PHCStaffDashboard({ onNewReferral }) {
           filteredReferrals.length ===
             0 && (
             <p>
-              {activeFilter ===
-              "all"
-                ? "No referrals found."
-                : "No referrals found for this filter."}
+              {normalizedSearch
+                ? "No referrals match your search. Try another term or clear the search."
+                : activeFilter === "all"
+                  ? "No referrals found."
+                  : "No referrals found for this filter."}
             </p>
           )}
 
@@ -5403,17 +5634,22 @@ function PHCStaffDashboard({ onNewReferral }) {
               <div className="dashboard-card counter-referral-card">
                 <span className="eyebrow">COUNTER-REFERRAL FEEDBACK</span>
                 <h3>Receiving Facility Outcome</h3>
-                <p><strong>Final diagnosis:</strong> {selectedReferral.counter_referral.final_diagnosis}</p>
+                <p><strong>Final diagnosis:</strong> {selectedReferral.counter_referral.final_diagnosis || "Not recorded"}</p>
+                <p><strong>Treatment provided:</strong> {selectedReferral.counter_referral.treatment_provided || "Not recorded"}</p>
                 <p><strong>Outcome:</strong> {formatClinicalLabel(selectedReferral.counter_referral.outcome)}</p>
                 <p><strong>Follow-up:</strong> {selectedReferral.counter_referral.follow_up_instructions || "Not recorded"}</p>
+                {selectedReferral.counter_referral.referred_further_to && (
+                  <p><strong>Further referral:</strong> {selectedReferral.counter_referral.referred_further_to}</p>
+                )}
+                {selectedReferral.counter_referral.additional_notes && (
+                  <p><strong>Additional notes:</strong> {selectedReferral.counter_referral.additional_notes}</p>
+                )}
               </div>
             )}
 
             <hr />
 
             <ReferralSourceDetails referral={selectedReferral} />
-
-            <ReferralTimeline referral={selectedReferral} />
 
             <hr />
 
@@ -5656,6 +5892,10 @@ function ReceivingDashboard() {
 
   const [message, setMessage] =
     useState("");
+
+  const [receivingSearch, setReceivingSearch] = useState("");
+  const [receivingStatusFilter, setReceivingStatusFilter] = useState("active");
+  const [receivingUrgencyFilter, setReceivingUrgencyFilter] = useState("all");
 
   const [facilityUserCount, setFacilityUserCount] =
     useState(null);
@@ -5962,6 +6202,7 @@ if (
             referral_reason,
             urgency,
             status,
+            ack_due_at,
             created_at,
             acknowledged_at,
             patient_arrived_at,
@@ -6015,12 +6256,7 @@ if (
           throw referralError;
         }
 
-        console.log(
-          "INCOMING REFERRALS:",
-          data
-        );
-
-        setReferrals(
+setReferrals(
           data || []
         );
 
@@ -6252,11 +6488,16 @@ if (
             "id",
             selectedInpatientReferral.id
           )
+          .eq("status", "admitted")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
+        }
+
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
         }
 
         setMessage(
@@ -6369,11 +6610,16 @@ if (
             "id",
             selectedInpatientReferral.id
           )
+          .eq("status", "admitted")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
+        }
+
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
         }
 
         setMessage(
@@ -6438,11 +6684,16 @@ if (
             "id",
             referralId
           )
+          .eq("status", "sent")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
+        }
+
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
         }
 
         setMessage(
@@ -6505,11 +6756,16 @@ if (
             "id",
             referralId
           )
+          .eq("status", "acknowledged")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
+        }
+
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
         }
 
         setMessage(
@@ -6557,13 +6813,17 @@ const handleStartAssessment = async (referralId) => {
         status: "under_assessment",
       })
       .eq("id", referralId)
+      .eq("status", "patient_arrived")
       .select()
-      .single();
+          .maybeSingle();
 
     if (error) {
-      console.error("START ASSESSMENT ERROR:", error);
-      throw error;
-    }
+          throw error;
+        }
+
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
+        }
 
     setMessage(
       `Clinical assessment started for ${data.referral_number}.`
@@ -6725,11 +6985,16 @@ const handleStartAssessment = async (referralId) => {
             "id",
             selectedReferral.id
           )
+          .eq("status", "under_assessment")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
+        }
+
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
         }
 
         setMessage(
@@ -6863,49 +7128,143 @@ const handleStartAssessment = async (referralId) => {
     loadDiagnosisCategories();
   }, []);
 
+  useEffect(() => {
+    let channel = null;
+    let isActive = true;
+
+    const setupReceivingRealtime = async () => {
+      try {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+          return;
+        }
+
+        const {
+          data: profile,
+          error: profileError,
+        } = await supabase
+          .from("profiles")
+          .select("facility_id")
+          .eq("id", user.id)
+          .single();
+
+        if (
+          profileError ||
+          !profile?.facility_id ||
+          !isActive
+        ) {
+          if (profileError) {
+            console.error(
+              "RECEIVING REALTIME PROFILE ERROR:",
+              profileError
+            );
+          }
+          return;
+        }
+
+        channel = supabase
+          .channel(`receiving-referrals-${profile.facility_id}-${Date.now()}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "referrals",
+              filter: `receiving_facility_id=eq.${profile.facility_id}`,
+            },
+            () => {
+              if (isActive) {
+                void loadIncomingReferrals();
+              }
+            }
+          )
+          .subscribe((status) => {
+            if (
+              status === "CHANNEL_ERROR" ||
+              status === "TIMED_OUT"
+            ) {
+              console.error(
+                "RECEIVING REALTIME SUBSCRIPTION ERROR:",
+                status
+              );
+            }
+          });
+      } catch (err) {
+        console.error(
+          "RECEIVING REALTIME ERROR:",
+          err
+        );
+      }
+    };
+
+    void setupReceivingRealtime();
+
+    return () => {
+      isActive = false;
+      if (channel) {
+        void supabase.removeChannel(channel);
+      }
+    };
+  }, []);
+
   /* =======================================================
      DASHBOARD STATISTICS
      ======================================================= */
 
-  const newReferrals =
-    referrals.filter(
-      (referral) =>
-        referral.status ===
-        "sent"
-    ).length;
-
-  const awaitingAssessment =
-    referrals.filter(
-      (referral) =>
-        referral.status ===
-        "acknowledged"
-    ).length;
-
-  const patientsReceived =
-    referrals.filter(
-      (referral) =>
-        referral.status ===
-        "patient_arrived"
-    ).length;
-
-  const completed =
-    referrals.filter(
-      (referral) =>
-        referral.status ===
-          "completed" ||
-        referral.status ===
-          "discharged"
-    ).length;
+  const {
+    newReferrals,
+    awaitingPatientArrival,
+    patientsReceived,
+    underAssessment,
+    counterReferralPending,
+    completed,
+    emergencyIncomingReferrals,
+    overdueIncomingAcknowledgements,
+  } = getReceivingReferralMetrics(referrals);
       /* =======================================================
      FILTERED REFERRALS
      ======================================================= */
 
-  const filteredReferrals =
-    referrals.filter(
-      (referral) =>
-        referral.status !== "completed" &&
-        (referral.status !== "discharged" || !referral.counter_referral)
-    );
+  const receivingQuery = receivingSearch.trim().toLocaleLowerCase();
+  const filteredReferrals = referrals
+    .filter((referral) => {
+      const isOpen = isOpenIncomingReferral(referral);
+      const matchesStatus = receivingStatusFilter === "all" ||
+        (receivingStatusFilter === "active" ? isOpen : referral.status === receivingStatusFilter);
+      const matchesUrgency = receivingUrgencyFilter === "all" ||
+        String(referral.urgency || "routine").toLowerCase() === receivingUrgencyFilter;
+      const searchValues = [
+        referral.referral_number,
+        referral.patient_identifier,
+        referral.chief_complaint,
+        referral.provisional_diagnosis,
+        formatDiagnosisSummary(referral.diagnosis_records, referral.provisional_diagnosis),
+        referral.referring_facility?.name,
+      ];
+      const matchesSearch = !receivingQuery || searchValues.some((value) =>
+        String(value || "").toLocaleLowerCase().includes(receivingQuery)
+      );
+      return matchesStatus && matchesUrgency && matchesSearch;
+    })
+    .sort((a, b) => compareIncomingReferralPriority(a, b));
+
+  const assessmentRequiredFields = [
+    { key: "assessment_findings", label: "Assessment findings" },
+    { key: "final_diagnosis", label: "Final diagnosis" },
+    { key: "diagnosis_status", label: "Diagnosis status" },
+    { key: "diagnosis_category", label: "Diagnosis category" },
+    { key: "disposition", label: "Clinical disposition" },
+  ];
+  const completedAssessmentFields = assessmentRequiredFields.filter(({ key }) =>
+    String(assessmentForm[key] || "").trim().length > 0
+  ).length;
+  const assessmentProgress = Math.round(
+    (completedAssessmentFields / assessmentRequiredFields.length) * 100
+  );
 
   /* =======================================================
      USER INTERFACE
@@ -6969,11 +7328,11 @@ const handleStartAssessment = async (referralId) => {
 
         <div className="stat-card">
           <span>
-            Awaiting Assessment
+            Awaiting Patient Arrival
           </span>
 
           <strong>
-            {awaitingAssessment}
+            {awaitingPatientArrival}
           </strong>
         </div>
 
@@ -6988,6 +7347,23 @@ const handleStartAssessment = async (referralId) => {
         </div>
 
         <div className="stat-card">
+          <span>Under Assessment</span>
+          <strong>{underAssessment}</strong>
+        </div>
+
+        <div className="stat-card">
+          <span>Emergency referrals</span>
+          <strong>{emergencyIncomingReferrals}</strong>
+          <small>Requires immediate clinical prioritisation</small>
+        </div>
+
+        <div className={`stat-card ${overdueIncomingAcknowledgements > 0 ? "stat-card-alert" : ""}`}>
+          <span>Acknowledgements overdue</span>
+          <strong>{overdueIncomingAcknowledgements}</strong>
+          <small>Past the recorded acknowledgement target</small>
+        </div>
+
+        <div className="stat-card">
           <span>
             Completed
           </span>
@@ -6995,6 +7371,12 @@ const handleStartAssessment = async (referralId) => {
           <strong>
             {completed}
           </strong>
+        </div>
+
+        <div className="stat-card">
+          <span>Counter-Referral Pending</span>
+          <strong>{counterReferralPending}</strong>
+          <small>Discharged referrals awaiting structured feedback</small>
         </div>
 
       </div>
@@ -7023,6 +7405,45 @@ const handleStartAssessment = async (referralId) => {
 
           </div>
 
+          <div className="receiving-referral-filters" role="search" aria-label="Filter incoming referrals">
+            <label>
+              <span>Search referrals</span>
+              <input
+                type="search"
+                value={receivingSearch}
+                onChange={(event) => setReceivingSearch(event.target.value)}
+                placeholder="Referral ID, patient, complaint or facility"
+                aria-label="Search incoming referrals"
+              />
+            </label>
+            <label>
+              <span>Referral status</span>
+              <select value={receivingStatusFilter} onChange={(event) => setReceivingStatusFilter(event.target.value)}>
+                <option value="active">Active referrals</option>
+                <option value="all">All statuses</option>
+                <option value="sent">New</option>
+                <option value="acknowledged">Acknowledged</option>
+                <option value="patient_arrived">Patient arrived</option>
+                <option value="under_assessment">Under assessment</option>
+                <option value="admitted">Admitted</option>
+                <option value="discharged">Discharged</option>
+                <option value="completed">Completed</option>
+              </select>
+            </label>
+            <label>
+              <span>Urgency</span>
+              <select value={receivingUrgencyFilter} onChange={(event) => setReceivingUrgencyFilter(event.target.value)}>
+                <option value="all">All urgency levels</option>
+                <option value="emergency">Emergency</option>
+                <option value="urgent">Urgent</option>
+                <option value="routine">Routine</option>
+              </select>
+            </label>
+            <div className="receiving-filter-result" aria-live="polite">
+              Showing {filteredReferrals.length} of {referrals.length} referrals
+            </div>
+          </div>
+
         </div>
 
         {loading && (
@@ -7039,8 +7460,12 @@ const handleStartAssessment = async (referralId) => {
             </p>
           )}
 
+        {!loading && referrals.length > 0 && filteredReferrals.length === 0 && (
+          <p className="empty-selection-state">No incoming referrals match these filters. Adjust the search or select a different status.</p>
+        )}
+
         {!loading &&
-          referrals.length > 0 && (
+          filteredReferrals.length > 0 && (
 
             <div className="referral-list">
 
@@ -7675,6 +8100,32 @@ const handleStartAssessment = async (referralId) => {
                   </p>
                 </div>
 
+                <section className="assessment-completion-panel" aria-label="Required assessment documentation progress">
+                  <div className="assessment-completion-heading">
+                    <strong>Required documentation</strong>
+                    <span>{completedAssessmentFields} of {assessmentRequiredFields.length} completed</span>
+                  </div>
+                  <div
+                    className="assessment-completion-track"
+                    role="progressbar"
+                    aria-label="Required assessment fields completed"
+                    aria-valuemin={0}
+                    aria-valuemax={assessmentRequiredFields.length}
+                    aria-valuenow={completedAssessmentFields}
+                  >
+                    <span style={{ width: `${assessmentProgress}%` }} />
+                  </div>
+                  <ul className="assessment-completion-list">
+                    {assessmentRequiredFields.map(({ key, label }) => (
+                      <li key={key} className={String(assessmentForm[key] || "").trim() ? "is-complete" : ""}>
+                        <span aria-hidden="true">{String(assessmentForm[key] || "").trim() ? "✓" : "○"}</span>
+                        {label}
+                      </li>
+                    ))}
+                  </ul>
+                  <small>This checklist tracks required form fields only; it does not assess clinical adequacy or replace professional judgement.</small>
+                </section>
+
                 <form
                   onSubmit={
                     handleSaveAssessment
@@ -7944,6 +8395,170 @@ const handleStartAssessment = async (referralId) => {
 /* =======================================================
    ADMINISTRATOR-ONLY ROUTE PROTECTION
    ======================================================= */
+
+
+/* =========================================================
+   STRUCTURED COUNTER-REFERRAL
+   ========================================================= */
+function CounterReferralForm({ referral, onCompleted }) {
+  const [form, setForm] = useState({
+    final_diagnosis: referral?.discharge_diagnosis || referral?.final_diagnosis || "",
+    treatment_provided: referral?.treatment_provided || "",
+    outcome: "",
+    follow_up_instructions: referral?.follow_up_plan || "",
+    referred_further_to: "",
+    additional_notes: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  const counterReferralRequiredFields = [
+    { key: "final_diagnosis", label: "Final diagnosis" },
+    { key: "outcome", label: "Patient outcome" },
+    ...(form.outcome === "referred_further"
+      ? [{ key: "referred_further_to", label: "Further referral destination" }]
+      : []),
+  ];
+  const completedCounterReferralFields = counterReferralRequiredFields.filter(({ key }) =>
+    String(form[key] || "").trim().length > 0
+  ).length;
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+
+    if (!referral?.id) {
+      setError("The referral record could not be identified.");
+      return;
+    }
+    if (!form.final_diagnosis.trim()) {
+      setError("Final diagnosis is required.");
+      return;
+    }
+    if (!form.outcome) {
+      setError("Please select the patient's outcome.");
+      return;
+    }
+    if (form.outcome === "referred_further" && !form.referred_further_to.trim()) {
+      setError("Specify the facility or service receiving the further referral.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { data: result, error: submitError } = await supabase.rpc(
+        "submit_counter_referral",
+        {
+          p_referral_id: referral.id,
+          p_final_diagnosis: form.final_diagnosis.trim(),
+          p_treatment_provided: form.treatment_provided.trim() || null,
+          p_outcome: form.outcome,
+          p_follow_up_instructions: form.follow_up_instructions.trim() || null,
+          p_referred_further_to: form.outcome === "referred_further"
+            ? form.referred_further_to.trim()
+            : null,
+          p_additional_notes: form.additional_notes.trim() || null,
+        }
+      );
+
+      if (submitError) throw submitError;
+      const completion = Array.isArray(result) ? result[0] : result;
+      if (!completion?.counter_referral_id || completion.referral_status !== "completed") {
+        throw new Error("REFLINK could not confirm completion. Refresh the referral status before retrying.");
+      }
+
+      const counterReferralPayload = {
+        id: completion.counter_referral_id,
+        referral_id: referral.id,
+        final_diagnosis: form.final_diagnosis.trim(),
+        treatment_provided: form.treatment_provided.trim() || null,
+        outcome: form.outcome,
+        follow_up_instructions: form.follow_up_instructions.trim() || null,
+        referred_further_to: form.outcome === "referred_further" ? form.referred_further_to.trim() : null,
+        additional_notes: form.additional_notes.trim() || null,
+      };
+
+      setMessage("Counter-referral submitted and referral successfully completed.");
+      if (onCompleted) {
+        onCompleted({
+          ...referral,
+          status: completion.referral_status,
+          completed_at: completion.completed_at,
+          counter_referral: counterReferralPayload,
+        });
+      }
+    } catch (submitError) {
+      setError(submitError?.message || "Unable to submit the counter-referral. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="dashboard-card counter-referral-card" aria-labelledby="counter-referral-heading">
+      <span className="eyebrow">CLOSED-LOOP REFERRAL</span>
+      <h3 id="counter-referral-heading">Counter-Referral Feedback</h3>
+      <p>Record the receiving facility's final outcome and follow-up information for referral <strong>{referral?.referral_number || "record"}</strong>. Submitting this form closes the referral episode and sends the documented outcome back through the referral record.</p>
+      <div className="counter-referral-completion" aria-live="polite">
+        <strong>{completedCounterReferralFields} of {counterReferralRequiredFields.length} required items completed</strong>
+        <ul>
+          {counterReferralRequiredFields.map(({ key, label }) => (
+            <li key={key} className={String(form[key] || "").trim() ? "is-complete" : ""}>
+              <span aria-hidden="true">{String(form[key] || "").trim() ? "✓" : "○"}</span> {label}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="counter-referral-finality-note" role="note">
+        Before submitting, verify the diagnosis, outcome and follow-up instructions. This action marks the referral as completed.
+      </div>
+      {error && <div className="form-error" role="alert">{error}</div>}
+      {message && <div className="form-success" role="status">{message}</div>}
+
+      <form onSubmit={handleSubmit}>
+        <label htmlFor="counter-final-diagnosis">Final diagnosis *</label>
+        <textarea id="counter-final-diagnosis" name="final_diagnosis" value={form.final_diagnosis} onChange={handleChange} rows="3" maxLength="4000" required />
+
+        <label htmlFor="counter-treatment">Treatment provided</label>
+        <textarea id="counter-treatment" name="treatment_provided" value={form.treatment_provided} onChange={handleChange} rows="3" maxLength="6000" />
+
+        <label htmlFor="counter-outcome">Patient outcome *</label>
+        <select id="counter-outcome" name="outcome" value={form.outcome} onChange={handleChange} required>
+          <option value="">Select outcome</option>
+          <option value="recovered">Recovered</option>
+          <option value="improved">Improved</option>
+          <option value="referred_further">Referred for further care</option>
+          <option value="died">Died</option>
+          <option value="other">Other / outcome documented in notes</option>
+        </select>
+
+        {form.outcome === "referred_further" && (
+          <>
+            <label htmlFor="counter-referred-to">Further referral destination *</label>
+            <input id="counter-referred-to" name="referred_further_to" value={form.referred_further_to} onChange={handleChange} maxLength="500" required />
+          </>
+        )}
+
+        <label htmlFor="counter-follow-up">Follow-up instructions for referring facility</label>
+        <textarea id="counter-follow-up" name="follow_up_instructions" value={form.follow_up_instructions} onChange={handleChange} rows="3" maxLength="4000" />
+
+        <label htmlFor="counter-additional-notes">Additional clinical notes</label>
+        <textarea id="counter-additional-notes" name="additional_notes" value={form.additional_notes} onChange={handleChange} rows="3" maxLength="4000" />
+
+        <button type="submit" className="primary-button full-width" disabled={saving}>
+          {saving ? "Submitting Counter-Referral..." : "Submit Counter-Referral & Complete Referral"}
+        </button>
+      </form>
+    </section>
+  );
+}
 
 function AdministratorRoute({ children }) {
   const [checking, setChecking] = useState(true);

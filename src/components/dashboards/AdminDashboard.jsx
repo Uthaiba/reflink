@@ -1,5 +1,16 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase.js";
+import { isCompleteCalendarMonth } from "../../lib/rphiFacilityReporting.js";
+
+function formatRphiMinutes(value) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+    return "Not enough valid timestamps";
+  }
+  const total = Math.max(0, Math.round(Number(value)));
+  const hours = Math.floor(total / 60);
+  const minutes = total % 60;
+  return hours > 0 ? hours + "h " + minutes + "m" : total + " min";
+}
 
 /* =======================================================
    ADMIN DASHBOARD
@@ -7,8 +18,6 @@ import { supabase } from "../../lib/supabase.js";
 
 function AdminDashboard({
   profile,
-  AnalyticsDashboard,
-  AnalysisHub,
   formatPatientAge,
   getStatusLabel,
 }) {
@@ -198,109 +207,11 @@ function AdminDashboard({
      LOAD REFERRALS
      ======================================================= */
 
+  // Administrators receive aggregate reporting only. Patient-level referral rows
+  // remain restricted to the PHC and receiving-facility workflows.
   const loadReferrals = async () => {
-    setReferralsLoading(true);
-    setError("");
-
-    try {
-      const {
-        data,
-        error: referralsError,
-      } = await supabase
-        .from("referrals")
-        .select(`
-          id,
-          referral_number,
-          patient_identifier,
-          is_test,
-          patient_age_months,
-          patient_sex,
-          patient_phone,
-          patient_address,
-          relative_name,
-          relative_relationship,
-          relative_phone,
-          diagnosis_status,
-          diagnosis_category,
-          diagnosis_records,
-          investigation_categories,
-          investigation_records,
-          chief_complaint,
-          clinical_summary,
-          physical_findings,
-          provisional_diagnosis,
-          investigations,
-          treatment_given,
-          referral_reason,
-          urgency,
-          referring_facility_id,
-          receiving_facility_id,
-          referring_user_id,
-          status,
-          created_at,
-          acknowledged_at,
-          patient_arrived_at,
-          completed_at,
-          assessment_findings,
-          final_diagnosis,
-          treatment_provided,
-          procedures_performed,
-          clinical_feedback,
-          disposition,
-          assessment_completed_at,
-          discharged_at,
-          admission_at,
-          ward_unit,
-          admission_diagnosis,
-          clinical_progress,
-          inpatient_treatment,
-          discharge_diagnosis,
-          condition_at_discharge,
-          discharge_medications,
-          follow_up_plan,
-
-          referring_facility:facilities!referrals_referring_facility_id_fkey (
-            id,
-            name,
-            facility_type,
-            state,
-            lga,
-            is_active
-          ),
-
-          receiving_facility:facilities!referrals_receiving_facility_id_fkey (
-            id,
-            name,
-            facility_type,
-            state,
-            lga,
-            is_active
-          )
-        `)
-        .order("created_at", {
-          ascending: false,
-        });
-
-      if (referralsError) {
-        throw referralsError;
-      }
-
-      setReferrals(data || []);
-    } catch (err) {
-      console.error(
-        "REFERRALS ERROR:",
-        err
-      );
-
-      setError(
-        err?.message ||
-          "Unable to load referrals."
-      );
-
-      setReferrals([]);
-    } finally {
-      setReferralsLoading(false);
-    }
+    setReferrals([]);
+    setReferralsLoading(false);
   };
 
   /* =======================================================
@@ -1895,6 +1806,22 @@ function AdminDashboard({
      REFERRAL NETWORK VIEW
      ======================================================= */
 
+  if (view === "referrals" || view === "active-referrals") {
+    return (
+      <>
+        <div className="dashboard-actions">
+          <button type="button" className="secondary-button" onClick={() => setView("home")}>← Back to Administration</button>
+        </div>
+        <div className="dashboard-card">
+          <span className="eyebrow">CLINICAL RECORD PRIVACY</span>
+          <h3>Patient-level referral records are not available in the administrator workspace</h3>
+          <p>REFLINK restricts identifiable clinical referral records to the authorised referring and receiving care teams. Use the aggregate reporting workspace for network-level activity. If an administrator needs an individual record for a legitimate clinical or governance purpose, that access requires a separately approved, purpose-limited and audited workflow.</p>
+          <button type="button" className="primary-button" onClick={() => setView("analytics")}>Open aggregate reporting</button>
+        </div>
+      </>
+    );
+  }
+
   if (
     view ===
     "referrals"
@@ -2278,7 +2205,7 @@ function AdminDashboard({
             ← Back to Administration
           </button>
         </div>
-        <AnalysisHub />
+        <AdminAggregateReports />
       </>
     );
   }
@@ -2307,7 +2234,7 @@ function AdminDashboard({
           </button>
         </div>
 
-        <AnalyticsDashboard />
+        <AdminAggregateReports />
       </>
     );
   }
@@ -2536,108 +2463,38 @@ function AdminDashboard({
     );
   }
 
-  /* =======================================================
-     ADMINISTRATION HOME — MODERN COMMAND DASHBOARD
-     ======================================================= */
+  if (view === "home") {
+    return (
+      <div className="admin-modern-shell">
+        <main className="admin-modern-main">
+          <header className="admin-modern-heading">
+            <div>
+              <span className="eyebrow">REFLINK / ADMINISTRATION</span>
+              <h2>Good evening, {profile?.full_name?.split(" ")[0] || "Administrator"}</h2>
+              <p>Network administration and privacy-preserving service activity reporting.</p>
+            </div>
+            <button type="button" className="primary-button admin-primary-action" onClick={() => setView("facilities")}>+ Manage facilities</button>
+          </header>
+          <div className="admin-kpi-grid">
+            <div className="admin-kpi-card kpi-teal"><span>Facilities</span><strong>{facilities.length.toLocaleString()}</strong><small>Configured network facilities</small></div>
+            <div className="admin-kpi-card kpi-amber"><span>System users</span><strong>{users.length.toLocaleString()}</strong><small>Configured accounts and roles</small></div>
+          </div>
+          <AdminAggregateReports />
+          <div className="dashboard-card">
+            <span className="eyebrow">ACCESS MODEL</span>
+            <h3>Clinical records stay with care teams</h3>
+            <p>Administrator reporting is aggregate-only. Individual referral records remain available through authorised PHC and receiving-facility workflows, subject to database access policies.</p>
+            <div className="dashboard-actions">
+              <button type="button" className="secondary-button" onClick={() => setView("facilities")}>Manage facilities</button>
+              <button type="button" className="secondary-button" onClick={() => setView("users")}>Manage users</button>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
-  const adminActiveReferrals = referrals.filter(
-    (referral) =>
-      !["completed", "discharged"].includes(referral.status)
-  );
-
-  const adminClosedReferrals = referrals.filter(
-    (referral) =>
-      ["completed", "discharged"].includes(referral.status)
-  );
-
-  const adminAcknowledged = referrals.filter(
-    (referral) => Boolean(referral.acknowledged_at)
-  );
-
-  const adminQualityIssues = referrals.reduce((total, referral) => {
-    const hasTimestampIssue =
-      referral.admission_at &&
-      referral.assessment_completed_at &&
-      new Date(referral.admission_at) < new Date(referral.assessment_completed_at);
-
-    const hasDischargeIssue =
-      referral.discharged_at &&
-      referral.admission_at &&
-      new Date(referral.discharged_at) < new Date(referral.admission_at);
-
-    const hasFacilityIssue =
-      !referral.referring_facility_id ||
-      !referral.receiving_facility_id;
-
-    return total + Number(hasTimestampIssue || hasDischargeIssue || hasFacilityIssue);
-  }, 0);
-
-  const adminLastSevenDays = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    date.setDate(date.getDate() - (6 - index));
-
-    const next = new Date(date);
-    next.setDate(next.getDate() + 1);
-
-    const count = referrals.filter((referral) => {
-      if (!referral.created_at) return false;
-      const created = new Date(referral.created_at);
-      return created >= date && created < next;
-    }).length;
-
-    return {
-      label: date.toLocaleDateString(undefined, { weekday: "short" }),
-      fullLabel: date.toLocaleDateString(undefined, { day: "2-digit", month: "short" }),
-      count,
-    };
-  });
-
-  const adminMaxDailyReferrals = Math.max(
-    ...adminLastSevenDays.map((item) => item.count),
-    1
-  );
-
-  const adminStatusSummary = [
-    ["Active", adminActiveReferrals.length, "active"],
-    ["Acknowledged", adminAcknowledged.length, "acknowledged"],
-    ["Closed", adminClosedReferrals.length, "closed"],
-  ];
-
-  const adminStatusMax = Math.max(
-    ...adminStatusSummary.map((item) => item[1]),
-    1
-  );
-
-  const adminRecentReferrals = [...referrals]
-    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
-    .slice(0, 5);
-
-  const adminMaskIdentifier = (value) => {
-    const text = String(value || "").trim();
-    if (!text) return "Patient";
-    if (text.length <= 4) return "••••";
-    return `${text.slice(0, 2)}•••${text.slice(-2)}`;
-  };
-
-  const adminFunnel = [
-    ["Created", referrals.filter((r) => Boolean(r.created_at)).length],
-    ["Acknowledged", referrals.filter((r) => Boolean(r.acknowledged_at)).length],
-    ["Arrived", referrals.filter((r) => Boolean(r.patient_arrived_at)).length],
-    ["Assessed", referrals.filter((r) => Boolean(r.assessment_completed_at)).length],
-    ["Closed", referrals.filter((r) => ["completed", "discharged"].includes(r.status) || Boolean(r.completed_at || r.discharged_at)).length],
-  ];
-
-  const adminFunnelBase = Math.max(adminFunnel[0][1], 1);
-  const adminUrgentCount = referrals.filter((r) => ["urgent", "emergency"].includes(String(r.urgency || "").toLowerCase())).length;
-  const adminCompletionRate = referrals.length
-    ? (adminClosedReferrals.length / referrals.length) * 100
-    : null;
-  const adminAcknowledgementRate = referrals.length
-    ? (adminAcknowledged.length / referrals.length) * 100
-    : null;
-  const adminLastUpdated = new Date();
-  const adminSystemStatus = error ? "Attention required" : (facilitiesLoading || usersLoading || referralsLoading ? "Updating" : "Operational");
+  /* Administrator home renders aggregate reports and network configuration only. */
 
   return (
     <div className="admin-modern-shell">
@@ -2726,221 +2583,644 @@ function AdminDashboard({
         </nav>
 
         <div className="admin-modern-main">
-          <div className="admin-modern-heading">
+          <header className="admin-modern-heading">
             <div>
-              <span className="eyebrow">ADMINISTRATION / OVERVIEW</span>
-              <h2>Good evening, {profile?.full_name?.split(" ")[0] || "Administrator"}</h2>
-              <p>Here is the current operational picture across the REFLINK referral network.</p>
+              <span className="eyebrow">REFLINK / ADMINISTRATION</span>
+              <h2>Network overview</h2>
+              <p>Manage facilities and user access, and review privacy-preserving referral activity.</p>
             </div>
             <button type="button" className="primary-button admin-primary-action" onClick={() => setView("facilities")}>
               + Add Facility
             </button>
-          </div>
+          </header>
 
-          <div className="admin-kpi-grid">
-            <button type="button" className="admin-kpi-card kpi-blue" onClick={() => setView("referrals")}>
-              <div className="admin-kpi-icon">↗</div>
-              <span>Total Referrals</span>
-              <strong>{referrals.length.toLocaleString()}</strong>
-              <small>All recorded referral episodes</small>
-            </button>
-            <button type="button" className="admin-kpi-card kpi-purple" onClick={() => setView("active-referrals")}>
-              <div className="admin-kpi-icon">◔</div>
-              <span>Active Referrals</span>
-              <strong>{adminActiveReferrals.length.toLocaleString()}</strong>
-              <small>Currently requiring follow-up</small>
-            </button>
-            <button type="button" className="admin-kpi-card kpi-teal" onClick={() => setView("facilities")}>
+          <section className="admin-kpi-grid" aria-label="Network configuration summary">
+            <article className="admin-kpi-card kpi-teal">
               <div className="admin-kpi-icon">⌂</div>
-              <span>Facilities</span>
-              <strong>{facilities.length.toLocaleString()}</strong>
-              <small>Connected referral facilities</small>
-            </button>
-            <button type="button" className="admin-kpi-card kpi-green" onClick={() => setView("referrals")}>
-              <div className="admin-kpi-icon">✓</div>
-              <span>Closed Episodes</span>
-              <strong>{adminClosedReferrals.length.toLocaleString()}</strong>
-              <small>Completed or discharged</small>
-            </button>
-            <button type="button" className="admin-kpi-card kpi-amber" onClick={() => setView("users")}>
+              <span>Registered facilities</span>
+              <strong>{facilitiesLoading ? "…" : facilities.length.toLocaleString()}</strong>
+              <small>{facilities.filter((facility) => facility.is_active).length} active facilities</small>
+            </article>
+            <article className="admin-kpi-card kpi-amber">
               <div className="admin-kpi-icon">◎</div>
-              <span>System Users</span>
-              <strong>{users.length.toLocaleString()}</strong>
-              <small>Configured users & roles</small>
-            </button>
-            <button type="button" className="admin-kpi-card kpi-red" onClick={() => setView("analysis")}>
-              <div className="admin-kpi-icon">!</div>
-              <span>Quality Flags</span>
-              <strong>{adminQualityIssues.toLocaleString()}</strong>
-              <small>Records requiring review</small>
-            </button>
-          </div>
+              <span>Registered user profiles</span>
+              <strong>{usersLoading ? "…" : users.length.toLocaleString()}</strong>
+              <small>Role and facility assignments</small>
+            </article>
+            <article className="admin-kpi-card kpi-blue">
+              <div className="admin-kpi-icon">▦</div>
+              <span>Referral reporting</span>
+              <strong>Aggregate only</strong>
+              <small>No patient-level records in this workspace</small>
+            </article>
+          </section>
 
-          <div className="admin-executive-strip" role="status" aria-label="Operational summary">
-            <div className="admin-executive-copy">
-              <span className="eyebrow">OPERATIONAL SUMMARY</span>
-              <strong>{adminActiveReferrals.length ? `${adminActiveReferrals.length} referral${adminActiveReferrals.length === 1 ? " is" : "s are"} currently active` : "No active referrals requiring follow-up"}</strong>
-              <p>Live operational view from the connected referral dataset. Summary identifiers are privacy-masked.</p>
+          {(error || message) && (
+            <div className={error ? "error-message" : "success-message"} role={error ? "alert" : "status"}>
+              {error || message}
             </div>
-            <div className="admin-executive-metrics">
-              <div><span>Acknowledgement</span><strong>{adminAcknowledgementRate === null ? "—" : `${adminAcknowledgementRate.toFixed(1)}%`}</strong></div>
-              <div><span>Completion</span><strong>{adminCompletionRate === null ? "—" : `${adminCompletionRate.toFixed(1)}%`}</strong></div>
-              <div><span>Urgent / Emergency</span><strong>{adminUrgentCount}</strong></div>
-              <div className={adminQualityIssues ? "attention" : "healthy"}><span>Governance</span><strong>{adminQualityIssues ? `${adminQualityIssues} review` : "Clear"}</strong></div>
-            </div>
-          </div>
+          )}
 
           <div className="admin-dashboard-grid">
-            <div className="admin-chart-card admin-trend-card">
+            <div className="admin-chart-card">
               <div className="admin-card-heading">
                 <div>
-                  <span className="eyebrow">ACTIVITY</span>
-                  <h3>Referral Trend</h3>
-                  <p>Referral episodes created during the last 7 days.</p>
-                </div>
-                <button type="button" className={view === "analysis" ? "is-active" : ""} onClick={() => setView("analysis")}>View analytics →</button>
-              </div>
-              <div className="admin-bar-chart" aria-label="Seven day referral trend">
-                {adminLastSevenDays.map((item) => (
-                  <div className="admin-bar-column" key={item.fullLabel} title={`${item.fullLabel}: ${item.count} referrals`}>
-                    <span>{item.count}</span>
-                    <div className="admin-bar-track"><i style={{ height: `${Math.max((item.count / adminMaxDailyReferrals) * 100, item.count ? 12 : 4)}%` }} /></div>
-                    <small>{item.label}</small>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="admin-chart-card admin-status-card">
-              <div className="admin-card-heading">
-                <div>
-                  <span className="eyebrow">WORKFLOW</span>
-                  <h3>Referral Status</h3>
-                  <p>Current distribution by operational state.</p>
+                  <span className="eyebrow">PUBLIC HEALTH INTELLIGENCE</span>
+                  <h3>Referral service activity</h3>
+                  <p>Review aggregate referral volume for a defined reporting period.</p>
                 </div>
               </div>
-              <div className="admin-status-list">
-                {adminStatusSummary.map(([label, count, key]) => (
-                  <div className="admin-status-row" key={label}>
-                    <div><i className={`status-dot ${key}`} /><span>{label}</span></div>
-                    <strong>{count}</strong>
-                    <div className="admin-status-track"><i className={`status-fill ${key}`} style={{ width: `${(count / adminStatusMax) * 100}%` }} /></div>
-                  </div>
-                ))}
-              </div>
-              <div className="admin-status-total"><strong>{referrals.length}</strong><span>Total referral episodes</span></div>
-            </div>
-          </div>
-
-          <div className="admin-dashboard-grid admin-dashboard-grid-secondary">
-            <div className="admin-chart-card admin-funnel-card">
-              <div className="admin-card-heading">
-                <div>
-                  <span className="eyebrow">REFERRAL PIPELINE</span>
-                  <h3>Closed-loop pathway</h3>
-                  <p>Progression through the core referral workflow.</p>
-                </div>
-                <span className="admin-data-badge">N = {referrals.length}</span>
-              </div>
-              <div className="admin-funnel-list">
-                {adminFunnel.map(([label, count], index) => (
-                  <div className="admin-funnel-row" key={label}>
-                    <div className="admin-funnel-label"><span>{String(index + 1).padStart(2, "0")}</span><strong>{label}</strong></div>
-                    <div className="admin-funnel-track"><i style={{ width: `${(count / adminFunnelBase) * 100}%` }} /></div>
-                    <strong className="admin-funnel-value">{count}</strong>
-                  </div>
-                ))}
-              </div>
-              <small className="admin-method-note">Counts are descriptive and reflect recorded timestamps/statuses; missing events are not inferred.</small>
-            </div>
-
-            <div className="admin-chart-card admin-insight-card">
-              <div className="admin-card-heading">
-                <div>
-                  <span className="eyebrow">EXECUTIVE SIGNALS</span>
-                  <h3>What needs attention</h3>
-                  <p>Operational observations for administrative review.</p>
-                </div>
-              </div>
-              <div className="admin-insight-list">
-                <div className={adminActiveReferrals.length ? "signal attention" : "signal healthy"}>
-                  <span>{adminActiveReferrals.length ? "!" : "✓"}</span>
-                  <div><strong>{adminActiveReferrals.length ? "Active referrals require follow-up" : "No active referrals"}</strong><small>{adminActiveReferrals.length ? `${adminActiveReferrals.length} episode${adminActiveReferrals.length === 1 ? "" : "s"} remain open.` : "The current dataset contains no open episodes."}</small></div>
-                </div>
-                <div className={adminQualityIssues ? "signal attention" : "signal healthy"}>
-                  <span>{adminQualityIssues ? "!" : "✓"}</span>
-                  <div><strong>{adminQualityIssues ? "Data-quality review required" : "No dashboard quality flags"}</strong><small>{adminQualityIssues ? `${adminQualityIssues} record-level issue${adminQualityIssues === 1 ? "" : "s"} detected by the administrative checks.` : "Current administrative checks found no obvious integrity flags."}</small></div>
-                </div>
-                <div className="signal neutral">
-                  <span>i</span>
-                  <div><strong>Small-sample caution</strong><small>{referrals.length < 30 ? "The current volume is small; avoid interpreting rates as population-level performance." : "Interpret trends alongside context, case mix and data-quality findings."}</small></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="admin-bottom-grid">
-            <div className="admin-table-card">
-              <div className="admin-card-heading">
-                <div>
-                  <span className="eyebrow">RECENT ACTIVITY</span>
-                  <h3>Latest Referrals</h3>
-                  <p>The most recently created referral episodes.</p>
-                </div>
-                <button type="button" className={view === "referrals" || view === "active-referrals" ? "is-active" : ""} onClick={() => setView("referrals")}>View all →</button>
-              </div>
-              {adminRecentReferrals.length ? (
-                <div className="admin-modern-table-wrap">
-                  <table className="admin-modern-table">
-                    <thead><tr><th>Referral</th><th>Patient</th><th>Route</th><th>Urgency</th><th>Status</th></tr></thead>
-                    <tbody>
-                      {adminRecentReferrals.map((referral) => (
-                        <tr key={referral.id}>
-                          <td><strong>{referral.referral_number || "—"}</strong><small>{referral.created_at ? new Date(referral.created_at).toLocaleDateString() : "—"}</small></td>
-                          <td><strong>{adminMaskIdentifier(referral.patient_identifier)}</strong><small>{formatPatientAge(referral.patient_age_months)} · {referral.patient_sex || "Sex not recorded"}</small></td>
-                          <td><strong>{referral.referring_facility?.name || "Unassigned"}</strong><small>→ {referral.receiving_facility?.name || "Receiving facility not assigned"}</small></td>
-                          <td><span className="admin-urgency-pill">{referral.urgency || "Not specified"}</span></td>
-                          <td><span className={`admin-status-pill ${String(referral.status || "unknown").replace(/_/g, "-")}`}>{getStatusLabel(referral.status)}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="admin-empty-dashboard">No referral activity is available in the current scope.</div>
-              )}
+              <AdminAggregateReports />
             </div>
 
             <div className="admin-quick-card">
               <div className="admin-card-heading">
                 <div>
-                  <span className="eyebrow">QUICK ACCESS</span>
+                  <span className="eyebrow">NETWORK MANAGEMENT</span>
                   <h3>Administration</h3>
-                  <p>Common system management tasks.</p>
+                  <p>Common configuration and oversight tasks.</p>
                 </div>
               </div>
               <div className="admin-quick-actions">
-                <button type="button" className={view === "facilities" ? "is-active" : ""} onClick={() => setView("facilities")}><span>⌂</span><div><strong>Manage Facilities</strong><small>Network configuration</small></div><b>→</b></button>
-                <button type="button" className={view === "users" ? "is-active" : ""} onClick={() => setView("users")}><span>◎</span><div><strong>Manage Users</strong><small>Roles and access</small></div><b>→</b></button>
-                <button type="button" className={view === "analysis" ? "is-active" : ""} onClick={() => setView("analysis")}><span>◫</span><div><strong>Healthcare Analysis</strong><small>Clinical intelligence</small></div><b>→</b></button>
-                <button type="button" className={view === "analytics" ? "is-active" : ""} onClick={() => setView("analytics")}><span>▥</span><div><strong>Referral Performance</strong><small>Pathway and outcomes</small></div><b>→</b></button>
+                <button type="button" onClick={() => setView("facilities")}>
+                  <span>⌂</span><div><strong>Manage facilities</strong><small>Facility details and activation</small></div><b>→</b>
+                </button>
+                <button type="button" onClick={() => setView("users")}>
+                  <span>◎</span><div><strong>Manage users and roles</strong><small>Account roles and facility assignment</small></div><b>→</b>
+                </button>
+                <button type="button" onClick={() => setView("analysis")}>
+                  <span>◫</span><div><strong>Aggregate analytics</strong><small>Privacy-preserving reporting</small></div><b>→</b>
+                </button>
               </div>
             </div>
           </div>
 
-          <div className="admin-security-strip">
-            <div><span className="eyebrow">SECURITY & PRIVACY</span><strong>Administrative safeguards</strong><p>Authenticated access is role-gated. Patient identifiers are masked in the executive dashboard. Database row-level security should remain enforced in Supabase for production deployment.</p></div>
-            <div className="admin-security-items"><span>✓ Authenticated session</span><span>✓ Role-aware access</span><span>✓ Privacy-masked summary</span><span>! Verify database RLS</span></div>
-          </div>
+          <section className="admin-security-strip" aria-label="Administrative privacy safeguards">
+            <div>
+              <span className="eyebrow">SECURITY & PRIVACY</span>
+              <strong>Administrative oversight is separated from clinical care</strong>
+              <p>Individual referral records remain within authorised PHC and receiving-facility workflows. Network reporting uses aggregate counts and suppresses small cells where configured.</p>
+            </div>
+            <div className="admin-security-items">
+              <span>✓ Authenticated administrator</span>
+              <span>✓ Role-aware workspace</span>
+              <span>✓ Aggregate reporting</span>
+              <span>✓ Patient-level view restricted</span>
+            </div>
+          </section>
 
-          <div className="admin-modern-footer-note">
-            <span><i /> Data refreshes from the connected REFLINK database.</span>
-            <span>Privacy-aware administrative workspace · v2.0 · Updated {adminLastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-          </div>
+          <footer className="admin-modern-footer-note">
+            <span>Facility and user configuration refreshes from REFLINK.</span>
+            <span>Administrative workspace · Updated {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+          </footer>
         </div>
       </section>
     </div>
   );
 
 }
+function AdminAggregateReports() {
+  const toLagosDateInput = (date) => {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Lagos",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date);
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+  };
+  const todayValue = toLagosDateInput(new Date());
+  const getLagosMonthStart = (date) => `${toLagosDateInput(date).slice(0, 7)}-01`;
+  const shiftLagosDate = (value, days) => {
+    const [year, month, day] = value.split("-").map(Number);
+    const shifted = new Date(Date.UTC(year, month - 1, day + days, 12));
+    return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
+  };
+  const [startDate, setStartDate] = useState(getLagosMonthStart(new Date()));
+  const [endDate, setEndDate] = useState(todayValue);
+  const applyReportingPreset = (preset) => {
+    const today = toLagosDateInput(new Date());
+    if (preset === "month") {
+      setStartDate(getLagosMonthStart(new Date()));
+      setEndDate(today);
+      return;
+    }
+    if (preset === "previous-month") {
+      const [year, month] = today.split("-").map(Number);
+      const previousEnd = new Date(Date.UTC(year, month - 1, 0, 12));
+      setStartDate(`${previousEnd.getUTCFullYear()}-${String(previousEnd.getUTCMonth() + 1).padStart(2, "0")}-01`);
+      setEndDate(`${previousEnd.getUTCFullYear()}-${String(previousEnd.getUTCMonth() + 1).padStart(2, "0")}-${String(previousEnd.getUTCDate()).padStart(2, "0")}`);
+      return;
+    }
+    setStartDate(shiftLagosDate(today, preset === "90-days" ? -89 : -29));
+    setEndDate(today);
+  };
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [facilityRows, setFacilityRows] = useState([]);
+  const [facilityLoading, setFacilityLoading] = useState(false);
+  const [facilityError, setFacilityError] = useState("");
+  const facilityPeriodEligible = isCompleteCalendarMonth(startDate, endDate);
+  const [lgaRows, setLgaRows] = useState([]);
+  const [lgaLoading, setLgaLoading] = useState(false);
+  const [lgaError, setLgaError] = useState("");
+  const [coverageRows, setCoverageRows] = useState([]);
+  const [coverageLoading, setCoverageLoading] = useState(false);
+  const [coverageError, setCoverageError] = useState("");
+  const [pathwayRows, setPathwayRows] = useState([]);
+  const [pathwayLoading, setPathwayLoading] = useState(false);
+  const [pathwayError, setPathwayError] = useState("");
+  const [delayAlerts, setDelayAlerts] = useState([]);
+  const [delayAlertsLoading, setDelayAlertsLoading] = useState(false);
+  const [delayAlertsError, setDelayAlertsError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    const loadReport = async () => {
+      setLoading(true);
+      setError("");
+      setResult(null);
+      try {
+        const { data, error: reportError } = await supabase.rpc("get_admin_referral_volume", {
+          p_start_date: startDate,
+          p_end_date: endDate,
+        });
+        if (reportError) throw reportError;
+        if (active) setResult(Array.isArray(data) ? data[0] || null : data || null);
+      } catch {
+        if (active) {
+          setError("Aggregate reporting is not yet available in this environment. The reviewed database migration must be applied and tested before this report can run.");
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    loadReport();
+    return () => { active = false; };
+  }, [startDate, endDate, refreshKey]);
+
+  useEffect(() => {
+    let active = true;
+    if (!facilityPeriodEligible) {
+      setFacilityRows([]);
+      setFacilityError("");
+      setFacilityLoading(false);
+      return () => { active = false; };
+    }
+
+    const loadFacilitySummary = async () => {
+      setFacilityRows([]);
+      setFacilityLoading(true);
+      setFacilityError("");
+      try {
+        const { data, error: summaryError } = await supabase.rpc(
+          "get_admin_facility_referral_summary",
+          { p_start_date: startDate, p_end_date: endDate },
+        );
+        if (summaryError) throw summaryError;
+        if (active) setFacilityRows(Array.isArray(data) ? data : []);
+      } catch {
+        if (active) {
+          setFacilityRows([]);
+          setFacilityError("Facility-level reporting is not yet available. The reviewed database migration must be applied and tested before this breakdown can run.");
+        }
+      } finally {
+        if (active) setFacilityLoading(false);
+      }
+    };
+
+    loadFacilitySummary();
+    return () => { active = false; };
+  }, [startDate, endDate, refreshKey, facilityPeriodEligible]);
+
+  useEffect(() => {
+    let active = true;
+    if (!facilityPeriodEligible) {
+      setLgaRows([]);
+      setLgaError("");
+      setLgaLoading(false);
+      return () => { active = false; };
+    }
+    const loadLgaSummary = async () => {
+      setLgaRows([]);
+      setLgaLoading(true);
+      setLgaError("");
+      try {
+        const { data, error: summaryError } = await supabase.rpc(
+          "get_admin_lga_referral_summary",
+          { p_start_date: startDate, p_end_date: endDate },
+        );
+        if (summaryError) throw summaryError;
+        if (active) setLgaRows(Array.isArray(data) ? data : []);
+      } catch {
+        if (active) {
+          setLgaRows([]);
+          setLgaError("LGA reporting is not yet available. The reviewed database migration must be applied and tested before this breakdown can run.");
+        }
+      } finally {
+        if (active) setLgaLoading(false);
+      }
+    };
+    loadLgaSummary();
+    return () => { active = false; };
+  }, [startDate, endDate, refreshKey, facilityPeriodEligible]);
+
+  useEffect(() => {
+    let active = true;
+    if (!facilityPeriodEligible) {
+      setCoverageRows([]);
+      setCoverageError("");
+      setCoverageLoading(false);
+      return () => { active = false; };
+    }
+    const loadCoverage = async () => {
+      setCoverageRows([]);
+      setCoverageLoading(true);
+      setCoverageError("");
+      try {
+        const { data, error: coverageErrorResult } = await supabase.rpc(
+          "get_admin_facility_reporting_coverage",
+          { p_start_date: startDate, p_end_date: endDate },
+        );
+        if (coverageErrorResult) throw coverageErrorResult;
+        if (active) setCoverageRows(Array.isArray(data) ? data : []);
+      } catch {
+        if (active) {
+          setCoverageRows([]);
+          setCoverageError("Facility reporting coverage is not yet available. The reviewed database migration must be applied and tested before this summary can run.");
+        }
+      } finally {
+        if (active) setCoverageLoading(false);
+      }
+    };
+    loadCoverage();
+    return () => { active = false; };
+  }, [startDate, endDate, refreshKey, facilityPeriodEligible]);
+
+  useEffect(() => {
+    let active = true;
+    if (!facilityPeriodEligible) {
+      setPathwayRows([]);
+      setPathwayError("");
+      setPathwayLoading(false);
+      return () => { active = false; };
+    }
+    const loadPathways = async () => {
+      setPathwayRows([]);
+      setPathwayLoading(true);
+      setPathwayError("");
+      try {
+        const { data, error: pathwayErrorResult } = await supabase.rpc(
+          "get_admin_referral_pathway_summary",
+          { p_start_date: startDate, p_end_date: endDate },
+        );
+        if (pathwayErrorResult) throw pathwayErrorResult;
+        if (active) setPathwayRows(Array.isArray(data) ? data : []);
+      } catch {
+        if (active) {
+          setPathwayRows([]);
+          setPathwayError("Referral pathway intelligence is not yet available. The reviewed database migration must be applied and tested before this report can run.");
+        }
+      } finally {
+        if (active) setPathwayLoading(false);
+      }
+    };
+    loadPathways();
+    return () => { active = false; };
+  }, [startDate, endDate, refreshKey, facilityPeriodEligible]);
+
+  useEffect(() => {
+    let active = true;
+    const loadDelayAlerts = async () => {
+      setDelayAlerts([]);
+      setDelayAlertsLoading(true);
+      setDelayAlertsError("");
+      try {
+        const { data, error: alertError } = await supabase.rpc(
+          "get_admin_acknowledgement_delay_alerts",
+        );
+        if (alertError) throw alertError;
+        if (active) setDelayAlerts(Array.isArray(data) ? data : []);
+      } catch {
+        if (active) {
+          setDelayAlerts([]);
+          setDelayAlertsError("Acknowledgement delay intelligence is not yet available. The reviewed database migration must be applied and tested before this summary can run.");
+        }
+      } finally {
+        if (active) setDelayAlertsLoading(false);
+      }
+    };
+    loadDelayAlerts();
+    return () => { active = false; };
+  }, [refreshKey]);
+
+  const indicatorCards = result ? [
+    {
+      key: "referrals",
+      label: "Referrals initiated",
+      value: result.referral_count,
+      suppressed: result.small_cell_suppressed,
+      note: "Referral episodes created in the selected period.",
+    },
+    {
+      key: "acknowledged",
+      label: "Acknowledged",
+      value: result.acknowledged_count,
+      suppressed: result.acknowledged_count_suppressed,
+      note: "Valid acknowledgement timestamps recorded.",
+    },
+    {
+      key: "arrived",
+      label: "Arrival confirmed",
+      value: result.arrival_confirmed_count,
+      suppressed: result.arrival_count_suppressed,
+      note: "Valid patient-arrival timestamps recorded.",
+    },
+    {
+      key: "assessed",
+      label: "Assessment completed",
+      value: result.assessment_completed_count,
+      suppressed: result.assessment_count_suppressed,
+      note: "Valid assessment-completion timestamps recorded.",
+    },
+    {
+      key: "completed",
+      label: "Referral completed",
+      value: result.referral_completed_count,
+      suppressed: result.completion_count_suppressed,
+      note: "Valid referral-completion timestamps recorded.",
+    },
+    {
+      key: "chronology",
+      label: "Timestamp quality flags",
+      value: result.chronology_anomaly_count,
+      suppressed: result.chronology_anomaly_suppressed,
+      note: "Referrals with at least one event timestamp before creation.",
+    },
+  ] : [];
+
+  return (
+    <section className="dashboard-card" aria-labelledby="admin-aggregate-heading">
+      <span className="eyebrow">PRIVACY-PRESERVING REPORTING</span>
+      <h3 id="admin-aggregate-heading">Referral service activity</h3>
+      <p>Aggregate referral workflow indicators and a timestamp-quality signal. No patient names, identifiers, diagnoses or individual referral records are returned.</p>
+      <div className="aggregate-report-presets" role="group" aria-label="Reporting period shortcuts">
+        <button type="button" className={startDate === getLagosMonthStart(new Date()) && endDate === todayValue ? "is-active" : ""} onClick={() => applyReportingPreset("month")}>This month</button>
+        <button type="button" onClick={() => applyReportingPreset("previous-month")}>Previous month</button>
+        <button type="button" onClick={() => applyReportingPreset("30-days")}>Last 30 days</button>
+        <button type="button" onClick={() => applyReportingPreset("90-days")}>Last 90 days</button>
+      </div>
+      <div className="dashboard-actions">
+        <label>
+          From
+          <input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} />
+        </label>
+        <label>
+          To
+          <input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} />
+        </label>
+        <button type="button" className="primary-button" onClick={() => setRefreshKey((current) => current + 1)} disabled={loading || !startDate || !endDate || startDate > endDate}>
+          {loading ? "Loading..." : "Refresh report"}
+        </button>
+      </div>
+      {error && <p className="error-message" role="status">{error}</p>}
+      {result && (
+        <>
+          <div className="stats-grid admin-rphi-indicator-grid">
+            {indicatorCards.map((indicator) => (
+              <article className="stat-card admin-rphi-indicator-card" key={indicator.key}>
+                <span>{indicator.label}</span>
+                <strong>{indicator.suppressed ? "Suppressed" : Number(indicator.value || 0).toLocaleString()}</strong>
+                <small>{indicator.suppressed ? "Counts from 1–4 are hidden to reduce disclosure risk." : indicator.note}</small>
+              </article>
+            ))}
+          </div>
+          <div className="admin-rphi-period-note">
+            <strong>Reporting cohort: {startDate} – {endDate}</strong>
+            <span>Workflow indicators use referrals created in this period. A timestamp-quality flag identifies referrals with at least one event timestamp earlier than creation; those invalid timestamps are excluded from the corresponding event count. Missing timestamps are not automatically failures. These are operational counts, not validated performance rates.</span>
+          </div>
+        </>
+      )}
+      {!result && !error && !loading && <p>No aggregate result is available for this reporting period.</p>}
+      <small className="admin-method-note">Test referrals are excluded. Counts from 1 to 4 are suppressed independently. Timestamp flags are data-quality signals, not clinical outcomes. These aggregate indicators do not establish population incidence, prevalence, clinical quality or referral failure rates. Validate definitions and observation windows with clinical and public-health leads before using them for performance decisions.</small>
+
+      <section className="admin-facility-intelligence" aria-labelledby="admin-facility-intelligence-heading">
+        <div className="admin-facility-intelligence-heading">
+          <div>
+            <span className="eyebrow">NETWORK DISTRIBUTION</span>
+            <h4 id="admin-facility-intelligence-heading">Facility referral activity</h4>
+            <p>Sending and receiving facilities are reported separately. Facility labels and locations are hidden with suppressed counts.</p>
+          </div>
+          <span className="admin-facility-period-tag">Complete month only</span>
+        </div>
+        {!facilityPeriodEligible && (
+          <p className="admin-facility-hint">Select one complete calendar month to view facility distribution. Partial and overlapping date ranges are not accepted for this breakdown.</p>
+        )}
+        {facilityLoading && <p role="status" className="admin-facility-hint">Loading facility aggregates…</p>}
+        {facilityError && <p role="status" className="error-message">{facilityError}</p>}
+        {facilityPeriodEligible && !facilityLoading && !facilityError && facilityRows.length === 0 && (
+          <p className="admin-facility-hint">No facility-level aggregate is available for this month.</p>
+        )}
+        {facilityPeriodEligible && !facilityLoading && !facilityError && facilityRows.length > 0 && (
+          <div className="admin-facility-directions">
+            {["Sending", "Receiving"].map((direction) => {
+              const rows = facilityRows.filter((row) => row.referral_direction === direction);
+              if (rows.length === 0) return null;
+              return (
+                <div className="admin-facility-direction" key={direction}>
+                  <h5>{direction} facilities</h5>
+                  <div className="admin-facility-list">
+                    {rows.map((row, index) => {
+                      const suppressed = row.small_cell_suppressed || row.complementary_suppressed;
+                      return (
+                        <article className="admin-facility-row" key={direction + "-" + index}>
+                          <div>
+                            <strong>{suppressed ? "Suppressed facility group" : row.facility_label}</strong>
+                            <small>{suppressed ? "Facility identity and geography withheld" : [row.facility_type, row.lga, row.state].filter(Boolean).join(" · ") || "Location not recorded"}</small>
+                          </div>
+                          <span className={suppressed ? "is-suppressed" : ""}>
+                            {suppressed ? "Suppressed" : Number(row.referral_count || 0).toLocaleString()}
+                          </span>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <small className="admin-method-note">Facility breakdowns are restricted to complete calendar months. Counts from 1–4 are suppressed. When exactly one small facility group exists in a direction, an additional visible group is suppressed to reduce subtraction-based disclosure. No facility IDs or patient-level records are returned.</small>
+      </section>
+
+      <section className="admin-facility-intelligence" aria-labelledby="admin-lga-intelligence-heading">
+        <div className="admin-facility-intelligence-heading">
+          <div>
+            <span className="eyebrow">GEOGRAPHIC DISTRIBUTION</span>
+            <h4 id="admin-lga-intelligence-heading">Referral activity by LGA</h4>
+            <p>Sending and receiving activity is grouped by LGA and state. Suppressed geography is not identified.</p>
+          </div>
+          <span className="admin-facility-period-tag">Complete month only</span>
+        </div>
+        {!facilityPeriodEligible && (
+          <p className="admin-facility-hint">Select one complete calendar month to view LGA distribution.</p>
+        )}
+        {lgaLoading && <p role="status" className="admin-facility-hint">Loading LGA aggregates…</p>}
+        {lgaError && <p role="status" className="error-message">{lgaError}</p>}
+        {facilityPeriodEligible && !lgaLoading && !lgaError && lgaRows.length === 0 && (
+          <p className="admin-facility-hint">No LGA-level aggregate is available for this month.</p>
+        )}
+        {facilityPeriodEligible && !lgaLoading && !lgaError && lgaRows.length > 0 && (
+          <div className="admin-facility-directions">
+            {["Sending", "Receiving"].map((direction) => {
+              const rows = lgaRows.filter((row) => row.referral_direction === direction);
+              if (rows.length === 0) return null;
+              return (
+                <div className="admin-facility-direction" key={direction}>
+                  <h5>{direction} activity by LGA</h5>
+                  <div className="admin-facility-list">
+                    {rows.map((row, index) => {
+                      const suppressed = row.small_cell_suppressed || row.complementary_suppressed;
+                      const unassigned = row.lga_label === "Unassigned geography";
+                      return (
+                        <article className="admin-facility-row" key={direction + "-lga-" + index}>
+                          <div>
+                            <strong>{suppressed ? "Suppressed geography" : row.lga_label}</strong>
+                            <small>{suppressed ? "LGA and state withheld" : unassigned ? "Facility assignment or geography not recorded" : row.state || "State not recorded"}</small>
+                          </div>
+                          <span className={suppressed ? "is-suppressed" : ""}>
+                            {suppressed ? "Suppressed" : Number(row.referral_count || 0).toLocaleString()}
+                          </span>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <small className="admin-method-note">LGA groups are limited to complete calendar months. Counts from 1–4 and one additional group where needed are suppressed. Unassigned geography indicates missing facility assignment or geography. Low recorded referral activity is not proof of an unmet need or service gap; interpret alongside verified population, facility readiness and reporting-completeness data.</small>
+      </section>
+
+      <section className="admin-facility-intelligence" aria-labelledby="admin-coverage-heading">
+        <div className="admin-facility-intelligence-heading">
+          <div>
+            <span className="eyebrow">DATA QUALITY & COVERAGE</span>
+            <h4 id="admin-coverage-heading">Facility registry and reporting coverage</h4>
+            <p>Shows the current facility registry grouped by active status, recorded referral activity and geography completeness.</p>
+          </div>
+          <span className="admin-facility-period-tag">Monthly activity cohort</span>
+        </div>
+        {!facilityPeriodEligible && (
+          <p className="admin-facility-hint">Select one complete calendar month to assess recorded facility participation.</p>
+        )}
+        {coverageLoading && <p role="status" className="admin-facility-hint">Loading facility coverage aggregates…</p>}
+        {coverageError && <p role="status" className="error-message">{coverageError}</p>}
+        {facilityPeriodEligible && !coverageLoading && !coverageError && coverageRows.length === 0 && (
+          <p className="admin-facility-hint">No facility registry coverage summary is available for this month.</p>
+        )}
+        {facilityPeriodEligible && !coverageLoading && !coverageError && coverageRows.length > 0 && (
+          <div className="admin-facility-list admin-coverage-list">
+            {coverageRows.map((row, index) => {
+              const suppressed = row.small_cell_suppressed || row.complementary_suppressed;
+              return (
+                <article className="admin-facility-row" key={"coverage-" + index}>
+                  <div>
+                    <strong>{suppressed ? "Suppressed facility group" : row.coverage_group}</strong>
+                    <small>{suppressed ? "Category and count withheld to reduce disclosure" : "Registry facility count"}</small>
+                  </div>
+                  <span className={suppressed ? "is-suppressed" : ""}>
+                    {suppressed ? "Suppressed" : Number(row.facility_count || 0).toLocaleString()}
+                  </span>
+                </article>
+              );
+            })}
+          </div>
+        )}
+        <small className="admin-method-note">This combines the current facility registry snapshot with referral activity in the selected creation cohort. “No recorded referral activity” does not prove that a facility failed to report: a facility may not have been expected to refer during the period, may serve another workflow, or may have activity recorded outside REFLINK. Geography is considered complete only when both LGA and state are populated. No facility names, IDs, users or patient records are returned.</small>
+      </section>
+
+      <section className="admin-facility-intelligence" aria-labelledby="admin-pathway-heading">
+        <div className="admin-facility-intelligence-heading">
+          <div>
+            <span className="eyebrow">REFERRAL PATHWAY INTELLIGENCE</span>
+            <h4 id="admin-pathway-heading">Referral pathways and workflow intervals</h4>
+            <p>Aggregated sending-to-receiving facility-type pathways, acknowledgement intervals and arrival intervals.</p>
+          </div>
+          <span className="admin-facility-period-tag">Complete month only</span>
+        </div>
+        {!facilityPeriodEligible && <p className="admin-facility-hint">Select one complete calendar month to view pathway patterns.</p>}
+        {pathwayLoading && <p role="status" className="admin-facility-hint">Loading referral pathway aggregates…</p>}
+        {pathwayError && <p role="status" className="error-message">{pathwayError}</p>}
+        {facilityPeriodEligible && !pathwayLoading && !pathwayError && pathwayRows.length === 0 && <p className="admin-facility-hint">No referral pathway aggregate is available for this month.</p>}
+        {facilityPeriodEligible && !pathwayLoading && !pathwayError && pathwayRows.length > 0 && (
+          <div className="admin-pathway-list">
+            {pathwayRows.map((row, index) => {
+              const suppressed = row.small_cell_suppressed || row.complementary_suppressed;
+              return (
+                <article className="admin-pathway-card" key={"pathway-" + index}>
+                  <div className="admin-pathway-route">
+                    <strong>{suppressed ? "Suppressed pathway group" : row.sending_facility_type + " → " + row.receiving_facility_type}</strong>
+                    <span>{suppressed ? "Count and pathway labels withheld" : Number(row.referral_count || 0).toLocaleString() + " referrals"}</span>
+                  </div>
+                  <div className="admin-pathway-metrics">
+                    <div>
+                      <small>Acknowledgement interval · median / P90</small>
+                      <strong>{suppressed || row.acknowledgement_interval_suppressed ? "Suppressed" : formatRphiMinutes(row.median_acknowledgement_minutes) + " / " + formatRphiMinutes(row.p90_acknowledgement_minutes)}</strong>
+                    </div>
+                    <div>
+                      <small>Arrival interval · median / P90</small>
+                      <strong>{suppressed || row.arrival_interval_suppressed ? "Suppressed" : formatRphiMinutes(row.median_arrival_minutes) + " / " + formatRphiMinutes(row.p90_arrival_minutes)}</strong>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+        <small className="admin-method-note">Pathways are grouped by facility type, not individual facility. Counts of 1–4 and one additional group where required are suppressed. Interval statistics are shown only when at least five valid timestamps contribute to that pathway metric. Intervals run from referral creation to acknowledgement or recorded arrival; invalid timestamps earlier than creation are excluded. These are descriptive platform intervals, not validated clinical targets, causal explanations or facility performance rankings.</small>
+      </section>
+
+      <section className="admin-facility-intelligence" aria-labelledby="admin-delay-alerts-heading">
+        <div className="admin-facility-intelligence-heading">
+          <div>
+            <span className="eyebrow">OPERATIONAL EARLY WARNING</span>
+            <h4 id="admin-delay-alerts-heading">Acknowledgement delay alerts</h4>
+            <p>Current network snapshot of referrals that missed their existing acknowledgement target, plus referrals acknowledged after their target.</p>
+          </div>
+          <span className="admin-facility-period-tag">Live aggregate snapshot</span>
+        </div>
+        {delayAlertsLoading && <p role="status" className="admin-facility-hint">Checking acknowledgement deadlines…</p>}
+        {delayAlertsError && <p role="status" className="error-message">{delayAlertsError}</p>}
+        {!delayAlertsLoading && !delayAlertsError && delayAlerts.length === 0 && (
+          <p className="admin-facility-hint">No acknowledgement delays are currently reportable. This does not confirm that every referral has been acknowledged.</p>
+        )}
+        {!delayAlertsLoading && !delayAlertsError && delayAlerts.length > 0 && (
+          <div className="admin-delay-alert-list">
+            {delayAlerts.map((alert, index) => {
+              const suppressed = alert.small_cell_suppressed || alert.complementary_suppressed;
+              return (
+                <article className="admin-delay-alert-row" key={"delay-alert-" + index}>
+                  <div>
+                    <strong>{suppressed ? "Suppressed alert category" : alert.alert_label}</strong>
+                    <small>{suppressed ? "Category and count withheld to reduce disclosure" : "Referral episodes in current snapshot"}</small>
+                  </div>
+                  <span className={suppressed ? "is-suppressed" : "is-alert-count"}>
+                    {suppressed ? "Suppressed" : Number(alert.alert_count || 0).toLocaleString()}
+                  </span>
+                </article>
+              );
+            })}
+          </div>
+        )}
+        <small className="admin-method-note">The report uses REFLINK's existing acknowledgement targets: Emergency 15 minutes, Urgent 2 hours and Routine 24 hours, represented by each referral's stored acknowledgement due time. “Awaiting acknowledgement” means the referral remains in sent status after its due time. “Acknowledged after target” is based on the recorded acknowledgement timestamp. Counts of 1–4 and one additional category where required are suppressed. This is an administrator-only aggregate signal; it does not notify a receiving team, expose individual cases, or replace clinical escalation. Confirm delays through the authorised clinical workflow.</small>
+      </section>
+    </section>
+  );
+}
+
 export default AdminDashboard;

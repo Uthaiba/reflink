@@ -1,0 +1,282 @@
+# REFLINK Offline PHI Threat Model
+
+**Status:** Implemented encrypted offline queue foundation with Chromium CI coverage; production release approval remains blocked by the limitations and validation gates below.
+
+## Current implementation status — 7 November 2026
+
+The current source branch integrates AES-256-GCM encryption into the IndexedDB referral queue. New queue writes require an unlocked account key and persist ciphertext rather than a plaintext referral payload. A passphrase-wrapped key envelope is stored separately; the active non-extractable CryptoKey remains in application memory. Legacy plaintext records have an explicit per-record migration path, and the application attempts migration after vault unlock before syncing. Queue ownership, account-scoped vault locking, per-record cross-tab sync claims and stale-worker fencing are implemented.
+
+The Chromium CI suite exercises real browser Web Crypto and IndexedDB, including vault persistence/reload, encrypted queue round trips, legacy migration, duplicate writes, account isolation, cross-tab vault locking and competing sync claims. The latest branch commit `ed623eb7be1dbbde02cbf1cf99bb3d8469d25197` passed the GitHub Actions quality workflow, including the Chromium browser suite (run #42321066495).
+
+**This is not production approval.** The queue is encrypted at rest at the application layer, but same-origin malicious JavaScript/XSS can access data while unlocked. The passphrase has no recovery/reset workflow. Firefox/WebKit, browser eviction/crash behaviour, managed-device controls, CSP/XSS assurance, server-side sync authorization, endpoint governance, clinical retention and recovery policy remain release gates. The queue must not be described as secure on shared or unmanaged endpoints.
+
+## Scope and historical position
+
+The sections below retain dated design decisions and implementation milestones. Statements in earlier dated sections describe the state at that point in the project and are superseded only where a later dated implementation section explicitly records the change. Service-worker cache restrictions do not encrypt IndexedDB.
+
+## Assets
+
+- Patient identifiers and contact details.
+- Referral reason, urgency and clinical narrative.
+- Facility, referrer and receiving-facility identifiers.
+- Authentication/session material.
+- Offline queue metadata and sync state.
+
+## Threat actors and failure modes
+
+| Threat | Potential impact | Required control |
+|---|---|---|
+| Lost or stolen device | Local PHI disclosure | Device encryption, screen lock, remote wipe where managed, short offline retention |
+| Shared workstation/browser profile | Next user accesses prior queue | Per-user queue isolation, sign-out lock, explicit purge and device policy |
+| XSS or malicious same-origin script | Read queued PHI and active session | Strict CSP, output encoding, dependency hygiene, minimal third-party scripts |
+| Browser profile/backup extraction | IndexedDB copied off device | Platform disk encryption and application-layer encryption with key lifecycle |
+| Lost network response | Duplicate referral creation | Stable client-generated idempotency key and server unique constraint |
+| User role/facility changes while offline | Stale authorisation at sync | Server re-authorisation at sync; never trust queued role/facility claims |
+| Clock manipulation | Incorrect queue expiry | Server-issued timestamps where online; treat local clock as advisory |
+| Browser storage eviction | Lost unsynced referral | Visible queue state, explicit export/recovery policy approved by clinical governance |
+
+## Required design before enabling offline PHI broadly
+
+1. **Minimise:** queue only fields required to initiate a referral; avoid copying unrelated patient records or attachments.
+2. **Identity boundary:** partition queue records by authenticated subject and tenant/facility; revalidate both server-side during sync.
+3. **Encryption:** use authenticated encryption (AES-GCM) through Web Crypto with a documented per-device/per-user key strategy. Do not hard-code keys, derive keys from user IDs, or store raw keys beside ciphertext.
+4. **Key lifecycle:** define key provisioning, rotation, expiry, logout, account disablement, recovery and secure deletion. A non-extractable browser key is not a complete defence against same-origin XSS or a compromised browser profile.
+5. **Retention:** set a clinically approved maximum offline lifetime and purge expired, synced and abandoned records. Do not rely only on a user-controlled device clock.
+6. **Sync:** use server-side idempotency constraints, atomic reconciliation and current authorization checks. Keep notification delivery outside the referral transaction.
+7. **Observability:** log counts, error classes and correlation IDs only; never log patient payloads, access tokens or clinical narratives.
+8. **User controls:** display queued/synced/failed status, warn on shared devices, provide a deliberate sign-out/purge workflow, and avoid silently deleting unsynced clinical work.
+9. **Endpoint governance:** document supported browsers, device ownership, OS encryption, screen lock, patching, remote wipe and incident response.
+10. **Validation:** test device loss, logout, role revocation, facility transfer, XSS assumptions, storage eviction, concurrent sync and retry after lost responses using synthetic records.
+
+## Recommended staged policy
+
+- Until key lifecycle and endpoint controls are implemented and tested, restrict offline queue use to approved, managed devices under an explicit organisational policy.
+- If the device is shared or unmanaged, disable offline PHI capture rather than implying browser storage is protected.
+- Do not persist attachments offline in the initial hardened release.
+- On logout, lock access immediately and execute the approved purge/key-destruction policy without silently discarding unsynced work; present a safe reconciliation path.
+
+## Acceptance criteria
+
+- No plaintext patient payload is stored in the offline queue.
+- Keys are not stored alongside ciphertext or embedded in source.
+- Sync rechecks user identity, active status, role, facility and referral eligibility on the server.
+- Repeated and concurrent sync attempts create one referral only.
+- Queue retention and deletion behaviour are verified on supported browsers.
+- Security review and clinical governance approve the endpoint and recovery model.
+
+This document is a design baseline, not evidence that current offline storage meets these criteria.
+
+
+## Source-only hardening implemented (6 November 2026)
+
+The browser queue now records an explicit `owner_user_id` for each newly queued referral and creates an IndexedDB index for that field. Existing queue entries are migrated using their original `payload.referring_user_id` value. Queue listing and deletion require the matching owner; the application badge counts only the current session user's queue. This is a client-side separation measure, not an authorization boundary.
+
+Automatic sync now:
+- Requires an online browser and a successful `supabase.auth.getUser()` verification before reading the user's queue.
+- Processes only records whose stored owner and payload referrer match the verified user.
+- Constrains duplicate reconciliation queries by both `offline_client_id` and `referring_user_id`.
+- Rechecks the authenticated user before deleting a locally queued record after server reconciliation.
+- Prevents overlapping sync runs in the same JavaScript runtime.
+
+Static unit tests cover owner matching and reject unowned records. They do not prove IndexedDB isolation against same-origin script execution, cross-tab races, RLS correctness or server-side role/facility authorization. Those controls remain mandatory.
+
+**Still outstanding:** queue payloads remain plaintext in IndexedDB; no application-layer encryption or key lifecycle has been implemented. Logout does not yet implement a reviewed purge/recovery policy. Device encryption, screen locks, managed endpoints, XSS mitigation, server-side sync authorization and clinical retention policy remain release gates.
+
+
+## AES-GCM implementation foundation — 6 November 2026
+
+Added `src/lib/offlineQueueCrypto.js` as a source-only cryptographic primitive. It:
+- Generates non-extractable AES-256-GCM keys through Web Crypto.
+- Uses a fresh 96-bit IV for each encryption operation and a 128-bit authentication tag.
+- Authenticates the format version, owner user ID and offline client ID as additional authenticated data.
+- Requires the payload's `referring_user_id` to match the owner context before encryption and after decryption.
+- Rejects malformed envelopes, unsupported versions, extractable keys and invalid record context.
+- Normalizes decryption/authentication failures so callers do not receive low-level cryptographic details.
+
+Added `tests/offlineQueueCrypto.test.js` for key properties, encryption/decryption round trips, fresh IVs, owner/record binding, tampering, wrong-key rejection, malformed envelopes and extractable-key rejection.
+
+**Important implementation boundary:** this module is not wired into `offlineReferralQueue.js`. Existing IndexedDB records are still stored in plaintext, and the application does not yet provision, persist, unlock, rotate, revoke or recover encryption keys. The helper's generated key is in-memory only; using it without a durable, approved lifecycle would make unsynced referrals unrecoverable after a reload. It does not by itself protect against same-origin XSS, malicious extensions, or a compromised browser profile.
+
+Do not describe offline referral storage as encrypted until the queue migration, key lifecycle, logout/recovery flow, retention policy and browser integration tests are implemented and reviewed. This source-only step does not change the database, production app, current queue schema or referral synchronization behaviour.
+
+
+## Offline key-vault foundation — 6 November 2026
+
+Added `src/lib/offlineQueueKeyVault.js` with a passphrase-wrapped data-key lifecycle foundation:
+- Generates a random 256-bit data key and imports it as a non-extractable AES-GCM CryptoKey for active use.
+- Wraps the raw data key using an AES-256-GCM key derived from a user-supplied passphrase with PBKDF2-HMAC-SHA-256 (600,000 iterations) and a random 128-bit salt.
+- Uses a fresh 96-bit IV and binds the vault envelope to the account owner through authenticated additional data.
+- Unlocks into a non-extractable, in-memory CryptoKey; the passphrase is not returned or persisted.
+- Supports passphrase rewrapping of the same data key without changing referral ciphertext.
+- Bounds and validates envelope fields and clears temporary raw-key byte buffers after use.
+
+Added `tests/offlineQueueKeyVault.test.js` for vault creation, correct unlock, wrong-passphrase rejection, cross-account rejection, envelope tampering, passphrase rotation and invalid passphrase/envelope handling.
+
+**Not yet integrated with IndexedDB or the referral queue:** the vault envelope is not persisted by the application, no UI prompts for a passphrase, and the returned CryptoKey is not connected to queue reads/writes. Existing queue payloads remain plaintext. There is no recovery mechanism if the passphrase is lost; losing it makes wrapped key material and any data encrypted by it unrecoverable. A reset must never silently discard pending referrals.
+
+Before production integration, approve a passphrase/recovery policy, device and session threat model, rate-limiting/lockout approach, cross-tab coordination, account-disablement behaviour, key rotation workflow and unsynced-record recovery. A passphrase-derived wrapping key does not protect against malicious same-origin JavaScript while the vault is unlocked.
+
+
+## IndexedDB key-vault envelope persistence — 6 November 2026
+
+The offline database schema is now version 3 and creates a separate `offline_key_vault` object store keyed by `owner_user_id`. The queue module exposes account-scoped functions to save, retrieve and explicitly delete the wrapped vault envelope. Before saving, it validates the expected PBKDF2/AES-GCM envelope fields, owner binding, fixed cryptographic parameters and encoded field lengths; unexpected fields (including passphrases) are rejected. The active non-extractable CryptoKey is never written to IndexedDB by these functions.
+
+**Scope and limitations:**
+- This is persistence for the wrapped envelope only. It does not yet create or unlock a vault automatically, retain a CryptoKey across reloads, or add passphrase UI.
+- Existing referral queue payloads remain plaintext. The current `queueReferral`, `listQueuedReferrals` and `syncQueuedReferrals` behaviour has not been switched to encryption.
+- No existing referral records are rewritten or deleted by the version 3 database upgrade. The upgrade adds the separate vault store; queue ownership migration remains unchanged.
+- Logout does not delete the vault or queued referrals. The delete API is explicit and must not be used as a logout side effect.
+- The storage functions have unit coverage for envelope validation, but require real-browser IndexedDB tests for upgrade, persistence across reloads, blocked upgrades, multi-tab behaviour and interrupted writes before release.
+
+Do not represent the offline queue as encrypted or production-ready. The next integration step must add a deliberate unlock state, encrypt new queue writes, decrypt only for the authenticated owner, and implement an idempotent per-record migration that commits each ciphertext replacement atomically without losing pending referrals.
+
+
+## Encrypted queue API and per-record migration foundation — 6 November 2026
+
+Added encrypted queue operations to `src/lib/offlineReferralQueue.js`:
+- `queueEncryptedReferral(payload, ownerUserId, key)` encrypts before opening the IndexedDB write transaction and writes an envelope-only queue record. It has no plaintext fallback.
+- `decryptQueuedReferralRecord(record, ownerUserId, key)` checks record ownership, decrypts with the owner/client-ID context, and validates the decrypted referrer.
+- `migratePlaintextQueueToEncrypted(ownerUserId, key)` processes one record at a time. Web Crypto runs outside IndexedDB transactions; a short readwrite transaction re-reads the original record and replaces it only if its owner and serialized payload still match. A failed or interrupted item is left unchanged; already encrypted items are skipped, making retries idempotent.
+- `listDecryptedQueuedReferrals` provides a key-gated read path. `syncQueuedReferrals` now accepts an optional unlocked key and decrypts encrypted records before upload. Without a key, encrypted records fail closed and remain queued.
+- Added an explicit encrypted-record classifier and unit coverage that rejects records carrying both ciphertext and a plaintext payload field.
+
+**Critical integration boundary:** the current application still calls the legacy `queueReferral` API, which stores new offline referrals in plaintext. The automatic sync effect also has no vault-unlock UI/key session and therefore cannot sync encrypted records. This step adds the safe primitives and migration path but does not yet switch the production-facing submit flow. Do not claim the application queue is encrypted.
+
+The migration code is guarded against a same-record concurrent change by re-reading and comparing the plaintext payload in the commit transaction. Browser-level tests are still required for real IndexedDB transaction behaviour, database upgrades, multiple tabs, browser termination between encrypt and commit, and simultaneous migration attempts. A Web Crypto key passed to these APIs must come from the correct account's unlocked vault; this module does not itself authenticate a user or implement UI lock state.
+
+
+Implementation follow-up: the offline queue module's ES module imports were normalized in commit `2dd8f69f965ab0e5df9b1033caba3dc4a98498c6`. The branch's CI and Preview checks for this latest commit have not yet been reported; treat validation as pending until exact-SHA checks are available.
+
+
+## Application integration — offline vault lifecycle and encrypted submission — 6 November 2026
+
+The PHC application now imports the vault and encrypted queue APIs and exposes an account-scoped vault panel:
+- A user can create a vault with a minimum 12-character passphrase or unlock the existing account envelope.
+- The application persists only the wrapped envelope. The non-extractable data key remains in React application memory and is cleared on explicit lock, sign-out, and account-switch handling.
+- A pending offline referral is held in application memory until vault unlock/create completes. It is then written using `queueEncryptedReferral`; if vault setup fails, the referral is not reported as saved and there is no plaintext fallback.
+- Existing plaintext queue records are migrated when the vault is unlocked. Each item is atomically replaced only after successful encryption and unchanged-record verification.
+- Background sync now requires an unlocked key for the current authenticated account, attempts migration first, and processes only structurally valid encrypted records. Legacy plaintext records that fail migration remain queued and are not uploaded by this path.
+- The app exposes a manual lock control. A `BroadcastChannel` message coordinates manual lock across open tabs where that browser API is supported. Sign-out and account-switch handlers clear the current tab's in-memory key.
+- The offline queue badge still reports queued item counts without decrypting patient payloads.
+
+**Security and operational limitations that remain:**
+- A vault passphrase has no recovery/reset workflow. If lost, encrypted pending referrals cannot be decrypted. Clinical governance must approve this risk before enabling broad use.
+- Cross-tab lock messaging is best-effort and depends on browser support; it is not a substitute for managed-device controls or protection against malicious same-origin JavaScript.
+- The pending referral being composed is held in memory until the vault unlock completes. A browser crash or refresh before the encrypted queue write means that not-yet-saved referral is lost; the UI explicitly does not claim it has been stored.
+- Browser-level IndexedDB tests (schema upgrade, persistence/reload, migration interruption, multi-tab transactions, quota/eviction and browser compatibility) are not yet implemented. The existing automated tests cover cryptographic helpers, ownership/classification and static contracts, not full browser behaviour.
+- Offline encryption does not replace server-side RLS, role/facility authorization, revalidation at sync, endpoint disk encryption, screen locks, CSP/XSS controls or a clinically approved retention policy.
+- Do not treat this as production approval for shared or unmanaged devices. PR release gates and clinical/security sign-off remain mandatory.
+
+
+## Latest CI record — 6 November 2026
+
+The integrated application revision at commit `f4c29fa0da2c1af45c4a297d8cd002493cade0bf` passed the GitHub Actions quality workflow: automated unit tests, lint and production bundle build all completed successfully (run #234, `42173481598`). A subsequent one-line change passes the active unlocked vault key to the online pre-submit sync call (commit `46dc349998d0b5581fda2631fe18f86df5f24710`); exact-HEAD CI has not yet been reported for that final adjustment.
+
+Vercel Preview returned a build-rate-limit failure for this branch. This is a platform quota failure, so there is no successful Preview build for the integrated revision. The source has not been deployed to production.
+
+
+## Phase 3 hardening — remove plaintext queue bypasses (6 November 2026)
+
+The queue module no longer has a plaintext write path through its legacy API:
+- `queueReferral(payload, ownerUserId, key)` remains as a compatibility alias but delegates directly to `queueEncryptedReferral`; callers must supply the account's unlocked key.
+- New encrypted records use IndexedDB `add` semantics, so a reused `client_id` cannot silently overwrite an existing pending referral. A collision fails visibly and leaves the existing record intact.
+- `listDecryptedQueuedReferrals` now rejects legacy plaintext records. Callers must explicitly run the per-record migration first; the decrypted-list API never returns a plaintext record as though it had passed through decryption.
+- Added source-contract tests for these fail-closed behaviours.
+
+These changes remove accidental plaintext bypasses from the module's public API. They do not replace browser-level IndexedDB tests, server-side authorization, or clinical/security approval. Legacy plaintext records remain available to the explicit migration path and are not silently deleted.
+
+
+## Phase 3.2 — IndexedDB integration test harness (6 November 2026)
+
+Added `tests/offlineQueueIndexedDb.test.js` using `fake-indexeddb` 6.2.5, a Node-compatible IndexedDB implementation. The tests exercise the queue module against IndexedDB request/transaction semantics rather than source-code regular expressions. Coverage includes:
+- Database v2-to-v3 upgrade and legacy queue owner-index migration.
+- Ciphertext-only persistence and decrypted round-trip for a synthetic referral.
+- Account-scoped queue reads and wrong-account decryption rejection.
+- Legacy plaintext migration and idempotent repeat migration.
+- Duplicate `client_id` rejection without overwriting the original queued referral.
+- Wrapped vault-envelope persistence across database close/reopen.
+- Creation and coexistence of queue, cache and vault object stores.
+
+**Testing boundary:** `fake-indexeddb` is an in-memory implementation, not Chromium, Firefox or Safari. These tests do not prove browser storage persistence across process restarts, quota/eviction behaviour, real multi-tab locking, browser-specific transaction scheduling, device loss, or browser compatibility. Those still require a real-browser test matrix with synthetic data. Do not describe this test harness as end-to-end browser validation or clinical acceptance.
+
+The harness also verifies that a serialization/encryption failure during legacy migration leaves the original pending record in place, with no partial plaintext deletion. This is an in-memory IndexedDB transaction test; actual browser crash/termination behaviour remains outside this harness.
+
+
+## Phase 3.3 — real-browser offline queue validation (6 November 2026)
+
+Added a browser test harness under `tests/browser/` and extended the GitHub Actions quality workflow to run it in Chromium using a pinned Playwright test runner. The browser tests use synthetic patient and account values only. They exercise the actual browser Web Crypto and IndexedDB implementations rather than the in-memory IndexedDB shim.
+
+The initial Chromium scenarios cover:
+- Creating a passphrase-wrapped vault and storing an encrypted referral with no plaintext payload property.
+- Reloading the browser page, retrieving the persisted vault envelope, unlocking it again and decrypting the queued synthetic referral.
+- Rejecting an incorrect passphrase after reload.
+- Upgrading a legacy version-two IndexedDB queue and migrating a synthetic plaintext record to ciphertext.
+
+The CI workflow installs the pinned Playwright runner as a temporary CI-only dependency (it is not added to the application's runtime dependencies), installs Chromium, starts the Vite development server and executes the browser suite after the existing unit, lint and production-build gates.
+
+**Validation status:** the Chromium browser suite passed in GitHub Actions run #294 on exact branch head `d535933de5221b8ebbc7bdccad11b1aece6f1134` (6 November 2026). The suite includes the initial persistence/reload/migration scenarios plus the multi-tab duplicate-write, account-isolation and cross-tab lock scenarios documented below. This is Chromium-only validation; Firefox/WebKit compatibility, storage quota/eviction, browser process termination, device loss, and production endpoint/security governance remain outstanding. No production database, secrets, Auth configuration, deployment or patient records were changed by this test harness.
+
+
+**CI runner compatibility adjustment:** the first browser-CI attempt failed before launching Chromium because the hosted `ubuntu-latest` image resolved to Ubuntu 26.04, which the pinned Playwright release does not support. The workflow has been pinned to `ubuntu-24.04`, a supported runner. The corrected exact-HEAD run must complete before the browser suite is considered validated.
+
+
+## Phase 3.4 — multi-tab duplicate-write validation (6 November 2026)
+
+Extended the Chromium browser suite to open two same-origin tabs in one browser context, independently unlock the same synthetic account vault and attempt to persist a referral using the same offline client ID at the same time. The expected result is exactly one successful IndexedDB `add` and one duplicate-key rejection; the stored queue must contain exactly one encrypted record for that client ID, with no plaintext payload field. This validates the browser's actual IndexedDB uniqueness/transaction behaviour for this scenario. It does not validate the application's full React lock UI, all BroadcastChannel races, concurrent network sync or server-side idempotency.
+
+The scenario uses synthetic test account and patient values only. **Validation:** passed in Chromium CI run #294 on exact branch head `d535933de5221b8ebbc7bdccad11b1aece6f1134`.
+
+
+## Phase 3.5 — real-browser account isolation (6 November 2026)
+
+Added a Chromium scenario that creates encrypted queue entries for two synthetic account owners in the same browser profile. It verifies that each owner's queue count is scoped to that owner and that unlocking account A decrypts only account A's referral. This tests the actual browser IndexedDB owner index and the application queue read API. It is not a security boundary against same-origin script execution, browser profile access or a malicious extension; server-side authorization remains essential.
+
+**Validation:** passed in Chromium CI run #294 on exact branch head `d535933de5221b8ebbc7bdccad11b1aece6f1134`. The scenario uses synthetic records only.
+
+
+## Phase 3.6 — account-scoped cross-tab vault locking (6 November 2026)
+
+Extracted the same-origin vault lock coordination into `src/lib/offlineVaultLockChannel.js` and wired the application to use that shared helper for lock subscription and broadcasts. The helper validates message shape, lock type and exact account owner before invoking the receiving tab's lock callback. It closes the channel during effect cleanup and degrades safely when `BroadcastChannel` is unavailable.
+
+The broadcast API is deliberately owner-bound: `broadcastLock()` accepts no target account argument and always publishes the channel instance's own authenticated owner ID. A caller therefore cannot use the helper to send a lock event targeting a different account. The receiving tab independently validates the owner ID before locking.
+
+The real Chromium browser test opens four same-origin tabs in one browser context: two synthetic tabs for account A and two for account B. It verifies:
+- A lock initiated by one A tab locks the other A tab, while both B tabs remain unlocked.
+- A lock initiated by one B tab locks the other B tab, while both A tabs remain unlocked.
+- The production helper used by the application is the module exercised by the browser test.
+
+Unit tests additionally verify exact outgoing payloads, account-scoped message delivery, rejection of malformed/non-lock/nonmatching messages, graceful fallback when `BroadcastChannel` is unavailable, and channel cleanup. Authentication lifecycle handling also broadcasts the current vault's lock before clearing local key state on sign-out or replacement by a different signed-in account. A regression test verifies both auth transitions broadcast before local key clearing. Only the lock event and account identifier are broadcast. Encryption keys, passphrases, referral payloads and patient information are not included.
+
+Vault unlock now revalidates the authenticated account after asynchronous legacy-record migration and before activating the in-memory key. The auth listener reads the latest vault owner through a ref, avoiding a stale React closure when a sign-in event arrives.
+
+This validates the shared channel helper and account-routing behaviour through helper-level browser tests and source-contract integration tests; it is not a full authenticated React UI test or a security boundary against malicious same-origin scripts. Firefox/WebKit, full authenticated UI coverage, server-side authorization and managed-device controls remain separate validation areas.
+
+**Validation history:** GitHub Actions runs #310 and #311 passed on exact branch head `a7908b2de65d5775280be7deca9061fbe31f55e1`; runs #312 and #313 passed on documentation head `6876a5b46db696ba75be2d8867725f9d35be9f88`; runs #316 and #317 passed on lifecycle head `94caa701a45feedcfce1b65d9e0c7dfdf3f3f15d`. The additional sign-out/account-replacement broadcast changes and their regression test are now committed on a newer branch head; exact-HEAD CI is pending and must pass before treating those latest changes as verified.
+
+## Concurrent sync notification safeguard — 6 November 2026
+
+A cross-tab race review identified that two browser tabs could both observe a missing server referral before attempting the same offline referral insert. The database uniqueness conflict path reconciles the second attempt to the already-created referral. Previously, both attempts could still satisfy the later notification condition and independently call the SMS endpoint.
+
+The sync path now records whether the current attempt actually inserted the referral. Only that successful inserting attempt may trigger the referral-sent SMS call. A tab that finds an existing referral or reconciles a uniqueness conflict does not send another SMS.
+
+This is a client-side duplicate-notification safeguard, not a complete distributed sync lock. Correctness still depends on the server enforcing a unique idempotency constraint for the offline referral identity. The SMS endpoint itself does not yet provide a durable idempotency key or transactional outbox guarantee, so delivery across network timeouts/retries is not exactly-once. Server-side notification idempotency remains a release-hardening item.
+
+No production schema or endpoint has been changed by this source-only client safeguard.
+
+
+## Phase 4.1 — cross-tab offline sync claims and stale-worker fencing — 6 November 2026
+
+The offline queue now uses an owner-scoped per-record claim before a sync worker begins processing a queued referral. The claim is written in a short IndexedDB readwrite transaction, which serializes competing transactions against the queue object store across same-origin tabs. Claim metadata contains only the account owner, a random claim token and an expiry timestamp; it does not contain referral payload or patient information.
+
+The default lease is five minutes. A worker that finds a non-expired claim skips that record. An expired claim can be reclaimed by another tab. On successful server reconciliation, queue deletion is conditional on the current claim token still matching the worker's token. Failure cleanup likewise clears a claim only when its token still matches. This fencing prevents a delayed worker from deleting a record or clearing a newer worker's claim after its own lease has expired.
+
+Automated coverage now includes:
+- Concurrent fake-IndexedDB claim attempts, proving only one receives the active claim.
+- Lease expiry and reclamation.
+- Rejection of stale-worker release and deletion attempts.
+- Account-owner isolation for claims.
+- A real Chromium multi-tab test that races two tabs for one queue record, verifies only one wins, then verifies the other tab can claim after release.
+
+**Limitations and release boundary:** the lease is time-bounded and is not renewed while a network request is in flight. A request lasting longer than five minutes may outlive its lease; fencing still protects local deletion, but cannot prevent an already-issued remote request from completing. The server's unique offline-referral identity remains necessary to reconcile duplicate submissions, and the SMS endpoint still lacks durable idempotency/outbox guarantees. This client-side lease is not a distributed transaction, does not coordinate across different browser profiles/devices, and does not establish exactly-once server processing. Browser crash recovery, Firefox/WebKit compatibility, and production endpoint/security validation remain separate release gates.
+
+No production Supabase schema, RLS policy, credentials, Auth settings or deployment configuration was changed.

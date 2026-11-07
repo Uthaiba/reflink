@@ -10104,3 +10104,40 @@ textarea:focus {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
+
+.reflink-offline-vault-panel {
+  width: min(100% - 2rem, 34rem);
+  margin: 1rem auto;
+  padding: 1.25rem;
+  border: 1px solid var(--border-color, #d8e0e8);
+  border-radius: 0.875rem;
+  background: var(--surface, #fff);
+  color: var(--text-primary, #17212b);
+  box-shadow: 0 8px 28px rgba(20, 35, 50, 0.08);
+}
+.reflink-offline-vault-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.reflink-offline-vault-panel h3 { margin: 0 0 0.35rem; }
+.reflink-offline-vault-panel p { margin: 0.35rem 0 0.85rem; }
+.reflink-offline-vault-panel form { display: grid; gap: 0.65rem; }
+.reflink-offline-vault-panel input {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border-color, #cbd5df);
+  border-radius: 0.5rem;
+}
+.reflink-offline-vault-panel__notice {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--text-secondary, #526171);
+}
+.reflink-offline-vault-open { display: block; margin: 0.5rem auto; }
+@media (max-width: 480px) {
+  .reflink-offline-vault-panel { width: calc(100% - 1rem); padding: 1rem; }
+  .reflink-offline-vault-panel__header { flex-direction: column; }
+}
