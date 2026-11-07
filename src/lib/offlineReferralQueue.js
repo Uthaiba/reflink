@@ -5,7 +5,7 @@ const DB_VERSION = 3;
 const STORE_QUEUE = "referral_queue";
 const STORE_CACHE = "cache";
 const STORE_KEY_VAULT = "offline_key_vault";
-let activeSyncPromise = null;
+const activeSyncPromises = new Map();
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -550,15 +550,23 @@ async function syncOwnedQueue(supabaseClient, userId, key) {
 export async function syncQueuedReferrals(supabaseClient, key = null) {
   if (!key) return { synced: 0, failed: 0, skipped: true, reason: "vault_locked" };
   if (typeof navigator === "undefined" || !navigator.onLine) return { synced: 0, failed: 0, skipped: true };
-  if (activeSyncPromise) return activeSyncPromise;
-  activeSyncPromise = (async () => {
-    const { data: { user }, error } = await supabaseClient.auth.getUser();
-    if (error || !user?.id) return { synced: 0, failed: 0, skipped: true };
-    return syncOwnedQueue(supabaseClient, user.id, key);
-  })();
+
+  const { data: { user }, error } = await supabaseClient.auth.getUser();
+  if (error || !user?.id) return { synced: 0, failed: 0, skipped: true };
+
+  // Serialize duplicate syncs for the same account without allowing one
+  // account's in-flight work to suppress another account's queue sync.
+  const owner = String(user.id);
+  const existing = activeSyncPromises.get(owner);
+  if (existing) return existing;
+
+  const syncPromise = syncOwnedQueue(supabaseClient, owner, key);
+  activeSyncPromises.set(owner, syncPromise);
   try {
-    return await activeSyncPromise;
+    return await syncPromise;
   } finally {
-    activeSyncPromise = null;
+    if (activeSyncPromises.get(owner) === syncPromise) {
+      activeSyncPromises.delete(owner);
+    }
   }
 }
