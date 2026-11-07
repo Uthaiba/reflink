@@ -420,3 +420,13 @@ test("foreign-key index recommendations require exact catalog evidence", async (
   assert.match(reconciliation, /no index migration is proposed/i);
   assert.match(reconciliation, /disposable database/i);
 });
+
+test("migration governance accurately describes acknowledgement hooks as cancellation-only", async () => {
+  const governance = await readFile(
+    new URL("../docs/MIGRATION_GOVERNANCE.md", import.meta.url),
+    "utf8",
+  );
+  assert.match(governance, /cancellation-only reminder lifecycle semantics/i);
+  assert.match(governance, /does not enqueue reminders, infer recipients, or dispatch messages/i);
+  assert.doesNotMatch(governance, /stored-deadline\/in-app-only enqueue semantics/i);
+});
