@@ -193,6 +193,41 @@ test("outbox claiming is bounded, concurrent-safe and records each attempt", asy
   assert.match(definition, /o\.attempt_count\s*<\s*8/i);
 });
 
+test("outbox lease reclamation locks queue rows before attempt-ledger rows", async () => {
+  const sql = await migration(
+    "20261105000600",
+    "notification_outbox_foundation",
+  );
+  const definition = functionDefinition(sql, "private", "claim_notification_batch");
+  const queueLock = definition.indexOf("perform o.id");
+  const attemptUpdate = definition.indexOf("update private.notification_attempts");
+  assert.notEqual(queueLock, -1);
+  assert.notEqual(attemptUpdate, -1);
+  assert.ok(queueLock < attemptUpdate, "queue rows must be locked before attempt rows");
+  assert.match(definition.slice(queueLock, attemptUpdate), /for update/i);
+});
+
+test("referral cancellation trigger follows the outbox-first lock order", async () => {
+  const sql = await migration(
+    "20261106000100",
+    "referral_acknowledgement_notification_hooks",
+  );
+  const definition = functionDefinition(
+    sql,
+    "private",
+    "cancel_referral_acknowledgement_reminders",
+  );
+  const queueLock = definition.indexOf("perform o.id");
+  const attemptUpdate = definition.indexOf("update private.notification_attempts");
+  const queueUpdate = definition.indexOf("update private.notification_outbox");
+  assert.notEqual(queueLock, -1);
+  assert.notEqual(attemptUpdate, -1);
+  assert.notEqual(queueUpdate, -1);
+  assert.ok(queueLock < attemptUpdate, "queue rows must be locked before attempt rows");
+  assert.ok(attemptUpdate < queueUpdate, "attempt audit must close before the queue lease is released");
+  assert.match(definition.slice(queueLock, attemptUpdate), /for update/i);
+});
+
 test("outbox settlement validates the active lease and bounds retry delay", async () => {
   const sql = await migration(
     "20261105000600",
