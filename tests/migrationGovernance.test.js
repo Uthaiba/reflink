@@ -433,3 +433,45 @@ test("migration governance accurately describes acknowledgement hooks as cancell
   assert.match(governance, /does not enqueue reminders, infer recipients, or dispatch messages/i);
   assert.doesNotMatch(governance, /stored-deadline\/in-app-only enqueue semantics/i);
 });
+
+
+test("live privileged RPC catalog reconciliation records owner, RLS bypass and helper dependencies", async () => {
+  const review = await readFile(
+    new URL("../docs/PRIVILEGED_RPC_SOURCE_RECONCILIATION.md", import.meta.url),
+    "utf8",
+  );
+  assert.match(review, /All five legacy functions exist in the live public schema/i);
+  assert.match(review, /owner role is not a superuser but \*\*does have BYPASSRLS\*\*/i);
+  assert.match(review, /12 catalog dependency entries across 10 distinct RLS policies/i);
+  assert.match(review, /guard_profile_security_fields\(\)/i);
+  assert.match(review, /there is no unique index on/i);
+  assert.match(review, /search_path=""|empty search path/i);
+});
+
+test("dependency remediation pins patched Vite and source-map-js versions", async () => {
+  const packageJson = JSON.parse(await readFile(
+    new URL("../package.json", import.meta.url),
+    "utf8",
+  ));
+  const lock = JSON.parse(await readFile(
+    new URL("../package-lock.json", import.meta.url),
+    "utf8",
+  ));
+  const triage = await readFile(
+    new URL("../docs/DEPENDENCY_SECURITY_TRIAGE.md", import.meta.url),
+    "utf8",
+  );
+  const workflow = await readFile(
+    new URL("../.github/workflows/quality.yml", import.meta.url),
+    "utf8",
+  );
+
+  assert.equal(packageJson.devDependencies.vite, "^8.2.4");
+  assert.equal(lock.packages["node_modules/vite"].version, "8.2.4");
+  assert.equal(lock.packages["node_modules/source-map-js"].version, "1.2.2");
+  assert.equal(lock.packages["node_modules/rolldown"].version, "1.2.4");
+  assert.match(triage, /GHSA-68fv-2mgg-jv7q/i);
+  assert.match(triage, /GHSA-587h-7wmj-h5pm/i);
+  assert.match(workflow, /npm audit --json/);
+  assert.match(workflow, /fixAvailable/);
+});
