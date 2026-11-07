@@ -118,7 +118,7 @@ The separate user-facing inbox, ownership policy, restricted mark-read operation
 
 The source-level authenticated inbox adapter is documented in [NOTIFICATION_INBOX_ADAPTER.md](./NOTIFICATION_INBOX_ADAPTER.md) and implemented in `src/lib/notificationInbox.js` with isolated unit tests. It remains unwired because its inbox relation and mark-read RPC are not installed or integration-tested.
 
-Recipient selection is now explicitly fail-closed: no user is automatically selected until an approved roster/notification-duty assignment source exists; facility-wide fan-out to all receiving-staff profiles is not approved. See [NOTIFICATION_RECIPIENT_ELIGIBILITY.md](./NOTIFICATION_RECIPIENT_ELIGIBILITY.md). The existing acknowledgement-hook migration still contains broad fan-out and must remain unapplied.
+Recipient selection is now explicitly fail-closed: no user is automatically selected until an approved roster/notification-duty assignment source exists; facility-wide fan-out to all receiving-staff profiles is not approved. See [NOTIFICATION_RECIPIENT_ELIGIBILITY.md](./NOTIFICATION_RECIPIENT_ELIGIBILITY.md). The current acknowledgement-hook migration is cancellation-only: it cancels stale reminder work after referral lifecycle changes and does not enqueue notifications, query profiles, or fan out to any recipient. It must remain unapplied until the migration baseline and staging gates are resolved.
 
 
 ## Additional concurrency and idempotency review — 7 November 2026
@@ -151,3 +151,8 @@ A source-only review of `api/referral-sms.js` confirms that the endpoint validat
 - Add endpoint tests for unauthorized roles/facilities, missing profiles, invalid lifecycle states, duplicate/replayed requests, provider timeout, and provider error sanitization.
 
 **Decision:** keep `api/referral-sms.js` and its call sites unchanged for now. A superficial status check or application-only duplicate guard would not provide transactional event authenticity or durable idempotency. Do not send test SMS or activate the outbox worker until recipient routing, migration reconciliation and synthetic-data staging validation are complete.
+
+
+### Correction — acknowledgement hook source verified (7 November 2026)
+
+The migration `20261106000100_referral_acknowledgement_notification_hooks.sql` was re-read directly. It defines only `private.cancel_referral_acknowledgement_reminders()`, an AFTER UPDATE trigger that cancels pending/retry/processing reminder rows and closes the matching in-flight attempt when referral status, acknowledgement deadline, acknowledgement timestamp or receiving facility changes. It does not select recipients, insert inbox/outbox work, or fan out to staff profiles. Earlier wording in this document that said the migration “still contains broad fan-out” was inaccurate and is superseded by the corrected statement above. The migration remains unapplied because the baseline/staging blockers remain, not because it contains recipient fan-out.
