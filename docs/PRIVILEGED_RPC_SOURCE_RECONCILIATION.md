@@ -106,3 +106,66 @@ The inventory is a source search, not a proof that no dynamic, generated, extern
 The reviewed snapshot is the exact Phase 1 branch head recorded on 7 November 2026. The application call-site line references above were checked against the files at that commit, not inferred from an earlier search result. The review remains source-only: it cannot establish that the live database objects match these proposed SQL files, that the five legacy RPCs have safe live definitions, or that any SECURITY DEFINER function is owned by a least-privileged role.
 
 The source review found no reason to fabricate the missing legacy function definitions or alter their grants. The correct next action for those blockers is still an approved metadata-only export and a verified disposable/non-production database after baseline reconciliation. Until then, keep the proposed SQL migrations unapplied and PR #1 unmerged.
+
+
+## 8. Live catalog metadata export — 7 November 2026
+
+**Evidence source:** read-only PostgreSQL catalog queries against the linked REFLINK project. Queries returned function metadata/definitions, role attributes, schema privileges, policy expressions, trigger metadata and index definitions only. No patient-level or application rows were queried. No database object, ACL, policy, migration ledger entry or deployment was changed.
+
+### 8.1 Exact live legacy function metadata
+
+All five legacy functions exist in the live public schema, are owned by `postgres`, and are SECURITY DEFINER. The owner role is not a superuser but **does have BYPASSRLS**. Therefore, each function executes with a role that bypasses row-level security. The authorization logic inside each function is the effective control; RLS cannot be assumed to protect operations performed by these functions.
+
+| Function | Language | Search path | anon EXECUTE | authenticated EXECUTE | service_role EXECUTE |
+|---|---|---|---:|---:|---:|
+| `get_facility_user_count(uuid)` | PL/pgSQL | empty (`search_path=""`) | No | Yes | Yes |
+| `get_facility_user_counts()` | PL/pgSQL | `public` | No | Yes | Yes |
+| `is_administrator()` | SQL | `public` | No | Yes | Yes |
+| `log_referral_print(uuid,text)` | PL/pgSQL | `public` | No | Yes | Yes |
+| `log_referral_read(uuid)` | PL/pgSQL | `public` | No | Yes | Yes |
+
+The explicit ACLs include the owner, authenticated and service_role; effective privilege checks confirmed anon cannot execute any of the five functions. Authenticated can execute all five, so every internal authorization check is security-critical.
+
+### 8.2 Function-by-function authorization review
+
+- **`get_facility_user_count(uuid)`:** requires non-null `auth.uid()`; loads the caller's profile role and facility; non-administrators can only request their own non-null facility ID; administrators can request any facility ID. The function normalizes role using `lower(trim(role))`. It uses an empty search path. The query counts profiles assigned to the requested facility.
+- **`get_facility_user_counts()`:** loads the caller's normalized role and rejects unless it is `administrator`; returns grouped user counts by non-null facility. It uses `search_path=public`. There is no explicit `auth.uid() IS NOT NULL` statement, but a null identity produces no matching profile and a null role, which is rejected.
+- **`is_administrator()`:** returns whether a profile exists for `auth.uid()` with role exactly equal to `administrator`. It uses `search_path=public`. The role comparison is case-sensitive and does not normalize whitespace, unlike the two facility-count functions. Confirm that the profile role constraint and stored values enforce a canonical role before changing this semantic.
+- **`log_referral_print(uuid,text)`:** permits the administrator, the referral's `referring_user_id`, or a user whose profile facility equals the referral's `receiving_facility_id`. It then calculates `max(print_number)+1`, inserts the print event and returns the number. The table's catalog indexes show a primary key on `id` and a non-unique index on `(referral_id, created_at DESC)`; there is no unique index on `(referral_id, print_number)`. Concurrent calls can therefore allocate duplicate print numbers. The copy label is not length-bounded or allowlisted in the function.
+- **`log_referral_read(uuid)`:** uses the same administrator/referrer/receiving-facility authorization predicate and inserts a READ audit event. It uses `search_path=public`. It does not return an audit identifier or prove to the client that the write succeeded.
+
+For both logging RPCs, the receiving-side authorization is based on facility assignment and does not independently check the caller's profile role. Confirm whether every account assigned to a receiving facility is intentionally allowed to print/read referral records, or whether the intended contract is limited to specified clinical roles. The UI's role and facility checks are not a substitute for this database decision.
+
+### 8.3 Actual helper dependencies
+
+The live `is_administrator()` helper has **12 catalog dependency entries across 10 distinct RLS policies**. The two additional dependency entries arise because the profiles and users update policies reference the helper in both USING and WITH CHECK expressions.
+
+| Table | Policy |
+|---|---|
+| `profiles` | Administrators can view all profiles |
+| `profiles` | Administrators can create profiles |
+| `profiles` | Administrators can update profiles (USING and WITH CHECK) |
+| `users` | Administrators can view users |
+| `users` | Administrators can insert users |
+| `users` | Administrators can update users (USING and WITH CHECK) |
+| `referral_notifications` | Admins can view notification log |
+| `counter_referrals` | Participants can view counter referrals |
+| `audit_log` | Administrators can view audit log |
+| `referral_print_events` | Participants can view print history |
+
+The helper is also called by the live `public.log_referral_print(uuid,text)`, `public.log_referral_read(uuid)`, and the non-SECURITY-DEFINER trigger function `public.guard_profile_security_fields()`. The latter is attached as a BEFORE UPDATE trigger on `public.profiles`; its function owner is postgres, it is SECURITY INVOKER, and it pins an empty search path. The trigger rejects non-administrator changes to protected profile fields, while allowing trusted database/service-role operations.
+
+The catalog shows `public` CREATE privilege is false for anon, authenticated and service_role; only postgres has CREATE. This reduces the immediate ability of API roles to plant shadow objects in public, but does not remove the benefit of an empty search path for privileged functions.
+
+### 8.4 Remediation priorities — source and staging only
+
+1. Preserve the current authorization contracts while adding explicit regression cases for unauthenticated, wrong-role, wrong-facility, own-referral and administrator calls.
+2. Review and then harden the four legacy functions that currently use `search_path=public` to an empty search path, retaining schema-qualified references and verifying the function bodies compile and behave identically.
+3. Resolve the role canonicalization mismatch in `is_administrator()` only after confirming the live profile role constraint and actual stored role vocabulary. Do not silently broaden administrator matching.
+4. Decide and document the intended receiving-side roles for `log_referral_print` and `log_referral_read`.
+5. Fix print-number allocation with a transaction-safe allocation strategy and a verified unique constraint/index, after checking existing duplicate numbers and staging migration feasibility. Do not apply DDL to production from this source-only review.
+6. Add a bounded/allowlisted copy-label contract and tests.
+7. Preserve and test all 12 helper dependency entries across 10 policies and the three function/trigger callers before any helper replacement or grant change.
+8. Test the SECURITY DEFINER owner and BYPASSRLS behavior explicitly in a disposable synthetic-data database; do not assume RLS protects privileged function internals.
+
+**Current disposition:** the metadata gap is now closed for these five live functions, but remediation is not authorized by this evidence export. Migration baseline reconciliation, role/assignment semantics, synthetic staging and direct RPC authorization tests remain release blockers. No production changes were made.
