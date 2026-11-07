@@ -3,7 +3,7 @@ import {
   isOpenIncomingReferral,
 } from "./referralPriority.js";
 
-export function getReceivingReferralMetrics(referrals) {
+export function getReceivingReferralMetrics(referrals, now = Date.now()) {
   const records = Array.isArray(referrals) ? referrals : [];
   return {
     newReferrals: records.filter((item) => item?.status === "sent").length,
@@ -19,6 +19,6 @@ export function getReceivingReferralMetrics(referrals) {
         String(item?.urgency || "").toLowerCase() === "emergency" &&
         isOpenIncomingReferral(item),
     ).length,
-    overdueIncomingAcknowledgements: records.filter(isAcknowledgementOverdue).length,
+    overdueIncomingAcknowledgements: records.filter((item) => isAcknowledgementOverdue(item, now)).length,
   };
 }
