@@ -1289,6 +1289,10 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
 }
 
 function ReferralTimeline({ referral }) {
+  const counterReferral = Array.isArray(referral.counter_referral)
+    ? referral.counter_referral[0]
+    : referral.counter_referral;
+
   const steps = [
     {
       key: "created",
@@ -1308,16 +1312,31 @@ function ReferralTimeline({ referral }) {
     {
       key: "assessment",
       label: referral.assessment_completed_at
-  ? "Assessment Completed"
-  : referral.status === "under_assessment"
-    ? "Assessment in Progress"
-    : "Assessment",
+        ? "Assessment Completed"
+        : referral.status === "under_assessment"
+          ? "Assessment in Progress"
+          : "Assessment",
       timestamp: referral.assessment_completed_at,
+    },
+    {
+      key: "admission",
+      label: "Patient Admitted",
+      timestamp: referral.admission_at,
+    },
+    {
+      key: "discharge",
+      label: "Patient Discharged",
+      timestamp: referral.discharged_at,
+    },
+    {
+      key: "counter-referral",
+      label: "Counter-Referral Submitted",
+      timestamp: counterReferral?.created_at,
     },
     {
       key: "completed",
       label: "Referral Completed",
-      timestamp: referral.completed_at || referral.discharged_at,
+      timestamp: referral.completed_at,
     },
   ];
 
@@ -4888,6 +4907,7 @@ function PHCStaffDashboard({ onNewReferral }) {
           discharge_medications,
           follow_up_plan,
           discharged_at,
+          completed_at,
 
           referring_facility_id,
           receiving_facility_id,
@@ -5665,17 +5685,22 @@ loadMyReferrals();
               <div className="dashboard-card counter-referral-card">
                 <span className="eyebrow">COUNTER-REFERRAL FEEDBACK</span>
                 <h3>Receiving Facility Outcome</h3>
-                <p><strong>Final diagnosis:</strong> {selectedReferral.counter_referral.final_diagnosis}</p>
+                <p><strong>Final diagnosis:</strong> {selectedReferral.counter_referral.final_diagnosis || "Not recorded"}</p>
+                <p><strong>Treatment provided:</strong> {selectedReferral.counter_referral.treatment_provided || "Not recorded"}</p>
                 <p><strong>Outcome:</strong> {formatClinicalLabel(selectedReferral.counter_referral.outcome)}</p>
                 <p><strong>Follow-up:</strong> {selectedReferral.counter_referral.follow_up_instructions || "Not recorded"}</p>
+                {selectedReferral.counter_referral.referred_further_to && (
+                  <p><strong>Further referral:</strong> {selectedReferral.counter_referral.referred_further_to}</p>
+                )}
+                {selectedReferral.counter_referral.additional_notes && (
+                  <p><strong>Additional notes:</strong> {selectedReferral.counter_referral.additional_notes}</p>
+                )}
               </div>
             )}
 
             <hr />
 
             <ReferralSourceDetails referral={selectedReferral} />
-
-            <ReferralTimeline referral={selectedReferral} />
 
             <hr />
 
