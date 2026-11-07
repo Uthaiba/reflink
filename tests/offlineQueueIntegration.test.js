@@ -161,3 +161,45 @@ test("vault lock channel handles post failures and repeated close without throwi
     else delete globalThis.BroadcastChannel;
   }
 });
+
+
+test("vault lock messages are account-scoped and ignore malformed or unrelated events", async () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  const instances = [];
+  let lockCount = 0;
+  try {
+    Object.defineProperty(globalThis, "BroadcastChannel", {
+      configurable: true,
+      value: class {
+        constructor(name) {
+          this.name = name;
+          this.sent = [];
+          instances.push(this);
+        }
+        postMessage(message) { this.sent.push(message); }
+        close() {}
+      },
+    });
+    const { createOfflineVaultLockChannel } = await import("../src/lib/offlineVaultLockChannel.js");
+    const accountA = createOfflineVaultLockChannel("account-a", () => { lockCount += 1; });
+    const accountB = createOfflineVaultLockChannel("account-b", () => { lockCount += 1; });
+
+    instances[0].onmessage({ data: { type: "LOCK", ownerUserId: "account-b" } });
+    instances[0].onmessage({ data: { type: "UNLOCK", ownerUserId: "account-a" } });
+    instances[0].onmessage({ data: ["LOCK", "account-a"] });
+    assert.equal(lockCount, 0);
+
+    instances[0].onmessage({ data: { type: "LOCK", ownerUserId: "account-a" } });
+    assert.equal(lockCount, 1);
+
+    assert.equal(accountA.broadcastLock(), true);
+    assert.deepEqual(instances[0].sent, [{ type: "LOCK", ownerUserId: "account-a" }]);
+    assert.equal(accountB.broadcastLock(), true);
+    assert.deepEqual(instances[1].sent, [{ type: "LOCK", ownerUserId: "account-b" }]);
+    accountA.close();
+    accountB.close();
+  } finally {
+    if (original) Object.defineProperty(globalThis, "BroadcastChannel", original);
+    else delete globalThis.BroadcastChannel;
+  }
+});
