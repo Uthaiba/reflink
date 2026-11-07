@@ -127,3 +127,27 @@ Recipient selection is now explicitly fail-closed: no user is automatically sele
 - Queue lease cleanup and referral-trigger cancellation now lock matching outbox rows before touching attempt-ledger rows. Worker settlement already locks the outbox row before updating its attempt record; the consistent outbox-then-attempt order reduces deadlock risk during simultaneous settlement, expiry, lease reclamation and referral lifecycle changes.
 - The acknowledgement trigger now uses a row-level `WHEN` predicate so an UPDATE statement that names lifecycle columns but leaves their values unchanged does not cancel valid reminder work.
 - Static migration-governance tests cover these source contracts. They do not replace PostgreSQL concurrency tests; the migrations remain unapplied and these lock-order assumptions still require synthetic-data database validation.
+
+
+## Legacy direct-SMS endpoint review — 7 November 2026
+
+A source-only review of `api/referral-sms.js` confirms that the endpoint validates a Supabase access token and checks the caller's current profile role and facility against the referral before sending. The message template does not include patient identifiers or clinical details. These controls are useful but do not establish safe retry or event authenticity.
+
+### Findings and constraints
+
+1. **No durable pre-send idempotency.** Each authorized request can reach Twilio again. A caller retry, double submission or replay can create duplicate SMS messages. The `referral_notifications` insert occurs after provider dispatch, so it cannot act as a reliable pre-send claim.
+2. **Acknowledgement is not bound to a verified lifecycle transition.** The `referral_acknowledged` path checks that the actor is receiving staff at the receiving facility, but the endpoint does not verify the referral's current status or prove that this request corresponds to a newly committed acknowledgement transition. A facility staff member can therefore request an acknowledgement SMS for a referral without this endpoint establishing that the acknowledgement event just occurred.
+3. **Provider failure details are persisted and returned.** The catch path stores the provider's error message and returns it to the caller. Provider diagnostics should be normalized to bounded internal error codes; raw provider responses must not be exposed or retained.
+4. **Recipient phone is copied into the notification history.** This is facility contact data, not referral clinical content, but it remains personal/contact information and requires a defined access and retention policy.
+5. **Profile lookup errors are fail-closed in practice** because a missing profile prevents the role/facility equality checks from passing; however, the error is not explicitly handled or logged as a controlled authorization failure.
+
+### Required remediation before changing the endpoint
+
+- Move event authorization to a trusted server-side lifecycle operation or verify a committed, uniquely identified transition before dispatch.
+- Establish a durable event idempotency key and atomic pre-send claim. Define the expected semantics for provider timeouts, where provider acceptance may be unknown.
+- Restrict acknowledgement dispatch to a verified eligible status/transition and an approved recipient routing rule.
+- Replace raw provider error persistence/response with bounded internal codes and sanitized operational diagnostics.
+- Define access controls and retention for facility phone numbers in notification history.
+- Add endpoint tests for unauthorized roles/facilities, missing profiles, invalid lifecycle states, duplicate/replayed requests, provider timeout, and provider error sanitization.
+
+**Decision:** keep `api/referral-sms.js` and its call sites unchanged for now. A superficial status check or application-only duplicate guard would not provide transactional event authenticity or durable idempotency. Do not send test SMS or activate the outbox worker until recipient routing, migration reconciliation and synthetic-data staging validation are complete.
