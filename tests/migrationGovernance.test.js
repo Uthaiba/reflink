@@ -473,5 +473,7 @@ test("dependency remediation pins patched Vite and source-map-js versions", asyn
   assert.match(triage, /GHSA-68fv-2mgg-jv7q/i);
   assert.match(triage, /GHSA-587h-7wmj-h5pm/i);
   assert.match(workflow, /npm audit --json/);
+  assert.match(workflow, /totals\.high[\s\S]*totals\.critical|totals\.critical[\s\S]*totals\.high/);
+  assert.match(workflow, /High or critical dependency vulnerabilities block this workflow/);
   assert.match(workflow, /fixAvailable/);
 });
