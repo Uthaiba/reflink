@@ -393,3 +393,30 @@ test("facility coverage documentation identifies current-registry versus histori
   assert.match(sql, /from public\.facilities f/i);
   assert.match(sql, /from cohort c/i);
 });
+
+test("migration governance reflects encrypted queue integration and preserves offline release limits", async () => {
+  const governance = await readFile(
+    new URL("../docs/MIGRATION_GOVERNANCE.md", import.meta.url),
+    "utf8",
+  );
+  assert.match(governance, /integrates encrypted queue writes/i);
+  assert.match(governance, /Chromium CI covers selected persistence/i);
+  assert.match(governance, /not production approval/i);
+  assert.doesNotMatch(governance, /Current IndexedDB records remain unencrypted/i);
+});
+
+test("foreign-key index recommendations require exact catalog evidence", async () => {
+  const governance = await readFile(
+    new URL("../docs/MIGRATION_GOVERNANCE.md", import.meta.url),
+    "utf8",
+  );
+  const reconciliation = await readFile(
+    new URL("../docs/MIGRATION_RECONCILIATION_PLAN.md", import.meta.url),
+    "utf8",
+  );
+  assert.match(governance, /16 foreign-key columns/i);
+  assert.match(governance, /exact table\/column list/i);
+  assert.match(reconciliation, /count alone is not sufficient/i);
+  assert.match(reconciliation, /no index migration is proposed/i);
+  assert.match(reconciliation, /disposable database/i);
+});
