@@ -7128,6 +7128,89 @@ const handleStartAssessment = async (referralId) => {
     loadDiagnosisCategories();
   }, []);
 
+  useEffect(() => {
+    let channel = null;
+    let isActive = true;
+
+    const setupReceivingRealtime = async () => {
+      try {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+          return;
+        }
+
+        const {
+          data: profile,
+          error: profileError,
+        } = await supabase
+          .from("profiles")
+          .select("facility_id")
+          .eq("id", user.id)
+          .single();
+
+        if (
+          profileError ||
+          !profile?.facility_id ||
+          !isActive
+        ) {
+          if (profileError) {
+            console.error(
+              "RECEIVING REALTIME PROFILE ERROR:",
+              profileError
+            );
+          }
+          return;
+        }
+
+        channel = supabase
+          .channel(`receiving-referrals-${profile.facility_id}-${Date.now()}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "referrals",
+              filter: `receiving_facility_id=eq.${profile.facility_id}`,
+            },
+            () => {
+              if (isActive) {
+                void loadIncomingReferrals();
+              }
+            }
+          )
+          .subscribe((status) => {
+            if (
+              status === "CHANNEL_ERROR" ||
+              status === "TIMED_OUT"
+            ) {
+              console.error(
+                "RECEIVING REALTIME SUBSCRIPTION ERROR:",
+                status
+              );
+            }
+          });
+      } catch (err) {
+        console.error(
+          "RECEIVING REALTIME ERROR:",
+          err
+        );
+      }
+    };
+
+    void setupReceivingRealtime();
+
+    return () => {
+      isActive = false;
+      if (channel) {
+        void supabase.removeChannel(channel);
+      }
+    };
+  }, []);
+
   /* =======================================================
      DASHBOARD STATISTICS
      ======================================================= */
