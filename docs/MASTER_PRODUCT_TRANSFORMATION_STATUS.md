@@ -115,3 +115,13 @@ A data-projection defect was found during this review: the receiving referral qu
 - Key finding: migration 001 drops and recreates `public.get_admin_referral_volume(date, date)`; dependent objects, callers, owner and grants must be inventoried and validated before execution. Five reporting RPCs also rely on the existing `public.is_administrator()` helper, which is not defined by the proposal migrations.
 - Migration 007 explicitly depends on outbox migration 006. The notification-log ACL migration is a separate sensitive permission change requiring exact privilege and frontend-query validation.
 - No SQL was executed, no production or shared-project database was used for testing, and no migration or deployment was applied.
+
+## Latest continuation — exact-HEAD CI and aggregate disclosure review (7 November 2026)
+
+- CI for commit `cf1c9f7639b7376725a97cd6b02da09aa34abe31` completed successfully: dependency installation/audit reporting, unit tests, lint, production bundle build, Chromium installation and real-browser offline queue tests all passed.
+- Draft PR #1 remains open and unmerged. No Preview or production deployment is claimed.
+- A focused source audit confirmed the reporting and counter-referral RPCs use `SECURITY DEFINER` with an empty search path and explicit execute revokes/grants. The five administrator reporting RPCs still rely on the externally defined `public.is_administrator()` helper; its authoritative definition, owner, security mode, search path and grants remain a required preflight.
+- The notification outbox foundation uses SECURITY INVOKER routines, revokes browser-role access to its private tables/functions, and grants worker routines to `service_role`. The acknowledgement hook remains cancellation-only and does not infer recipients or dispatch notifications.
+- **New disclosure-control finding:** the referral-volume RPC permits arbitrary overlapping date ranges up to 366 days, unlike the other aggregate summaries which require a complete calendar month. Repeated overlapping queries may allow differencing to recover suppressed small counts. This risk and the required fixed-period policy decision/tests are recorded in `docs/MIGRATION_RECONCILIATION_PLAN.md` section 10.
+- No SQL, database ACL, RLS, production data, or frontend behavior was changed. No Supabase branch was created. Migration baseline and isolated synthetic database validation remain blocked.
+- Documentation-only follow-up commit: `f9a5b3b750e92208eb8c6d93916de5c8fa6f380e`. Its CI must be polled before treating this commit as fully verified.
