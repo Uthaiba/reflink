@@ -60,6 +60,14 @@ A data-projection defect was found during this review: the receiving referral qu
 - The test suite is not a live end-to-end test. No synthetic database environment is currently approved, so actual role/RLS behavior, RPC execution, concurrent submissions, persisted timestamps, realtime delivery and refresh consistency remain unverified.
 - No migration was applied, no database branch was created, and no production data was changed.
 
+## Migration baseline reconciliation — latest source findings
+
+- Re-inspected the Git trees for `v2.0-release`, `main` and the remediation branch. Neither release baseline contains a historical `supabase/migrations/` directory; the working branch contains exactly eight proposed November migrations and no source for the recorded production migration `20260928203447_reflink_v2_rural_first`.
+- Re-read the connected Supabase migration ledger. It still reports exactly one applied migration: `20260928203447_reflink_v2_rural_first`.
+- Re-listed Supabase branches. The only listed branch is non-persistent and data-free but reports the production project reference; it is not a separate synthetic integration environment. Existing project tables contain production records.
+- Added a migration-governance regression test to prevent accidental fabrication of the missing historical migration.
+- No database changes, test fixtures, branch creation, migration replay or ledger updates were performed. The next database test gate remains blocked pending a reviewed schema-only baseline export and an isolated synthetic environment.
+
 ## Receiving-facility realtime continuity — latest source changes
 
 - Added a facility-scoped Supabase Realtime subscription for receiving users, filtered by the signed-in profile's `receiving_facility_id`.
