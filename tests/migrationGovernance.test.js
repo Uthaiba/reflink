@@ -42,6 +42,32 @@ test("proposed migration files exist exactly once and are chronologically ordere
   assert.deepEqual(proposedVersions, migrationVersions);
 });
 
+
+test("historical production baseline remains an explicit blocker and is never fabricated", async () => {
+  const files = await readdir(migrationDirectory);
+  const historicalVersion = "20260928203447";
+  assert.equal(
+    files.some((file) => file.startsWith(historicalVersion)),
+    false,
+    "do not invent or reconstruct the missing historical migration from catalog summaries",
+  );
+
+  const plan = await readFile(
+    new URL("../docs/MIGRATION_RECONCILIATION_PLAN.md", import.meta.url),
+    "utf8",
+  );
+  const governance = await readFile(
+    new URL("../docs/MIGRATION_GOVERNANCE.md", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(plan, /20260928203447_reflink_v2_rural_first/);
+  assert.match(plan, /restore missing historical migrations|create a reviewed baseline\/squash/i);
+  assert.match(plan, /Do not mark migrations applied merely to silence a mismatch/i);
+  assert.match(governance, /complete source-controlled migration baseline/i);
+  assert.match(governance, /Do not run `supabase db push`/i);
+});
+
 test("acknowledgement hooks explicitly depend on the outbox foundation", async () => {
   const sql = await migration(
     "20261106000100",
