@@ -68,15 +68,11 @@ If an internal trigger requires elevated rights to insert into the inbox, its pr
 
 ## 4. Recipient eligibility is not yet approved
 
-The current acknowledgement-hook migration selects **every** `public.profiles` row with `role = 'receiving_staff'` and `facility_id = receiving_facility_id`. The recipient contract separately says not to broadcast to every profile by default and requires approved active membership, on-call responsibility, role eligibility and reassignment behavior.
+Automatic user-recipient eligibility remains unapproved. The currently evidenced profile fields are `profiles.id`, `role` and `facility_id`; they do not establish active membership, on-call duty, shift assignment or notification preferences. Do not infer notification responsibility from a profile's existence or invent missing fields.
 
-The schema evidence currently available confirms `profiles.id`, `role` and `facility_id`; it does not demonstrate `profiles.is_active`, an on-call roster, shift assignment or notification preferences. Do not invent these columns or infer eligibility from a profile's existence.
+The current `20261106000100_referral_acknowledgement_notification_hooks.sql` migration is cancellation-only: it invalidates stale reminder work when relevant referral lifecycle, deadline, acknowledgement or destination values materially change. It does not query `public.profiles`, select recipients, enqueue new notifications or fan out. This cancellation behavior does not resolve the separate recipient-policy decision.
 
-Before the acknowledgement hook is approved, the product/clinical owners must choose one explicit rule:
-1. all currently assigned receiving-staff profiles are intentionally eligible, with that broad fan-out documented and approved; or
-2. a verified active-membership/on-call/assignment source is identified and recipient selection is constrained to it.
-
-Until this decision is made, the existing hook is a source proposal only and must not be applied.
+The approved fail-closed rule is to select no automatic user recipient until an authoritative notification-duty assignment or roster and its eligibility rules are identified and approved. Facility-wide fan-out to all receiving-staff profiles is not approved. See [NOTIFICATION_RECIPIENT_ELIGIBILITY.md](./NOTIFICATION_RECIPIENT_ELIGIBILITY.md).
 
 ## 5. Relationship to the outbox
 
@@ -120,7 +116,7 @@ Do not wire the current isolated `NotificationCenter` into `App.jsx` until the i
 1. `NotificationCenter.jsx` is correctly isolated and presentational; it has no Supabase access and is not mounted in `App.jsx`.
 2. Its expected `read_at` field and callbacks have no confirmed persisted inbox relation or authenticated data-access adapter.
 3. The outbox migration is a private delivery queue, not a user-facing inbox. It has no `read_at` field and must not be exposed to browser roles.
-4. The acknowledgement hook selects every receiving-staff profile at the destination facility, while recipient eligibility is not approved.
+4. Recipient eligibility remains unapproved. The current acknowledgement hook is cancellation-only and does not select profiles or enqueue notifications; user-addressed enqueue remains blocked pending an authoritative roster/notification-duty assignment source.
 5. The outbox's user-only recipient contract cannot represent the facility-level SMS destinations used by `api/referral-sms.js`.
 6. The acknowledgement-hook trigger functions are `SECURITY DEFINER`; their exact owner, effective privileges, dependency behavior and ACL must be reviewed in the disposable database before approval. Static tests do not establish this.
 
@@ -142,9 +138,9 @@ No production schema, RLS, Auth setting, Edge Function, provider configuration, 
 
 ## 10. Recipient policy decision — 6 November 2026
 
-The recipient eligibility decision is now explicit: **do not select any automatic user recipient until an approved authoritative roster or notification-duty assignment source is identified. Facility-wide fan-out to every `receiving_staff` profile is not approved.** This supersedes the two open options described in §4; option 1 (all assigned receiving staff) is not an implicit default.
+The recipient eligibility decision remains explicit: **do not select any automatic user recipient until an approved authoritative roster or notification-duty assignment source is identified. Facility-wide fan-out to every `receiving_staff` profile is not approved.** This supersedes the earlier open options described in §4; all assigned receiving staff is not an implicit default.
 
-The proposed trigger in `20261106000100_referral_acknowledgement_notification_hooks.sql` still contains broad profile fan-out and must remain unapplied. Referral workflows must not depend on a notification recipient being available. The required governance questions, assignment lifecycle and acceptance tests are recorded in [NOTIFICATION_RECIPIENT_ELIGIBILITY.md](./NOTIFICATION_RECIPIENT_ELIGIBILITY.md).
+The current acknowledgement-hook migration is cancellation-only; it does not contain profile fan-out or enqueue notifications. It may remain unapplied until the migration baseline and staging gates are satisfied, but not because it performs broad fan-out. Referral workflows must not depend on a notification recipient being available. The required governance questions, assignment lifecycle and acceptance tests are recorded in [NOTIFICATION_RECIPIENT_ELIGIBILITY.md](./NOTIFICATION_RECIPIENT_ELIGIBILITY.md).
 
 ## 11. Authenticated adapter source status
 
