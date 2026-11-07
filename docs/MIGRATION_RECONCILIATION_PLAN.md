@@ -306,3 +306,36 @@ Installed extensions are `pg_stat_statements 1.11`, `pgcrypto 1.3`, `plpgsql 1.0
 The database also contains Supabase-managed schemas (`auth`, `storage`, `realtime`, `vault`, `extensions`, `graphql`, `graphql_public`, `pgbouncer` and `supabase_migrations`). These are platform dependencies, not application-owned baseline objects. The REFLINK baseline should declare required extension/schema dependencies and must not recreate or mutate Supabase-managed objects.
 
 The public catalog snapshot now includes 14 tables/162 columns, 2 sequences, 30 policies, 52 constraints, 28 indexes, 16 routines, 9 triggers, 2 views and 305 table-grant records. It remains a metadata inventory rather than a complete `pg_dump --schema-only` artifact. The missing recorded baseline SQL and a verified full schema-only export remain outstanding.
+
+## 1B. Proposed migration dependency and risk review (7 November 2026)
+
+A source-only review of all eight proposal files was completed. This is a dependency inventory, not PostgreSQL execution or proof of compatibility with the connected database.
+
+### Dependency map
+
+| Migration | Objects introduced or changed | Required pre-existing contract / dependency | Review disposition |
+|---|---|---|---|
+| `20261105000100_admin_aggregate_referral_volume.sql` | `submit_counter_referral`, `get_admin_referral_volume`, `get_admin_facility_referral_summary` | `auth.uid()`, `profiles`, `referrals`, `counter_referrals`, existing referral lifecycle guards, `is_administrator()` | Highest schema/dependency review priority |
+| `20261105000200_admin_lga_referral_summary.sql` | LGA aggregate RPC | `referrals`, `facilities`, `is_administrator()` | Independent of the outbox; validate location fields and suppression behavior |
+| `20261105000300_admin_facility_reporting_coverage.sql` | Facility coverage aggregate RPC | `referrals`, `facilities`, `is_administrator()` | Independent of the outbox; confirm registry/status semantics |
+| `20261105000400_admin_referral_pathway_intelligence.sql` | Referral pathway and interval aggregate RPC | `referrals`, `facilities`, `is_administrator()` | Independent of the outbox; validate timestamp and denominator semantics |
+| `20261105000500_admin_acknowledgement_delay_alerts.sql` | Acknowledgement delay aggregate RPC | `referrals`, `is_administrator()` | Independent of the outbox; validate deadline and status cohort |
+| `20261105000600_notification_outbox_foundation.sql` | Private outbox/attempt tables, worker functions and public service-role wrappers | PostgreSQL roles `service_role`, `anon`, `authenticated`; UUID generation; private schema exposure configuration | Foundation for the later cancellation hook; no provider dispatch is included |
+| `20261106000100_referral_acknowledgement_notification_hooks.sql` | Referral update trigger and cancellation function | Outbox and attempt tables/functions from `20261105000600`; existing `referrals` columns | Explicit dependency on migration 006; cancellation-only, no recipient inference or enqueue |
+| `20261107000100_restrict_notification_log_column_access.sql` | Column-level ACL changes on `public.referral_notifications` | Exact existing table columns, grants, RLS policies, authenticated participant query requirements, service-role endpoint access | Separate ACL-sensitive change; require before/after privilege matrix and role tests |
+
+### Specific findings and required preflight
+
+1. **Migration 001 is not purely additive.** It executes `DROP FUNCTION IF EXISTS public.get_admin_referral_volume(date, date)` before creating the replacement with an expanded return shape. PostgreSQL will reject a drop that has dependent objects unless dependencies are handled; if it succeeds, existing grants on the dropped function do not carry over automatically. Before approval, inventory dependent views/functions and callers, record existing execute grants and ownership, and test the replacement contract with all callers in a disposable database. Do not add `CASCADE` as a shortcut.
+2. **The five reporting RPCs share an authorization dependency.** They call the existing `public.is_administrator()` helper. The helper is not defined by these proposal files. Its live owner, SECURITY DEFINER status, search path, execute grants, policy dependencies and behavior must be reconciled against the authoritative source before these RPCs can be approved.
+3. **Counter-referral completion depends on the existing clinical schema.** The first migration expects the receiving role/facility profile, referral destination/status, counter-referral columns and existing lifecycle triggers. Static tests verify source contracts only; they do not prove database trigger order, grants, constraints, concurrency or RLS behavior.
+4. **The notification hook has one explicit file dependency.** Migration 007 calls objects created by migration 006. The five reporting RPC files do not reference the outbox. The hook currently only cancels stale reminder work; it must not be described as delivering reminders.
+5. **The notification-log ACL change is not safe to infer from source alone.** Its table-level and column-level revokes can change existing authenticated application reads. Validate the exact column grants, RLS policies, all frontend query projections and service-role access in a synthetic environment before applying. Preserve least privilege without breaking participant status visibility.
+6. **Timestamp order is not a complete dependency graph.** The listed timestamps provide a deterministic proposal order, but only migration 007 has a declared cross-file dependency. Schema prerequisites, role ownership, existing objects, trigger behavior and grants remain external dependencies.
+
+### Current safe execution decision
+
+- No SQL migration was run or applied during this review.
+- No production or shared-project database was used for synthetic testing.
+- The eight files remain proposals. The only database-safe next step is owner-approved schema-only baseline evidence plus a genuinely isolated synthetic database.
+- The first SQL execution review should start with migration 001's drop/recreate behavior and the authoritative `is_administrator()` helper, then validate the independent reporting RPCs, outbox foundation, cancellation hook, and notification-log ACL change in their dependency order.
