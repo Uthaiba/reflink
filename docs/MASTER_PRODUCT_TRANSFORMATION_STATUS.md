@@ -3,7 +3,7 @@
 **Last reviewed:** 7 November 2026  
 **Production baseline:** `v2.0-release` at `cce730ec64aa8be568021f16de4de47c110f81d5`  
 **Working branch:** `reflink/phase-1-security-remediation`  
-**Current reviewed HEAD:** `f99bf38e006547bf02e501cae4b62983edfdabaf`  
+**Source changes reviewed through:** `8b0cada60046281640ebef3842d33eef9a76b275` (documentation update itself is committed separately).  
 **Pull request:** #1, open and draft; target `v2.0-release`.
 
 This register distinguishes source implementation, automated verification, live database validation and production release. A source file or passing unit test is not evidence that a database migration is safe or that a feature is live in production.
@@ -49,7 +49,7 @@ A data-projection defect was found during this review: the receiving referral qu
 - Emergency KPI now counts open emergency referrals only.
 - Added `tests/referralPriority.test.js` for deadline handling, priority ordering, active/closed status and query projection.
 
-**Validation:** the preceding receiving-queue commit `5098ee1b3fc58ff6e976d6ff73fab63dcda1b71a` passed GitHub Actions workflow #625, including unit tests, lint, production bundle build and Chromium offline-queue browser tests. Vercel's status check was successful for that commit. The subsequent lifecycle compare-and-set changes documented below are newer and require their own exact-HEAD CI run; no Preview deployment is inferred from the earlier status.
+**Validation:** the preceding receiving-queue commit `5098ee1b3fc58ff6e976d6ff73fab63dcda1b71a` passed GitHub Actions workflow #625, including unit tests, lint, production bundle build and Chromium offline-queue browser tests. Vercel's status check was successful for that commit. The subsequent lifecycle compare-and-set changes documented below are newer and have not yet produced an exact-HEAD GitHub Actions run in the available PR-run query. Vercel reports `build-rate-limit` for the newer commits, so no Preview deployment is claimed.
 
 ## Receiving lifecycle concurrency protection — latest source changes\n\n- Added expected-current-status filters to all six receiving-facility update handlers: acknowledgement (`sent`), patient arrival (`acknowledged`), assessment start (`patient_arrived`), assessment save (`under_assessment`), admission save (`admitted`) and discharge (`admitted`).\n- Changed these update responses to `maybeSingle()` and treat a no-match as a stale referral rather than reporting success. The user receives a clear instruction to refresh and review the current status before retrying.\n- Added `tests/referralLifecycleConcurrency.test.js` to assert each handler's expected-status guard, no-match handling and stale-state message. These are source-contract tests, not concurrent PostgreSQL integration tests; server-side atomicity and trigger behavior still require synthetic-database validation.\n\n## Hard release blockers
 
