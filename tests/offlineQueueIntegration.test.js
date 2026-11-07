@@ -119,3 +119,45 @@ test("invalid decrypted queue ownership releases its claim before continuing", (
   assert.ok(releaseIndex > validationIndex, "the active claim must be released after validation failure");
   assert.ok(continueIndex > releaseIndex, "the worker must release before continuing");
 });
+
+
+test("vault lock channel degrades safely when browser construction is unavailable", async () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  try {
+    Object.defineProperty(globalThis, "BroadcastChannel", {
+      configurable: true,
+      value: class { constructor() { throw new Error("blocked by browser policy"); } },
+    });
+    const { createOfflineVaultLockChannel } = await import("../src/lib/offlineVaultLockChannel.js");
+    const channel = createOfflineVaultLockChannel("account-a", () => {});
+    assert.equal(channel.broadcastLock(), false);
+    assert.doesNotThrow(() => channel.close());
+  } finally {
+    if (original) Object.defineProperty(globalThis, "BroadcastChannel", original);
+    else delete globalThis.BroadcastChannel;
+  }
+});
+
+test("vault lock channel handles post failures and repeated close without throwing", async () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "BroadcastChannel");
+  let closeCount = 0;
+  try {
+    Object.defineProperty(globalThis, "BroadcastChannel", {
+      configurable: true,
+      value: class {
+        postMessage() { throw new Error("channel is unavailable"); }
+        close() { closeCount += 1; }
+      },
+    });
+    const { createOfflineVaultLockChannel } = await import("../src/lib/offlineVaultLockChannel.js");
+    const channel = createOfflineVaultLockChannel("account-a", () => {});
+    assert.equal(channel.broadcastLock(), false);
+    channel.close();
+    channel.close();
+    assert.equal(closeCount, 1);
+    assert.equal(channel.broadcastLock(), false);
+  } finally {
+    if (original) Object.defineProperty(globalThis, "BroadcastChannel", original);
+    else delete globalThis.BroadcastChannel;
+  }
+});
