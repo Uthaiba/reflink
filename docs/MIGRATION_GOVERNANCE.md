@@ -51,13 +51,12 @@ The advisor findings are not proof of exploitation. Remediation must preserve re
 
 The detailed source migration inventory, dependency graph, read-only evidence, object-level review requirements and non-production acceptance gates are maintained in [MIGRATION_RECONCILIATION_PLAN.md](./MIGRATION_RECONCILIATION_PLAN.md). The current decision is **blocked pending baseline reconciliation and synthetic-data staging verification**. Do not apply any of the seven November 2026 source migrations to production or manually advance the remote migration ledger.
 
-
 ## Source-level migration contract tests
 
-- `tests/migrationGovernance.test.js` checks migration version ordering, the acknowledgement-hook dependency, stored-deadline/in-app-only enqueue semantics, service-role-only outbox grants, administrator guards on reporting RPCs, and receiving-role/facility checks for counter-referral completion.
+- `tests/migrationGovernance.test.js` checks migration version ordering, the acknowledgement-hook dependency, cancellation-only reminder lifecycle semantics, service-role-only outbox grants, administrator guards on reporting RPCs, and receiving-role/facility checks for counter-referral completion.
+- The acknowledgement hook currently cancels stale reminder work after relevant referral lifecycle changes. It does not enqueue reminders, infer recipients, or dispatch messages.
 - These are static source-contract checks. They do **not** parse or execute PostgreSQL, validate function ownership against the live database, prove RLS behavior, or replace disposable-database integration tests.
 - The checks run with `npm test` in CI and are a preflight guard against accidental source regressions only.
-
 
 ## Index review status
 
