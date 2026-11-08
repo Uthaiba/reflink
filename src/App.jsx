@@ -3336,6 +3336,7 @@ provisional_diagnosis: "",
     category: "",
     diagnosis: "",
   });
+  const [diagnosisDraftErrors, setDiagnosisDraftErrors] = useState({});
 
   // Multiple investigation categories and investigations.
   const [selectedInvestigationCategories, setSelectedInvestigationCategories] =
@@ -3421,13 +3422,18 @@ provisional_diagnosis: "",
     const { status, category, diagnosis } = diagnosisDraft;
 
     if (!status || !category || !diagnosis) {
-      setError(
-        "Select a diagnosis status, diagnosis category and diagnosis before adding it."
-      );
+      const nextErrors = {
+        ...(!status ? { status: "Select a diagnosis status." } : {}),
+        ...(!category ? { category: "Select a diagnosis category." } : {}),
+        ...(!diagnosis ? { diagnosis: "Select a diagnosis." } : {}),
+      };
+      setDiagnosisDraftErrors(nextErrors);
+      setError("Complete the highlighted diagnosis fields before adding the diagnosis.");
       const firstMissing = !status ? "diagnosis_status" : !category ? "diagnosis_category" : "provisional_diagnosis";
       fieldRefs.current[firstMissing]?.focus();
       return;
     }
+    setDiagnosisDraftErrors({});
 
     const duplicate = diagnosisEntries.some(
       (item) =>
@@ -4488,20 +4494,22 @@ if (!confirmDestination) {
             </label>
 
             <select
+              ref={(element) => { fieldRefs.current.diagnosis_status = element; }}
               id="diagnosis_status"
               value={diagnosisDraft.status}
-              onChange={(e) =>
-                setDiagnosisDraft((previous) => ({
-                  ...previous,
-                  status: e.target.value,
-                }))
-              }
+              onChange={(e) => {
+                setDiagnosisDraft((previous) => ({ ...previous, status: e.target.value }));
+                setDiagnosisDraftErrors((current) => { const next = { ...current }; delete next.status; return next; });
+              }}
+              aria-invalid={Boolean(diagnosisDraftErrors.status)}
+              aria-describedby={diagnosisDraftErrors.status ? "new-referral-diagnosis-status-error" : undefined}
             >
               <option value="">Select status</option>
               <option value="suspected">Suspected</option>
               <option value="provisional">Provisional</option>
               <option value="confirmed">Confirmed</option>
             </select>
+            {diagnosisDraftErrors.status && <p id="new-referral-diagnosis-status-error" className="form-error">{diagnosisDraftErrors.status}</p>}
           </div>
 
           <div className="form-group">
@@ -4510,15 +4518,15 @@ if (!confirmDestination) {
             </label>
 
             <select
+              ref={(element) => { fieldRefs.current.diagnosis_category = element; }}
               id="diagnosis_category"
               value={diagnosisDraft.category}
-              onChange={(e) =>
-                setDiagnosisDraft((previous) => ({
-                  ...previous,
-                  category: e.target.value,
-                  diagnosis: "",
-                }))
-              }
+              onChange={(e) => {
+                setDiagnosisDraft((previous) => ({ ...previous, category: e.target.value, diagnosis: "" }));
+                setDiagnosisDraftErrors((current) => { const next = { ...current }; delete next.category; delete next.diagnosis; return next; });
+              }}
+              aria-invalid={Boolean(diagnosisDraftErrors.category)}
+              aria-describedby={diagnosisDraftErrors.category ? "new-referral-diagnosis-category-error" : undefined}
             >
               <option value="">Select category</option>
 
@@ -4528,6 +4536,7 @@ if (!confirmDestination) {
                 </option>
               ))}
             </select>
+            {diagnosisDraftErrors.category && <p id="new-referral-diagnosis-category-error" className="form-error">{diagnosisDraftErrors.category}</p>}
           </div>
 
           <div className="form-group">
@@ -4536,15 +4545,16 @@ if (!confirmDestination) {
             </label>
 
             <select
+              ref={(element) => { fieldRefs.current.provisional_diagnosis = element; }}
               id="provisional_diagnosis"
               value={diagnosisDraft.diagnosis}
-              onChange={(e) =>
-                setDiagnosisDraft((previous) => ({
-                  ...previous,
-                  diagnosis: e.target.value,
-                }))
-              }
+              onChange={(e) => {
+                setDiagnosisDraft((previous) => ({ ...previous, diagnosis: e.target.value }));
+                setDiagnosisDraftErrors((current) => { const next = { ...current }; delete next.diagnosis; return next; });
+              }}
               disabled={!diagnosisDraft.category}
+              aria-invalid={Boolean(diagnosisDraftErrors.diagnosis)}
+              aria-describedby={diagnosisDraftErrors.diagnosis ? "new-referral-diagnosis-error" : undefined}
             >
               <option value="">
                 {diagnosisDraft.category
@@ -4561,6 +4571,7 @@ if (!confirmDestination) {
                   )
                 )}
             </select>
+            {diagnosisDraftErrors.diagnosis && <p id="new-referral-diagnosis-error" className="form-error">{diagnosisDraftErrors.diagnosis}</p>}
           </div>
 
           <div className="form-group clinical-entry-action">
