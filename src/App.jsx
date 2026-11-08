@@ -3178,12 +3178,52 @@ function InvestigationResultEditor({ item, onChange, onFileChange }) {
   const layoutClass = ["quantitative", "blood_pressure", "electrolytes", "fbc_panel"].includes(config.type)
     ? "is-quantitative"
     : "is-textual";
+  const [validationError, setValidationError] = useState("");
+  const systolicRef = useRef(null);
+  const diastolicRef = useRef(null);
+  const resultValueRef = useRef(null);
+  const referenceRangeRef = useRef(null);
+  const validationErrorId = `investigation-validation-${String(item?.category || "other").replace(/[^a-z0-9]+/gi, "-")}-${String(item?.investigation || "result").replace(/[^a-z0-9]+/gi, "-")}`;
+  const quantitativeNeedsValue = config.type === "quantitative" && !String(item.result_value ?? "").trim();
+  const quantitativeNeedsRange = config.type === "quantitative" && !parseNumericReferenceRange(item.reference_range);
+  const bloodPressureNeedsSystolic = config.type === "blood_pressure" && !String(item.systolic ?? "").trim();
+  const bloodPressureNeedsDiastolic = config.type === "blood_pressure" && !String(item.diastolic ?? "").trim();
+
+  const handleStatusChange = (status) => {
+    const candidate = { ...item, result_status: status };
+    const message = NUMERIC_RESULT_CLASSIFICATION_STATUSES.has(status)
+      ? getInvestigationValidationMessage(candidate)
+      : "";
+    if (message) {
+      setValidationError(message);
+      if (config.type === "blood_pressure") {
+        (bloodPressureNeedsSystolic ? systolicRef : diastolicRef).current?.focus();
+      } else if (config.type === "quantitative") {
+        (quantitativeNeedsValue ? resultValueRef : referenceRangeRef).current?.focus();
+      }
+      return;
+    }
+    setValidationError("");
+    onChange({ result_status: status });
+  };
+
+  const handleMeasurementChange = (patch) => {
+    setValidationError("");
+    onChange(patch);
+  };
 
   return (
     <div className={`referral-investigation-result-editor ${layoutClass}`}>
-      <select value={item.result_status || "pending"} onChange={(e) => onChange({ result_status: e.target.value })} aria-label={`Result status for ${item.investigation}`}>
+      <select
+        value={item.result_status || "pending"}
+        onChange={(e) => handleStatusChange(e.target.value)}
+        aria-label={`Result status for ${item.investigation}`}
+        aria-invalid={Boolean(validationError)}
+        aria-describedby={validationError ? validationErrorId : undefined}
+      >
         {config.statuses.map((status) => <option key={status} value={status}>{getInvestigationResultLabel(status)}</option>)}
       </select>
+      {validationError && <p id={validationErrorId} className="form-error" role="alert">{validationError}</p>}
 
       {config.type === "blood_group" && (
         <select value={item.result_value || ""} aria-label="Blood group ABO Rh" onChange={(e) => onChange({ result_value: e.target.value, result_status: e.target.value ? "result_recorded" : "pending" })}>
@@ -3194,8 +3234,8 @@ function InvestigationResultEditor({ item, onChange, onFileChange }) {
 
       {config.type === "blood_pressure" && (
         <>
-          <input inputMode="decimal" value={item.systolic || ""} onChange={(e) => onChange({ systolic: e.target.value })} placeholder="Systolic (mmHg)" aria-label="Systolic blood pressure" />
-          <input inputMode="decimal" value={item.diastolic || ""} onChange={(e) => onChange({ diastolic: e.target.value })} placeholder="Diastolic (mmHg)" aria-label="Diastolic blood pressure" />
+          <input ref={systolicRef} inputMode="decimal" value={item.systolic || ""} onChange={(e) => handleMeasurementChange({ systolic: e.target.value })} placeholder="Systolic (mmHg)" aria-label="Systolic blood pressure" aria-invalid={Boolean(validationError && bloodPressureNeedsSystolic)} aria-describedby={validationError ? validationErrorId : undefined} />
+          <input ref={diastolicRef} inputMode="decimal" value={item.diastolic || ""} onChange={(e) => handleMeasurementChange({ diastolic: e.target.value })} placeholder="Diastolic (mmHg)" aria-label="Diastolic blood pressure" aria-invalid={Boolean(validationError && bloodPressureNeedsDiastolic)} aria-describedby={validationError ? validationErrorId : undefined} />
         </>
       )}
 
@@ -3220,9 +3260,9 @@ function InvestigationResultEditor({ item, onChange, onFileChange }) {
 
       {config.type === "quantitative" && (
         <>
-          <input inputMode="decimal" value={item.result_value || ""} onChange={(e) => onChange({ result_value: e.target.value })} placeholder="Measured value" aria-label={`Measured value for ${item.investigation}`} />
+          <input ref={resultValueRef} inputMode="decimal" value={item.result_value || ""} onChange={(e) => handleMeasurementChange({ result_value: e.target.value })} placeholder="Measured value" aria-label={`Measured value for ${item.investigation}`} aria-invalid={Boolean(validationError && quantitativeNeedsValue)} aria-describedby={validationError ? validationErrorId : undefined} />
           <input value={item.result_unit || config.defaultUnit || ""} onChange={(e) => onChange({ result_unit: e.target.value })} placeholder={config.defaultUnit || "Unit"} aria-label={`Unit for ${item.investigation}`} />
-          <input value={item.reference_range || ""} onChange={(e) => onChange({ reference_range: e.target.value })} placeholder="Laboratory reference range" aria-label={`Reference range for ${item.investigation}`} />
+          <input ref={referenceRangeRef} value={item.reference_range || ""} onChange={(e) => handleMeasurementChange({ reference_range: e.target.value })} placeholder="Laboratory reference range" aria-label={`Reference range for ${item.investigation}`} aria-invalid={Boolean(validationError && quantitativeNeedsRange)} aria-describedby={validationError ? validationErrorId : undefined} />
         </>
       )}
 
