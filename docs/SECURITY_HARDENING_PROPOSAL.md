@@ -2,7 +2,9 @@
 
 **Status: source-level proposal only — NOT an executable migration and NOT applied.**  
 **Target:** isolated synthetic staging only, after the schema baseline is reconstructed and reviewed.  
-**Production:** read-only; no grants, defaults, RLS, functions, Auth settings or data were changed.
+Production: read-only. No grants, defaults, RLS, functions, Auth settings or data were changed.
+
+**Production boundary:** no grants, defaults, RLS, functions, Auth settings or data were changed.
 
 ## 1. Evidence captured
 
