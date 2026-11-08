@@ -268,3 +268,48 @@ A focused source-level remediation was implemented for the custom validation pat
 - Added `tests/counterReferralAccessibility.test.js` to assert field/error associations, invalid-state semantics, first-invalid focus and per-field error clearing.
 
 This is a targeted source-contract regression test, not a rendered component test or assistive-technology test. The form uses `noValidate` so required-field checks consistently run through the field-associated custom validation and first-invalid focus path; required semantics remain exposed on the controls. Manual keyboard and screen-reader verification remains required. No referral lifecycle behavior, clinical validation rule, database, patient record, migration, deployment or production configuration was changed.
+
+
+## Referral-form accessibility and focus-management remediation — 8 November 2026
+
+### New referral form
+
+- Added field-associated custom validation for patient identifier, age, sex, chief complaint, conditional “Other” chief complaint, urgency, receiving facility and emergency clinical findings.
+- Added `aria-invalid` and `aria-describedby` associations with visible error text, and focus moves to the first invalid field in the form's visual order.
+- Retained the prior validation constraints when moving the form to custom validation: age must be a whole number greater than or equal to zero; the conditional “Other” complaint remains required.
+- Diagnosis-entry status, category and diagnosis now expose their own validation messages and receive focus in sequence.
+- The form-level alert remains for record-level messages such as duplicate diagnosis and submission/server failures.
+
+### Investigation result editor
+
+- Attempting to classify a quantitative or blood-pressure result now runs the existing validation before accepting the status change.
+- Invalid classification is blocked; the message is announced, associated with the status and relevant measurement controls, and focus moves to the missing/invalid measurement or reference range.
+- Correcting a measurement clears the local validation message; the user can then retry the classification.
+- No clinical reference threshold was added or inferred. Existing laboratory-range validation remains authoritative.
+
+### Referral detail and inpatient view focus
+
+- Source inspection found no actual `dialog`, `aria-modal` or `alertdialog` implementation in the reviewed `src/App.jsx` views. The selected referral and inpatient screens are conditional page-content views, not modal dialogs; a modal focus trap or Escape-to-dismiss behavior would be misleading without a genuine modal interaction model.
+- Added focus movement to the referral detail or inpatient heading when those views open.
+- On close, focus returns to the control that opened the view, or to the referral search field if the original trigger is no longer in the document.
+- This is source-level focus management; real keyboard testing is still required.
+
+Regression coverage is in `tests/referralFormAccessibility.test.js` and `tests/counterReferralAccessibility.test.js`. These tests assert source contracts and do not substitute for rendered interaction tests, manual keyboard checks or screen-reader testing.
+
+## Supabase SECURITY DEFINER function review — read-only — 8 November 2026
+
+Reviewed live definitions, ownership, function settings, execute ACLs, relevant RLS policy expressions and table RLS metadata for five advisor-flagged functions. No table rows, patient records, auth-user rows, audit-log rows, secrets or storage contents were queried. No database writes or configuration changes were made.
+
+| Function | Authorization observed | Execute privilege observed | Assessment |
+|---|---|---|---|
+| `get_facility_user_count(uuid)` | Requires `auth.uid()`; administrator may query a facility; other callers are restricted to their own profile facility | authenticated, service_role; not anon/PUBLIC | In-function authorization present; empty `search_path` already set |
+| `get_facility_user_counts()` | Requires administrator profile role before returning grouped counts | authenticated, service_role; not anon/PUBLIC | In-function authorization present; fixed `search_path=public` |
+| `is_administrator()` | Returns whether the current auth user has the canonical administrator role | authenticated, service_role; not anon/PUBLIC | Boolean-only helper; fixed `search_path=public` |
+| `log_referral_print(uuid,text)` | Requires a referral visible to administrator, referring user or receiving facility before inserting a print event | authenticated, service_role; not anon/PUBLIC | Participant check present; print-number allocation is race-prone |
+| `log_referral_read(uuid)` | Requires a referral visible to administrator, referring user or receiving facility before writing a READ audit event | authenticated, service_role; not anon/PUBLIC | Participant check present; audit table RLS is enabled and SELECT policy is administrator-only |
+
+All five functions are owned by `postgres`. The four functions with `search_path=public` schema-qualify the referenced application relations and `auth.uid()`; this reduces current name-resolution exposure, but Supabase's current guidance recommends `SET search_path = ''` for SECURITY DEFINER functions with all objects explicitly schema-qualified. The facility-count function already uses the empty path. No function is executable by `anon` or `PUBLIC`; `authenticated` and `service_role` are explicitly allowed. Relevant `profiles`, `referrals`, `referral_print_events` and `audit_log` RLS flags were enabled. The inspected referral access predicates for print/read logging correspond to the current participant model.
+
+**Confirmed integrity issue:** `log_referral_print` allocates `print_number` using `MAX(print_number) + 1`. The inspected `referral_print_events` constraints contain no uniqueness constraint on `(referral_id, print_number)`. Concurrent print RPCs can therefore allocate duplicate sequence numbers. Recommend a transaction-safe allocation design plus a unique constraint, validated in isolated staging before any production migration.
+
+**Disposition:** No immediate anonymous-execution or missing in-function authorization defect was demonstrated in these five definitions. Hardening opportunities remain: move the four mutable paths to empty `search_path`, verify exact role behaviour with positive/negative integration tests, and correct print-number concurrency. Do not blindly revoke grants or alter SECURITY DEFINER to INVOKER: these routines write protected audit/print tables and are used as privileged RPCs. All changes remain blocked on isolated staging and migration-baseline recovery.
