@@ -5935,6 +5935,10 @@ function ReceivingDashboard() {
       procedures_performed: "",
       clinical_feedback: "",
       disposition: "",
+      discharge_diagnosis: "",
+      condition_at_discharge: "",
+      discharge_medications: "",
+      follow_up_plan: "",
     });
 
   /* =======================================================
@@ -6351,6 +6355,18 @@ setReferrals(
 
       disposition:
         referral.disposition || "",
+
+      discharge_diagnosis:
+        referral.discharge_diagnosis || referral.final_diagnosis || "",
+
+      condition_at_discharge:
+        referral.condition_at_discharge || "",
+
+      discharge_medications:
+        referral.discharge_medications || "",
+
+      follow_up_plan:
+        referral.follow_up_plan || "",
     });
   };
 
@@ -6906,6 +6922,18 @@ const handleStartAssessment = async (referralId) => {
           );
         }
 
+        if (assessmentForm.disposition === "discharged") {
+          if (!assessmentForm.discharge_diagnosis.trim()) {
+            throw new Error("Discharge diagnosis is required before recording discharge.");
+          }
+          if (!assessmentForm.condition_at_discharge.trim()) {
+            throw new Error("Condition at discharge is required before recording discharge.");
+          }
+          if (!assessmentForm.follow_up_plan.trim()) {
+            throw new Error("Follow-up plan is required before recording discharge.");
+          }
+        }
+
         let newStatus =
           assessmentForm.disposition;
 
@@ -6959,10 +6987,11 @@ const handleStartAssessment = async (referralId) => {
           assessmentForm.disposition ===
           "discharged"
         ) {
-
-          updateData.discharged_at =
-            new Date().toISOString();
-
+          updateData.discharge_diagnosis = assessmentForm.discharge_diagnosis.trim();
+          updateData.condition_at_discharge = assessmentForm.condition_at_discharge.trim();
+          updateData.discharge_medications = assessmentForm.discharge_medications.trim() || null;
+          updateData.follow_up_plan = assessmentForm.follow_up_plan.trim();
+          updateData.discharged_at = new Date().toISOString();
         }
 
         if (
@@ -7028,6 +7057,10 @@ const handleStartAssessment = async (referralId) => {
             procedures_performed: "",
             clinical_feedback: "",
             disposition: "",
+            discharge_diagnosis: "",
+            condition_at_discharge: "",
+            discharge_medications: "",
+            follow_up_plan: "",
           });
 
           setSelectedInpatientReferral(
@@ -7093,6 +7126,10 @@ const handleStartAssessment = async (referralId) => {
             procedures_performed: "",
             clinical_feedback: "",
             disposition: "",
+            discharge_diagnosis: "",
+            condition_at_discharge: "",
+            discharge_medications: "",
+            follow_up_plan: "",
           });
         }
 
@@ -7258,6 +7295,13 @@ const handleStartAssessment = async (referralId) => {
     { key: "diagnosis_status", label: "Diagnosis status" },
     { key: "diagnosis_category", label: "Diagnosis category" },
     { key: "disposition", label: "Clinical disposition" },
+    ...(assessmentForm.disposition === "discharged"
+      ? [
+          { key: "discharge_diagnosis", label: "Discharge diagnosis" },
+          { key: "condition_at_discharge", label: "Condition at discharge" },
+          { key: "follow_up_plan", label: "Follow-up plan" },
+        ]
+      : []),
   ];
   const completedAssessmentFields = assessmentRequiredFields.filter(({ key }) =>
     String(assessmentForm[key] || "").trim().length > 0
@@ -7683,6 +7727,18 @@ const handleStartAssessment = async (referralId) => {
                               disposition:
                                 referral.disposition ||
                                 "",
+
+                              discharge_diagnosis:
+                                referral.discharge_diagnosis || referral.final_diagnosis || "",
+
+                              condition_at_discharge:
+                                referral.condition_at_discharge || "",
+
+                              discharge_medications:
+                                referral.discharge_medications || "",
+
+                              follow_up_plan:
+                                referral.follow_up_plan || "",
 
                             });
 
@@ -8319,6 +8375,52 @@ const handleStartAssessment = async (referralId) => {
                       Observation
                     </option>
                   </select>
+
+                  {assessmentForm.disposition === "discharged" && (
+                    <section className="assessment-discharge-summary" aria-labelledby="assessment-discharge-summary-title">
+                      <h4 id="assessment-discharge-summary-title">Discharge summary</h4>
+                      <p>Complete these handover details before recording the patient as discharged.</p>
+
+                      <label htmlFor="assessment-discharge-diagnosis">Discharge diagnosis *</label>
+                      <textarea
+                        id="assessment-discharge-diagnosis"
+                        name="discharge_diagnosis"
+                        value={assessmentForm.discharge_diagnosis}
+                        onChange={handleAssessmentChange}
+                        rows={2}
+                        required
+                      />
+
+                      <label htmlFor="assessment-condition-at-discharge">Condition at discharge *</label>
+                      <textarea
+                        id="assessment-condition-at-discharge"
+                        name="condition_at_discharge"
+                        value={assessmentForm.condition_at_discharge}
+                        onChange={handleAssessmentChange}
+                        rows={2}
+                        required
+                      />
+
+                      <label htmlFor="assessment-discharge-medications">Discharge medications</label>
+                      <textarea
+                        id="assessment-discharge-medications"
+                        name="discharge_medications"
+                        value={assessmentForm.discharge_medications}
+                        onChange={handleAssessmentChange}
+                        rows={2}
+                      />
+
+                      <label htmlFor="assessment-follow-up-plan">Follow-up plan *</label>
+                      <textarea
+                        id="assessment-follow-up-plan"
+                        name="follow_up_plan"
+                        value={assessmentForm.follow_up_plan}
+                        onChange={handleAssessmentChange}
+                        rows={2}
+                        required
+                      />
+                    </section>
+                  )}
 
                   <button
                     type="submit"
