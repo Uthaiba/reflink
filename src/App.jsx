@@ -8514,6 +8514,8 @@ function CounterReferralForm({ referral, onCompleted }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const fieldRefs = useRef({});
 
   const counterReferralRequiredFields = [
     { key: "final_diagnosis", label: "Final diagnosis" },
@@ -8529,6 +8531,12 @@ function CounterReferralForm({ referral, onCompleted }) {
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
+    setFieldErrors((current) => {
+      if (!current[name]) return current;
+      const next = { ...current };
+      delete next[name];
+      return next;
+    });
   };
 
   const handleSubmit = async (event) => {
@@ -8540,18 +8548,24 @@ function CounterReferralForm({ referral, onCompleted }) {
       setError("The referral record could not be identified.");
       return;
     }
+
+    const nextFieldErrors = {};
     if (!form.final_diagnosis.trim()) {
-      setError("Final diagnosis is required.");
-      return;
+      nextFieldErrors.final_diagnosis = "Final diagnosis is required.";
     }
     if (!form.outcome) {
-      setError("Please select the patient's outcome.");
-      return;
+      nextFieldErrors.outcome = "Please select the patient's outcome.";
     }
     if (form.outcome === "referred_further" && !form.referred_further_to.trim()) {
-      setError("Specify the facility or service receiving the further referral.");
+      nextFieldErrors.referred_further_to = "Specify the facility or service receiving the further referral.";
+    }
+    if (Object.keys(nextFieldErrors).length) {
+      setFieldErrors(nextFieldErrors);
+      const firstInvalidField = Object.keys(nextFieldErrors)[0];
+      fieldRefs.current[firstInvalidField]?.focus();
       return;
     }
+    setFieldErrors({});
 
     setSaving(true);
     try {
@@ -8626,13 +8640,34 @@ function CounterReferralForm({ referral, onCompleted }) {
 
       <form onSubmit={handleSubmit}>
         <label htmlFor="counter-final-diagnosis">Final diagnosis *</label>
-        <textarea id="counter-final-diagnosis" name="final_diagnosis" value={form.final_diagnosis} onChange={handleChange} rows="3" maxLength="4000" required />
+        <textarea
+          ref={(element) => { fieldRefs.current.final_diagnosis = element; }}
+          id="counter-final-diagnosis"
+          name="final_diagnosis"
+          value={form.final_diagnosis}
+          onChange={handleChange}
+          rows="3"
+          maxLength="4000"
+          required
+          aria-invalid={Boolean(fieldErrors.final_diagnosis)}
+          aria-describedby={fieldErrors.final_diagnosis ? "counter-final-diagnosis-error" : undefined}
+        />
+        {fieldErrors.final_diagnosis && <p id="counter-final-diagnosis-error" className="form-error">{fieldErrors.final_diagnosis}</p>}
 
         <label htmlFor="counter-treatment">Treatment provided</label>
         <textarea id="counter-treatment" name="treatment_provided" value={form.treatment_provided} onChange={handleChange} rows="3" maxLength="6000" />
 
         <label htmlFor="counter-outcome">Patient outcome *</label>
-        <select id="counter-outcome" name="outcome" value={form.outcome} onChange={handleChange} required>
+        <select
+          ref={(element) => { fieldRefs.current.outcome = element; }}
+          id="counter-outcome"
+          name="outcome"
+          value={form.outcome}
+          onChange={handleChange}
+          required
+          aria-invalid={Boolean(fieldErrors.outcome)}
+          aria-describedby={fieldErrors.outcome ? "counter-outcome-error" : undefined}
+        >
           <option value="">Select outcome</option>
           <option value="recovered">Recovered</option>
           <option value="improved">Improved</option>
@@ -8640,11 +8675,23 @@ function CounterReferralForm({ referral, onCompleted }) {
           <option value="died">Died</option>
           <option value="other">Other / outcome documented in notes</option>
         </select>
+        {fieldErrors.outcome && <p id="counter-outcome-error" className="form-error">{fieldErrors.outcome}</p>}
 
         {form.outcome === "referred_further" && (
           <>
             <label htmlFor="counter-referred-to">Further referral destination *</label>
-            <input id="counter-referred-to" name="referred_further_to" value={form.referred_further_to} onChange={handleChange} maxLength="500" required />
+            <input
+              ref={(element) => { fieldRefs.current.referred_further_to = element; }}
+              id="counter-referred-to"
+              name="referred_further_to"
+              value={form.referred_further_to}
+              onChange={handleChange}
+              maxLength="500"
+              required
+              aria-invalid={Boolean(fieldErrors.referred_further_to)}
+              aria-describedby={fieldErrors.referred_further_to ? "counter-referred-to-error" : undefined}
+            />
+            {fieldErrors.referred_further_to && <p id="counter-referred-to-error" className="form-error">{fieldErrors.referred_further_to}</p>}
           </>
         )}
 
