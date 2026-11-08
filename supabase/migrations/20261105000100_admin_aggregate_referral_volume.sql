@@ -182,13 +182,10 @@ begin
   end if;
 
   if p_start_date is null or p_end_date is null
-     or p_start_date > p_end_date then
-    raise exception 'A valid start date and end date are required.'
-      using errcode = '22023';
-  end if;
-
-  if p_end_date - p_start_date > 365 then
-    raise exception 'Reporting period cannot exceed 366 calendar days.'
+     or p_start_date > p_end_date
+     or p_start_date <> pg_catalog.date_trunc('month', p_start_date)::date
+     or p_end_date <> (p_start_date + interval '1 month - 1 day')::date then
+    raise exception 'Referral-volume reporting requires one complete calendar month.'
       using errcode = '22023';
   end if;
 
@@ -245,7 +242,7 @@ revoke all on function public.get_admin_referral_volume(date, date) from anon;
 grant execute on function public.get_admin_referral_volume(date, date) to authenticated;
 
 comment on function public.get_admin_referral_volume(date, date) is
-'Administrator-only aggregate inception-cohort counts for referral creation, acknowledgement, arrival, assessment and completion by created_at date range (Africa/Lagos). Event timestamps earlier than creation are excluded. Each count from 1 to 4 is suppressed. A chronology anomaly counts a referral with at least one lifecycle timestamp earlier than creation. Counts are operational event observations, not validated outcome rates or population incidence/prevalence.';
+'Administrator-only aggregate inception-cohort counts for exactly one complete calendar month in Africa/Lagos. Arbitrary and overlapping date windows are rejected to reduce small-cell differencing risk. Event timestamps earlier than creation are excluded. Each count from 1 to 4 is suppressed. A chronology anomaly counts a referral with at least one lifecycle timestamp earlier than creation. Counts are operational event observations, not validated outcome rates or population incidence/prevalence.';
 
 
 -- Facility distribution is restricted to one complete calendar month.
