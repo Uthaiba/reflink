@@ -104,6 +104,7 @@ Deno.serve(async (req) => {
         phone: phone || null,
         role,
         facility_id: facilityId,
+        must_change_password: true,
       })
       .select("id, full_name, phone, role, facility_id")
       .single();
