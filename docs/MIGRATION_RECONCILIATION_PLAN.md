@@ -411,3 +411,11 @@ A fresh read-only check of the connected REFLINK Supabase project confirmed:
 | Multiple permissive policies on the same role/action | 4 | Review policy overlap and OR semantics before consolidation; do not merge policies based only on a linter warning. |
 
 These advisor results are metadata/performance observations, not authorisation to change the live schema. The baseline and isolated synthetic-database release gates remain in force.
+
+## 16. Receiving assessment direct-discharge handover completeness — 8 November 2026
+
+A source-level review found a path from `under_assessment` directly to `discharged` in the assessment disposition selector. That path wrote `discharged_at` but did not require the structured discharge diagnosis, condition-at-discharge and follow-up fields required by the separate inpatient discharge form.
+
+The application now requires those three fields for the direct-discharge path and persists them with the status/timestamp update. Discharge medications remain optional. Existing values are restored when reopening the assessment. A regression source-contract test protects the validation and persistence contract.
+
+This change does not define clinical discharge eligibility, replace professional judgement, or prove database enforcement. The status update remains a client-side compare-and-set operation. A database-side invariant and authenticated synthetic-role integration test still require the reconciled schema baseline and approved isolated database. No production database was modified.
