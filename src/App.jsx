@@ -4879,6 +4879,25 @@ function PHCStaffDashboard({ onNewReferral }) {
 
   const [selectedReferral, setSelectedReferral] =
     useState(null);
+  const detailHeadingRef = useRef(null);
+  const referralTriggerRef = useRef(null);
+  const referralSearchFallbackRef = useRef(null);
+  const referralDetailWasOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (selectedReferral) {
+      detailHeadingRef.current?.focus();
+      referralDetailWasOpenRef.current = true;
+      return;
+    }
+    if (referralDetailWasOpenRef.current) {
+      const returnTarget = referralTriggerRef.current?.isConnected
+        ? referralTriggerRef.current
+        : referralSearchFallbackRef.current;
+      returnTarget?.focus();
+      referralDetailWasOpenRef.current = false;
+    }
+  }, [selectedReferral?.id]);
 
   const [activeFilter, setActiveFilter] =
     useState("all");
@@ -5234,6 +5253,7 @@ loadMyReferrals();
      ========================================================= */
 
   const openReferral = (referral) => {
+    referralTriggerRef.current = document.activeElement;
     setSelectedReferral(referral);
     void supabase.rpc("log_referral_read", { p_referral_id: referral.id });
   };
@@ -5494,6 +5514,7 @@ loadMyReferrals();
             <label className="referral-search-field">
               <span className="sr-only">Search your referrals</span>
               <input
+                ref={referralSearchFallbackRef}
                 type="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
@@ -5700,7 +5721,7 @@ loadMyReferrals();
             <div className="referral-modal-heading-row">
               <div>
                 <span className="eyebrow">REFERRAL DETAILS</span>
-                <h2>
+                <h2 ref={detailHeadingRef} tabIndex={-1}>
                   {selectedReferral.referral_number}
                 </h2>
               </div>
@@ -6051,11 +6072,36 @@ function ReceivingDashboard() {
 
   const [selectedReferral, setSelectedReferral] =
     useState(null);
+  const detailHeadingRef = useRef(null);
+  const inpatientHeadingRef = useRef(null);
+  const referralTriggerRef = useRef(null);
+  const referralSearchFallbackRef = useRef(null);
+  const referralDetailWasOpenRef = useRef(false);
 
   const [
     selectedInpatientReferral,
     setSelectedInpatientReferral,
   ] = useState(null);
+
+  useEffect(() => {
+    if (selectedReferral) {
+      detailHeadingRef.current?.focus();
+      referralDetailWasOpenRef.current = true;
+      return;
+    }
+    if (selectedInpatientReferral) {
+      inpatientHeadingRef.current?.focus();
+      referralDetailWasOpenRef.current = true;
+      return;
+    }
+    if (referralDetailWasOpenRef.current) {
+      const returnTarget = referralTriggerRef.current?.isConnected
+        ? referralTriggerRef.current
+        : referralSearchFallbackRef.current;
+      returnTarget?.focus();
+      referralDetailWasOpenRef.current = false;
+    }
+  }, [selectedReferral?.id, selectedInpatientReferral?.id]);
 
   const [actionLoading, setActionLoading] =
     useState(null);
@@ -6477,6 +6523,7 @@ setReferrals(
      ======================================================= */
 
   const openReferralDetails = (referral) => {
+    referralTriggerRef.current = document.activeElement;
     setSelectedReferral(referral);
     void supabase.rpc("log_referral_read", { p_referral_id: referral.id });
 
@@ -6526,6 +6573,7 @@ setReferrals(
   const openInpatientManagement =
     (referral) => {
 
+      if (!selectedReferral) referralTriggerRef.current = document.activeElement;
       setSelectedInpatientReferral(
         referral
       );
@@ -7602,6 +7650,7 @@ const handleStartAssessment = async (referralId) => {
             <label>
               <span>Search referrals</span>
               <input
+                ref={referralSearchFallbackRef}
                 type="search"
                 value={receivingSearch}
                 onChange={(event) => setReceivingSearch(event.target.value)}
@@ -7839,6 +7888,7 @@ const handleStartAssessment = async (referralId) => {
                           className="primary-button"
                           onClick={() => {
 
+                            referralTriggerRef.current = document.activeElement;
                             setSelectedReferral(
                               referral
                             );
@@ -7953,7 +8003,7 @@ const handleStartAssessment = async (referralId) => {
               INPATIENT CARE
             </span>
 
-            <h2>
+            <h2 ref={inpatientHeadingRef} tabIndex={-1}>
               Inpatient Management
             </h2>
 
@@ -8225,7 +8275,7 @@ const handleStartAssessment = async (referralId) => {
             <div className="referral-modal-heading-row">
               <div>
                 <span className="eyebrow">RECEIVING FACILITY • REFERRAL REVIEW</span>
-                <h2>Referral Review</h2>
+                <h2 ref={detailHeadingRef} tabIndex={-1}>Referral Review</h2>
               </div>
 
               <button
