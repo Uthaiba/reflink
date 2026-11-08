@@ -17,7 +17,7 @@ The transformation is in incremental implementation, not complete. Phase 1 audit
 | Phase | Status | Verified work | Outstanding |
 |---|---|---|---|
 | 1. Technical, database and security audit | Substantially complete | Production v2.0 source baseline, React/Vite/Supabase/Vercel architecture, public schema inventory, role model, referral status/trigger model, RLS and privileged routine findings documented. | Recover/reconstruct the exact historical migration source and complete a reproducible schema baseline. Validate live ACL/RLS/function behavior in an approved synthetic environment. |
-| 2. Design system and UI/UX | Partial | Responsive workspace styling, administrator workspace, PHC/receiving layout refinements, PWA metadata, focus-state and service-worker cache improvements. | Consolidated tokens/components; complete WCAG 2.2 AA review; consistent tables, forms, modal, notification, loading/empty/error states; usability testing with frontline staff. |
+| 2. Design system and UI/UX | Partial | Responsive workspace styling, administrator workspace, PHC/receiving layout refinements, PWA metadata, visible keyboard focus, reduced-motion support and responsive workspace refinements. A static accessibility scan found existing labels, selected live regions and alert/status roles, but no `aria-invalid` or `aria-describedby` attributes in `src/App.jsx`. | Complete WCAG 2.2 AA review; associate field-level validation messages with controls; add programmatic invalid-state semantics where custom validation is used; audit dialog focus management, keyboard operation, contrast, zoom/reflow and screen-reader announcements; usability testing with frontline staff. |
 | 3. Role-specific dashboards | Partial | Existing PHC, receiving and administrator dashboards refined; PHC referral search; receiving status/urgency filters, emergency/overdue indicators and prioritised queue; administrator patient-level view replaced by aggregate-oriented workspace. | Verify every role's information architecture and action permissions; complete facility directory, reports, settings, help/support and user-management workflows; full mobile and accessibility review. |
 | 4. Referral engine | Partial | Existing referral lifecycle retained; structured counter-referral form and proposed atomic completion RPC; receiving assessment, admission/discharge and investigation result workflows; acknowledgement/arrival actions; PHC referral journey now separates admission, discharge, counter-referral submission and formal completion, with expanded receiving feedback visibility. | Clinical acceptance testing for every transition; validate correction/audit controls; test concurrency, duplicate submissions, referral escalation, rejected/declined workflow under clinical governance, follow-up and end-to-end closure. |
 | 5. Security and privacy | Source remediation advanced; live validation blocked | PHI console logging removed; admin UI avoids patient-level referral reads; role-limited user-provisioning source; service-worker caching restrictions; notification/outbox source hardening; offline encryption/key vault and account isolation; dependency audit gate; metadata-only catalog snapshots. | Reconcile and test migration baseline; test RLS with synthetic roles/facilities; review all five legacy SECURITY DEFINER RPCs and dependencies; minimise full-row audit snapshots; validate Storage access, MFA/leaked-password settings, retention, incident response and recovery. No production security change is claimed. |
@@ -212,3 +212,32 @@ The next database-baseline stage now has a more precise metadata map. A fresh re
 ### Decision
 
 The baseline is better documented but is **not yet reconciled or restorable**. Existing metadata exports are not a complete schema dump, and the historical migration source remains missing. Next implementation work is limited to source documentation and a reviewed synthetic-environment plan until an isolated database and authoritative baseline are available. No production schema, migration ledger, RLS policy, grant, Auth setting, patient row or deployment was changed.
+
+
+## Accessibility source review — 8 November 2026
+
+A bounded static review of `src/App.jsx` and the shared workspace styles was completed as the next UI/UX workstream. This is a source inspection, not a WCAG conformance audit or assistive-technology test.
+
+### Positive evidence
+
+- The application includes visible `:focus-visible` styling in the shared CSS.
+- Reduced-motion preferences are respected by the workspace quality stylesheet.
+- The inspected referral, discharge and counter-referral forms use explicit labels in the reviewed sections.
+- Existing dynamic feedback includes selected `aria-live="polite"`, `role="alert"` and `role="status"` regions.
+
+### Confirmed gap
+
+- A source scan of `src/App.jsx` found no `aria-invalid` or `aria-describedby` attributes.
+- Some custom validation messages are therefore not demonstrably associated with the exact field they describe, and invalid state is not consistently exposed programmatically. Native `required` validation and form-level alert messages do not replace field-level error association.
+- The inspected counter-referral form has form-level alert/status feedback, but this review did not verify focus placement after failed submission or successful completion.
+- No `<dialog>` or `aria-modal` pattern was found in `src/App.jsx`; any custom overlays elsewhere still need a separate focus-trap, Escape-key and focus-return review.
+
+### Next safe implementation sequence
+
+1. Inventory every form that performs custom validation and identify its control IDs, error conditions and existing message elements.
+2. Add stable per-field error IDs, conditionally apply `aria-invalid`, and connect errors using `aria-describedby`; preserve visible error text and avoid duplicating announcements.
+3. On failed submission, focus the first invalid field or a concise error summary with links to invalid controls; do not steal focus during ordinary typing.
+4. Add component tests for error association, invalid-state removal after correction, keyboard submission and announcement behavior.
+5. Run automated accessibility checks, then manual keyboard and screen-reader checks on the supported browsers and mobile layouts. Verify contrast and 200–400% zoom/reflow before claiming WCAG 2.2 AA conformance.
+
+No application source, database schema, policies, patient data, deployment or production configuration was changed during this static review. Accessibility conformance is not claimed.
