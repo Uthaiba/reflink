@@ -45,3 +45,23 @@ The proposed `get_admin_referral_volume` and `submit_counter_referral` functions
 Catalog inspection does not establish data completeness, semantic validity, production query performance, or clinical suitability of the fields. Indicator definitions in `RPHI_INDICATOR_DATA_DICTIONARY.md` remain candidates pending clinical/public-health approval and data-quality profiling.
 
 No patient rows were queried. No production schema, function, grant, RLS policy, setting, patient record or deployment was modified during this review.
+
+
+## Production public-schema export review — 8 November 2026
+
+A schema-only `public` export was reviewed. It contains 14 tables, 16 functions, 2 views, 9 triggers, 23 foreign keys and 30 RLS policies. All 14 public tables have RLS enabled in the export. The export contains no patient rows and does not include managed Auth/Storage schemas or project-level settings.
+
+### Additional findings requiring remediation design
+
+- `public.referral_analytics` is a row-level view containing `patient_identifier` and referral-level data. Its explicit grant is service-role-only. It must not become an authenticated R-PHI source.
+- `public.audit_log` grants `TRUNCATE`, `TRIGGER`, `REFERENCES`, `MAINTAIN` and `SELECT` to `authenticated`. RLS does not constrain TRUNCATE. Remove unnecessary privileges in staging while retaining administrator-only read access through RLS and trusted audit writes.
+- Default privileges for `postgres` in `public` grant ALL on future tables and sequences to `anon`, `authenticated` and `service_role`. This creates a dangerous default for future objects, especially if a new table is created without RLS. Replace with restrictive defaults and explicit grants.
+- `audit_referral_mutation()` stores complete OLD/NEW row JSON for referrals and counter-referrals. This can replicate clinical narratives, contact details and other sensitive fields into the audit log. Define an allowlisted audit payload and retention/access policy.
+- `public.profiles` is Auth-linked; a separate `public.users` table also exists with email, role and facility fields. Confirm which identity model is authoritative before using either in new reporting or notification recipient selection.
+- `referral_events` and `referral_feedback` have RLS enabled with no policies and service-role-only table grants. Treat them as deliberately closed to browser roles unless an approved least-privilege use case requires access.
+- `log_referral_print()` allocates a print number using `MAX()+1`; there is no unique constraint on `(referral_id, print_number)`. Concurrent print operations can allocate duplicate numbers. Test a transaction-safe replacement in staging.
+- The status constraint has no `rejected` value. Clinical rejection/decline semantics need a governance-approved status and transition design; do not overload cancellation or further referral.
+
+The export confirms the existing referral status validation, status audit, counter-referral completion guard, acknowledgement-deadline trigger and full-row audit triggers. Any new lifecycle or reporting SQL must account for these existing triggers.
+
+**Limitations:** this is a `public` schema export only. It does not prove Auth trigger attachment, Auth settings, Storage policies/buckets, Realtime publication membership, extension versions, or all project-level configuration. No production changes were made.
