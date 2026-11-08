@@ -59,3 +59,12 @@ test("temporary-password requirement is persisted atomically with the new profil
   assert.doesNotMatch(adminDashboard, /TEMPORARY PASSWORD FLAG UPDATE SKIPPED/);
   assert.doesNotMatch(adminDashboard, /must_change_password:\s*true/);
 });
+
+
+test("provisioning CORS uses the verified application origin and explicit configured origins", () => {
+  assert.match(edgeFunction, /https:\/\/reflink-yobe\.vercel\.app/);
+  assert.match(edgeFunction, /REFLINK_ALLOWED_ORIGINS/);
+  assert.match(edgeFunction, /allowedOrigins\.has\(origin\)/);
+  assert.match(edgeFunction, /headers\["Access-Control-Allow-Origin"\] = origin/);
+  assert.doesNotMatch(edgeFunction, /"Access-Control-Allow-Origin": "\*"/);
+});
