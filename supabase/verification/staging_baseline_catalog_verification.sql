@@ -1,57 +1,71 @@
 -- REFLINK staging baseline catalog verification
--- READ-ONLY: safe to execute against staging or production for inventory.
--- This script performs SELECTs only. It does not create, alter, grant, revoke, or delete.
+-- READ-ONLY: SELECT statements only. No DDL, DML, grants, revokes, or configuration changes.
 WITH
-objects AS (
-  SELECT
-    (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','p')) AS tables,
-    (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public') AS functions,
-    (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='v') AS views,
-    (SELECT count(*) FROM pg_indexes WHERE schemaname='public') AS indexes,
-    (SELECT count(*) FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname='public' AND c.contype='f') AS foreign_keys,
-    (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND NOT t.tgisinternal) AS triggers,
-    (SELECT count(*) FROM pg_policies WHERE schemaname='public') AS policies,
-    (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','p') AND c.relrowsecurity) AS rls_enabled_tables
-),
-view_access AS (
-  SELECT coalesce(jsonb_agg(jsonb_build_object(
-    'view', c.relname,
-    'owner', pg_get_userbyid(c.relowner),
-    'security_invoker', coalesce((SELECT option_value='true' FROM pg_options_to_table(c.reloptions) WHERE option_name='security_invoker'), false),
-    'acl', coalesce(c.relacl::text,'(default)')
-  ) ORDER BY c.relname),'[]'::jsonb) AS details
+public_relations AS (
+  SELECT c.relname, c.relkind, c.relrowsecurity, c.relforcerowsecurity
   FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-  WHERE n.nspname='public' AND c.relkind='v'
+  WHERE n.nspname='public' AND c.relkind IN ('r','p','v','m','f')
+),
+public_functions AS (
+  SELECT p.proname, pg_get_userbyid(p.proowner) AS owner,
+         p.prosecdef AS security_definer, p.proconfig AS function_config,
+         pg_get_function_identity_arguments(p.oid) AS identity_arguments
+  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+  WHERE n.nspname='public'
 ),
 auth_triggers AS (
-  SELECT coalesce(jsonb_agg(jsonb_build_object('trigger',t.tgname,'enabled',t.tgenabled,'definition',pg_get_triggerdef(t.oid)) ORDER BY t.tgname),'[]'::jsonb) AS details
-  FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
-  WHERE n.nspname='auth' AND c.relname='users' AND NOT t.tgisinternal
+  SELECT t.tgname, c.relname AS table_name, t.tgenabled
+  FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+  JOIN pg_namespace n ON n.oid=c.relnamespace
+  WHERE n.nspname='auth' AND NOT t.tgisinternal
 ),
 default_acls AS (
-  SELECT coalesce(jsonb_agg(jsonb_build_object(
-    'owner',pg_get_userbyid(d.defaclrole),
-    'schema',coalesce(n.nspname,'*'),
-    'object_type',d.defaclobjtype,
-    'acl',d.defaclacl
-  ) ORDER BY pg_get_userbyid(d.defaclrole),d.defaclobjtype),'[]'::jsonb) AS details
+  SELECT pg_get_userbyid(d.defaclrole) AS grantor, n.nspname AS schema_name,
+         d.defaclobjtype AS object_type, d.defaclacl::text AS acl
   FROM pg_default_acl d LEFT JOIN pg_namespace n ON n.oid=d.defaclnamespace
-  WHERE n.nspname='public' OR d.defaclnamespace=0
+),
+public_schema_privileges AS (
+  SELECT r.rolname,
+         has_schema_privilege(r.oid,'public','USAGE') AS has_usage,
+         has_schema_privilege(r.oid,'public','CREATE') AS has_create
+  FROM pg_roles r
+  WHERE r.rolname IN ('anon','authenticated','service_role','postgres','supabase_admin')
 )
 SELECT jsonb_build_object(
-  'expected_snapshot_counts', jsonb_build_object('tables',14,'functions',16,'views',2,'indexes',10,'foreign_keys',23,'triggers',9,'policies',30),
-  'actual_counts', to_jsonb(objects),
-  'count_checks', jsonb_build_object(
-    'tables_match', objects.tables=14,
-    'functions_match', objects.functions=16,
-    'views_match', objects.views=2,
-    'foreign_keys_match', objects.foreign_keys=23,
-    'triggers_match', objects.triggers=9,
-    'policies_match', objects.policies=30,
-    'all_tables_rls_enabled', objects.tables=objects.rls_enabled_tables
+  'database',current_database(),
+  'server_version',current_setting('server_version'),
+  'public_relation_counts',jsonb_build_object(
+    'tables',(SELECT count(*) FROM public_relations WHERE relkind IN ('r','p')),
+    'views',(SELECT count(*) FROM public_relations WHERE relkind='v'),
+    'materialized_views',(SELECT count(*) FROM public_relations WHERE relkind='m'),
+    'rls_enabled_tables',(SELECT count(*) FROM public_relations WHERE relkind IN ('r','p') AND relrowsecurity),
+    'rls_forced_tables',(SELECT count(*) FROM public_relations WHERE relkind IN ('r','p') AND relforcerowsecurity)
   ),
-  'analytics_view_access', view_access.details,
-  'auth_users_triggers', auth_triggers.details,
-  'default_privileges', default_acls.details
-) AS verification_report
-FROM objects CROSS JOIN view_access CROSS JOIN auth_triggers CROSS JOIN default_acls;
+  'public_relations',coalesce((SELECT jsonb_agg(jsonb_build_object(
+    'name',relname,'kind',relkind,'rls_enabled',relrowsecurity,'rls_forced',relforcerowsecurity
+  ) ORDER BY relname) FROM public_relations),'[]'::jsonb),
+  'public_function_count',(SELECT count(*) FROM public_functions),
+  'public_functions',coalesce((SELECT jsonb_agg(jsonb_build_object(
+    'name',proname,'arguments',identity_arguments,'owner',owner,
+    'security_definer',security_definer,'config',function_config
+  ) ORDER BY proname,identity_arguments) FROM public_functions),'[]'::jsonb),
+  'public_view_grants',coalesce((
+    SELECT jsonb_agg(jsonb_build_object(
+      'view',c.relname,
+      'grantee',CASE WHEN x.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(x.grantee) END,
+      'privilege',x.privilege_type,'grantable',x.is_grantable
+    ) ORDER BY c.relname,x.grantee,x.privilege_type)
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) x
+    WHERE n.nspname='public' AND c.relkind='v'
+  ),'[]'::jsonb),
+  'auth_non_internal_triggers',coalesce((SELECT jsonb_agg(jsonb_build_object(
+    'trigger',tgname,'table',table_name,'enabled_state',tgenabled
+  ) ORDER BY tgname) FROM auth_triggers),'[]'::jsonb),
+  'default_privileges',coalesce((SELECT jsonb_agg(jsonb_build_object(
+    'grantor',grantor,'schema',schema_name,'object_type',object_type,'acl',acl
+  ) ORDER BY grantor,schema_name,object_type) FROM default_acls),'[]'::jsonb),
+  'public_schema_privileges',coalesce((SELECT jsonb_agg(jsonb_build_object(
+    'role',rolname,'usage',has_usage,'create',has_create
+  ) ORDER BY rolname) FROM public_schema_privileges),'[]'::jsonb)
+) AS staging_catalog_verification;
