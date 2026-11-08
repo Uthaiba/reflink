@@ -360,3 +360,19 @@ The six-step migration workstream is tracked in `docs/MIGRATION_RECONCILIATION_P
 ## Production schema export handoff — 8 November 2026
 
 Added `docs/PRODUCTION_SCHEMA_EXPORT_RUNBOOK.md` and linked it from the migration reconciliation plan. The runbook documents the schema-only export procedure, managed-schema exclusions, data/secret sanitization, metadata follow-up and staging restore acceptance gates. The connected Supabase tools do not expose a database dump/download operation, so the database owner/operator must run the approved export locally and share the sanitized artifact securely. Do not use `supabase db pull` against production for this handoff because it records a migration in the remote history. No production database or Auth changes were made. No migrations, users or synthetic records were created in staging.
+
+
+## Production schema export review — 8 November 2026
+
+The owner supplied a successful schema-only `public` export. Static inspection confirms 14 RLS-enabled public tables, 16 functions, 2 views, 9 triggers, 23 foreign keys and 30 policies. No table data was included.
+
+The export adds several concrete security priorities to Phase 1:
+- Remove the unnecessary authenticated `TRUNCATE`, `TRIGGER`, `REFERENCES` and `MAINTAIN` privileges on `public.audit_log`; RLS does not protect TRUNCATE.
+- Replace broad default privileges that grant ALL on future public tables and sequences to `anon` and `authenticated` with restrictive defaults and explicit grants.
+- Minimise full OLD/NEW referral and counter-referral JSON snapshots in audit logs.
+- Keep the patient-identifier-bearing `referral_analytics` view service-role-only.
+- Clarify the separate `public.users` and Auth-linked `public.profiles` identity models.
+- Preserve service-role-only access to `referral_events` and `referral_feedback` unless a least-privilege use case is approved.
+- Resolve concurrent print-number allocation before treating print audit numbering as reliable.
+
+The export is a public-schema baseline only. Auth/Storage metadata, extension inventory, Realtime publication configuration and project-level settings remain outstanding. The migration ledger still records only `20260928203447_reflink_v2_rural_first`; its historical SQL source remains missing from the repository. Therefore migration baseline reconciliation is **partially advanced, not complete**, and staging SQL execution remains blocked. No production schema, data, ACL, Auth setting or deployment was changed.
