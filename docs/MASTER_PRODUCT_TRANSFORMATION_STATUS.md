@@ -255,3 +255,16 @@ The project owner approved creating a separate Supabase project, conditional on 
 - If a separate project becomes available, provision it with independent credentials and environment variables, synthetic-only facilities/users/referrals, and no production secrets or connection strings. Keep production migrations and deployment workflows disabled until staging baseline and tests pass.
 
 The user explicitly conditioned approval on the new environment not affecting the existing project. This condition remains mandatory for any retry.
+
+
+## Counter-referral form accessibility remediation — 8 November 2026
+
+A focused source-level remediation was implemented for the custom validation paths in `CounterReferralForm`.
+
+- Custom validation now records field-specific errors for final diagnosis, patient outcome and conditional further-referral destination.
+- Each affected control exposes `aria-invalid` only while its field has an error and references the corresponding visible error message through `aria-describedby`.
+- A failed custom validation focuses the first invalid control. Correcting a field clears that field's error association without clearing unrelated field errors.
+- The form-level alert remains available for record-level and server/RPC errors; successful submission feedback remains a status message.
+- Added `tests/counterReferralAccessibility.test.js` to assert field/error associations, invalid-state semantics, first-invalid focus and per-field error clearing.
+
+This is a targeted source-contract regression test, not a rendered component test or assistive-technology test. Native required-field browser validation may run before the custom submit handler for empty required controls; the custom validation/focus path still covers trimmed whitespace and the conditional destination check when the handler is reached. Manual keyboard and screen-reader verification remains required. No referral lifecycle behavior, clinical validation rule, database, patient record, migration, deployment or production configuration was changed.
