@@ -52,3 +52,10 @@ test("administrator dashboard provisions accounts through the Edge Function", ()
   assert.match(adminDashboard, /"create-user"/);
   assert.match(adminDashboard, /\.from\("profiles"\)/);
 });
+
+
+test("temporary-password requirement is persisted atomically with the new profile", () => {
+  assert.match(edgeFunction, /must_change_password: true/);
+  assert.doesNotMatch(adminDashboard, /TEMPORARY PASSWORD FLAG UPDATE SKIPPED/);
+  assert.doesNotMatch(adminDashboard, /must_change_password:\s*true/);
+});
