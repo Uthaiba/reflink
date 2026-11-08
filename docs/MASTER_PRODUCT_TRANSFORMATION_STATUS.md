@@ -348,3 +348,10 @@ Advisor references:
 
 This project is an isolated, clean environment for synthetic-data testing only. Do not connect it to production data or production secrets. Before schema deployment, reconstruct and review the authoritative migration baseline: the production project has a historical migration-ledger entry whose source migration is absent from the repository, while the repository's newer migrations are proposals. Resolve that baseline gap before applying schema changes. Configure separate staging-only environment variables and test identities; never reuse production service-role credentials. Validate RLS, grants, functions, triggers, storage policies, and Supabase advisors in staging before considering any production rollout.
 
+
+
+## Staging execution checkpoint — 8 November 2026
+
+The isolated Supabase project `reflink-synthetic-staging` (`rcskuzmvyugbanygizri`, `eu-west-2`) is provisioned and healthy. Its public schema and migration ledger are empty; initial security and performance advisor scans returned no lints. No production data or secrets were copied.
+
+The six-step migration workstream is tracked in `docs/MIGRATION_RECONCILIATION_PLAN.md`. The historical migration source `20260928203447_reflink_v2_rural_first.sql` is absent from the current branch and its accessible Git path history. Existing catalog exports are metadata snapshots, not restorable schema dumps. Consequently, baseline reconstruction, synthetic identity creation, migration application and database integration tests remain gated. No SQL has been applied to staging or production in this checkpoint; production remains read-only.
