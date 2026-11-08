@@ -34,9 +34,9 @@ Staging has many additional extensions available but not installed. Do not insta
 
 ### Supabase-managed dependencies
 
-The schema depends on the managed `auth` schema and functions, notably `auth.uid()`, and on platform roles including `anon`, `authenticated`, `service_role`, `postgres`, and `pg_database_owner`. The export does not create these roles or Auth objects. Verify their presence and expected ownership/permissions on staging before applying any SQL.
+The schema depends on the managed `auth` schema and functions, notably `auth.uid()`, and on platform roles including `anon`, `authenticated`, `service_role`, `postgres`, and `pg_database_owner`. The export does not create these roles or Auth objects. Read-only staging catalog inspection confirmed all six roles (`anon`, `authenticated`, `service_role`, `postgres`, `pg_database_owner`, `supabase_admin`) and the `auth`, `public`, `extensions`, and `vault` schemas exist. `auth` and `vault` are owned by `supabase_admin`; `public` is owned by `pg_database_owner`; `extensions` is owned by `postgres`. The role attributes show `postgres` and `supabase_admin` are privileged platform roles and `service_role` has BYPASSRLS. Keep these managed roles/schemas intact.
 
-The `handle_new_user()` function is a SECURITY DEFINER trigger function intended to participate in Auth user provisioning. The export's public-schema trigger definitions must be inspected alongside the managed Auth trigger state. Do not attach a trigger to `auth.users` or alter Auth configuration until the exact production trigger definition, staging compatibility, and intended signup behavior are separately verified.
+The `handle_new_user()` function is a SECURITY DEFINER trigger function intended to participate in Auth user provisioning. The export's public-schema trigger definitions must be inspected alongside the managed Auth trigger state. Read-only inspection found **no non-internal trigger on staging `auth.users`**. This means the staging project does not currently mirror any production Auth provisioning hook. Do not create one from assumption: first retrieve and review the exact intended production trigger definition and validate signup behavior in staging.
 
 ### Extensions and built-ins
 
@@ -68,7 +68,7 @@ This is a dependency order, not executable SQL.
 
 ### A. Default-privilege discrepancy
 
-The dump includes default-privilege statements for `postgres` only. Prior live production catalog inspection found broad public-schema default ACLs for both `postgres` and `supabase_admin`. The dump therefore does not fully represent the observed production default-privilege state.
+The dump includes default-privilege statements for `postgres` only. Read-only staging catalog inspection independently confirmed broad public-schema default ACLs for both `postgres` and `supabase_admin`, granting `anon`, `authenticated`, and `service_role` broad default rights on future sequences, functions, and tables. Prior live production inspection found the same pattern. The dump therefore does not fully represent the observed production default-privilege state.
 
 Do not blindly replay the dump's broad default grants to `anon` and `authenticated`. Reconcile effective default ACLs for each object-creating role against a documented least-privilege target. Do not attempt to alter `supabase_admin` defaults unless the connected role is demonstrably authorized.
 
@@ -96,7 +96,7 @@ Before staging DDL is authorized, capture and review:
 - Existence and attributes of required roles and managed schemas/functions.
 - Installed extension names, versions, and schemas.
 - Whether the current execution role can create/alter objects and set intended ownership.
-- Current staging default ACLs for `postgres` and any other object-creating role.
+- Current staging default ACLs: `postgres` and `supabase_admin` both have broad public-schema defaults (tables, sequences, functions); reconcile to least privilege before baseline application.
 - Existing Auth triggers on `auth.users` (read-only inspection).
 - Whether the dump's view definitions preserve expected privacy boundaries.
 - Exact object inventory and dependency graph.
@@ -130,4 +130,4 @@ A staging restore is not complete until all gates pass:
 
 ## 8. Current decision
 
-**NO-GO for applying the raw export.** Staging is healthy and empty, and the key extension versions are available, but the managed Auth/role dependencies, ownership capability, view security semantics, and default-privilege discrepancy still require explicit verification and review. The next engineering deliverable is a normalized, staging-only baseline candidate plus a deterministic catalog verification script—not a production migration.
+**NO-GO for applying the raw export.** Staging is healthy and empty, required platform roles/schemas and key extension versions are present, but no Auth user trigger exists in staging, broad default ACLs are present for both `postgres` and `supabase_admin`, and view security/ownership behavior still require explicit review. The next engineering deliverable is a normalized, staging-only baseline candidate plus a deterministic catalog verification script—not a production migration. The next engineering deliverable is a normalized, staging-only baseline candidate plus a deterministic catalog verification script—not a production migration.
