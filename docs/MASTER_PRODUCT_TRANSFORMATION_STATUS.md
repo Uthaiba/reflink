@@ -313,3 +313,17 @@ All five functions are owned by `postgres`. The four functions with `search_path
 **Confirmed integrity issue:** `log_referral_print` allocates `print_number` using `MAX(print_number) + 1`. The inspected `referral_print_events` constraints contain no uniqueness constraint on `(referral_id, print_number)`. Concurrent print RPCs can therefore allocate duplicate sequence numbers. Recommend a transaction-safe allocation design plus a unique constraint, validated in isolated staging before any production migration.
 
 **Disposition:** No immediate anonymous-execution or missing in-function authorization defect was demonstrated in these five definitions. Hardening opportunities remain: move the four mutable paths to empty `search_path`, verify exact role behaviour with positive/negative integration tests, and correct print-number concurrency. Do not blindly revoke grants or alter SECURITY DEFINER to INVOKER: these routines write protected audit/print tables and are used as privileged RPCs. All changes remain blocked on isolated staging and migration-baseline recovery.
+
+
+### Follow-up security advisor snapshot — 8 November 2026, 15:08 UTC
+
+A fresh read-only Security Advisor run confirms:
+
+- `public.referral_events` and `public.referral_feedback` have RLS enabled but no policies. These tables currently fail closed for API roles; they remain an application capability/ownership decision, not a reason to add permissive policies automatically.
+- Five authenticated-callable SECURITY DEFINER functions remain flagged. The read-only ACL inspection confirms none is executable by `anon` or `PUBLIC`; the advisor warning reflects that signed-in users can invoke them. Source call sites show the app uses `get_facility_user_count`, `get_facility_user_counts`, `log_referral_print` and `log_referral_read`; `is_administrator` is used as a database authorization helper. Any move to a non-exposed schema or privilege change must update dependent RPC call sites/policies and be integration-tested in staging.
+- Supabase Auth leaked-password protection is disabled. This is an outstanding account-security configuration item. It was not changed because production Auth configuration is outside this read-only review and must be validated through the isolated environment and a controlled configuration rollout.
+
+Advisor references:
+- [RLS enabled with no policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
+- [Authenticated users can execute SECURITY DEFINER functions](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)
+- [Leaked password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
