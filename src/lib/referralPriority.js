@@ -51,8 +51,18 @@ export function sortIncomingReferralsByPriority(referrals, now = Date.now()) {
  * Cancelled and completed referrals are closed. A discharged referral remains
  * operationally open until its counter-referral has been recorded.
  */
+export function hasCounterReferral(referral) {
+  const relation = referral?.counter_referral;
+  return Array.isArray(relation) ? relation.length > 0 : Boolean(relation);
+}
+
+/**
+ * Cancelled and completed referrals are closed. A discharged referral remains
+ * operationally open until its counter-referral relation contains a record.
+ * PostgREST returns one-to-many relations as arrays, including [] when absent.
+ */
 export function isOpenIncomingReferral(referral) {
   const status = String(referral?.status || "").toLowerCase();
   if (!status || status === "completed" || status === "cancelled") return false;
-  return status !== "discharged" || !referral.counter_referral;
+  return status !== "discharged" || !hasCounterReferral(referral);
 }
