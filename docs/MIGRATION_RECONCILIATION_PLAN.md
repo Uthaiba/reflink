@@ -383,3 +383,31 @@ A source review identified that `public.get_admin_referral_volume(date, date)` a
 ### Validation and limits
 
 This is a source-only correction to an unapplied proposal migration and the working branch UI. It does not alter the live Supabase schema, ACLs, RLS, migration ledger, production data or deployment. The SQL guard still requires execution in an approved isolated synthetic-data environment after the missing historical migration baseline is reconciled. Complementary suppression and cross-filter testing for each aggregate dimension remain release requirements.
+
+## 15. Live environment and advisor recheck — 8 November 2026
+
+A fresh read-only check of the connected REFLINK Supabase project confirmed:
+
+- Project status is `ACTIVE_HEALTHY`.
+- The migration ledger still contains only `20260928203447_reflink_v2_rural_first`. Its historical SQL source is not present in the working repository.
+- The only listed development branch is named `main`, is non-persistent and has `with_data=false`; its `project_ref` and `parent_project_ref` both point to the production project reference. It is not accepted as an approved isolated integration environment for the proposed migration replay.
+- No patient rows were read, and no migration, schema object, policy, grant, Auth setting, secret or branch was changed.
+
+### Security advisor findings observed at 09:16 UTC
+
+| Finding | Count | Required handling |
+|---|---:|---|
+| RLS enabled with no policy (`referral_events`, `referral_feedback`) | 2 | Remain fail-closed until intended role/facility access is defined and tested. |
+| Authenticated-callable SECURITY DEFINER routines | 5 | Review ownership, body, search path, ACL and direct-RPC authorization; do not blindly revoke functions with policy dependencies. |
+| Leaked-password protection disabled | 1 | Plan an Auth configuration change only after a reviewed rollout and user-impact assessment. |
+
+### Performance advisor findings observed at 09:16 UTC
+
+| Finding | Count | Required handling |
+|---|---:|---|
+| Foreign keys without a covering index | 16 | Prioritise from measured joins, parent-row update/delete behavior, table size and query plans; do not add all indexes blindly. |
+| RLS policies with per-row auth/current-setting evaluation | 17 | Assess safe `(select auth.uid())` / equivalent rewrites against each exact policy and regression-test the effective access rules. |
+| Unused indexes | 5 | Treat as candidates only; inspect workload and retention windows before removal. |
+| Multiple permissive policies on the same role/action | 4 | Review policy overlap and OR semantics before consolidation; do not merge policies based only on a linter warning. |
+
+These advisor results are metadata/performance observations, not authorisation to change the live schema. The baseline and isolated synthetic-database release gates remain in force.
