@@ -56,7 +56,7 @@ All 14 exported public tables have RLS enabled in the export. There are no stand
 - `profiles` and `users` both exist; authoritative identity model needs explicit documentation.
 - `referral_events` and `referral_feedback` have RLS enabled but no policies in the export; expected behavior is fail-closed.
 
-## Staging observation, 2026-11-08
+## Read-only verifier execution, 2026-11-08\n\nThe committed SELECT-only script `supabase/verification/staging_baseline_catalog_verification.sql` was executed against staging. It returned zero public tables, functions, views, indexes, foreign keys, triggers, and policies, as expected for the empty baseline target. It also confirmed no RLS-enabled public tables (because no tables exist), no non-internal Auth user triggers, and six broad default ACL entries covering tables, sequences, and functions for both `postgres` and `supabase_admin`. The zero-object comparison flags are expected pre-restore and are not acceptance passes.\n\n## Staging observation, 2026-11-08
 
 - Project status: `ACTIVE_HEALTHY`.
 - PostgreSQL: `17.11.0.018`.
