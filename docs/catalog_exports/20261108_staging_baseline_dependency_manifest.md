@@ -47,6 +47,31 @@ All 14 exported public tables have RLS enabled in the export. There are no stand
 - The export references Supabase-managed Auth functions and roles and cannot bootstrap them.
 - The dump does not recreate Storage, Realtime, Auth configuration, secrets, or edge functions.
 
+## Function security review from export
+
+Static inspection of the 16 function definitions found 10 declared `SECURITY DEFINER` and 6 without that attribute. This is source-text inventory, not a PostgreSQL parser or behavioral security test.
+
+| Function | Security mode | Declared search_path | Restore review |
+|---|---|---|---|
+| `audit_referral_mutation` | DEFINER | `public` | High priority: audit writer; review object qualification and PHI minimization |
+| `get_facility_user_count` | DEFINER | empty | Review authorization and fully qualified references |
+| `get_facility_user_counts` | DEFINER | `public` | High priority: review admin authorization and public-schema name resolution |
+| `get_referral_analytics_summary` | DEFINER | `public` | High priority: aggregate disclosure controls and schema qualification |
+| `handle_new_user` | DEFINER | `public` | High priority: Auth trigger function; no matching staging Auth trigger exists |
+| `is_administrator` | DEFINER | `public` | High priority: authorization primitive used by RLS |
+| `is_current_user_administrator` | DEFINER | `public` | High priority: authorization primitive; confirm intended caller |
+| `log_referral_print` | DEFINER | `public` | Review caller authorization and print-number concurrency |
+| `log_referral_read` | DEFINER | `public` | Review caller authorization and audit/event data |
+| `log_referral_status_change` | DEFINER | `public` | High priority: trigger writer and privilege boundary |
+| `guard_profile_security_fields` | INVOKER | empty | Preserve invoker semantics; test protected profile fields |
+| `require_counter_referral_before_completion` | INVOKER | `public` | Preserve invoker semantics; test transition guard |
+| `set_referral_ack_due_at` | INVOKER | `public` | Preserve invoker semantics; test acknowledgement deadline |
+| `update_referral_draft_timestamp` | INVOKER | empty | Preserve invoker semantics; test timestamp behavior |
+| `validate_referral_entry` | INVOKER | `public` | Preserve invoker semantics; test validation constraints |
+| `validate_referral_status_transition` | INVOKER | empty | Preserve invoker semantics; test transition matrix |
+
+**Security blocker:** Nine of the ten SECURITY DEFINER functions declare `search_path = public`; only `get_facility_user_count` declares an empty search path. This is not automatically proof of exploitability, but it is a material name-resolution hardening concern. Before restore, inspect every body for unqualified relation/function/type references and either (a) qualify all non-system objects and pin a safe search path (typically empty), or (b) document a justified alternative. Do not mechanically rewrite function bodies without regression tests. Preserve invoker/definer mode and intended EXECUTE grants.
+
 ## Security-sensitive objects
 
 - `public.referral_analytics` exposes patient identifiers and clinical fields; explicit grant is service-role-only.
