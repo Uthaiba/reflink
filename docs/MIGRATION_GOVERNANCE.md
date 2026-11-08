@@ -112,3 +112,8 @@ Added [SECURITY_HARDENING_PROPOSAL.md](./SECURITY_HARDENING_PROPOSAL.md) and a s
 Important execution constraint: the catalog shows no membership of `postgres` in `supabase_admin`. A migration executed as `postgres` must not assume it can change that creator's default privileges. Obtain an authorised owner-level path or keep new public objects created by `supabase_admin` blocked from release. Existing function grants must be reviewed individually; do not blanket-revoke authenticated EXECUTE because current workflow helpers and policy dependencies rely on selected calls.
 
 The candidate audit-log revoke is limited to `TRUNCATE`, `REFERENCES`, `TRIGGER` and `MAINTAIN`; preserve the existing administrator-only SELECT RLS contract and prove the audit trigger writer path in synthetic staging before narrowing write privileges. This is a proposal, not a migration. No production or staging DDL was executed. The new Node source-contract test checks the proposal's safety gates; it does not execute PostgreSQL.
+
+
+## Public schema export manifest review — 8 November 2026
+
+The supplied schema-only artifact has a static, hashed inventory in [20261108_public_schema_export_manifest.md](./catalog_exports/20261108_public_schema_export_manifest.md). The review counted 14 tables, 16 functions, 2 views, 30 policies, 9 triggers, 10 indexes and 23 foreign keys. It found no standalone table-data load statements. The dump does not include extension creation or `supabase_admin` default ACLs, although separate live catalog evidence confirms broad defaults for that creator. It is not a complete platform restore artifact and is not yet approved as an executable restore script. Staging remains empty; no SQL was applied.
