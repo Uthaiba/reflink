@@ -461,3 +461,46 @@ The application status timeline is therefore backed by a database status-history
 5. Obtain a complete schema-only export / authoritative migration history and establish a separate synthetic-data database. The current metadata exports are valuable reconciliation evidence but are not a restorable schema dump and do not resolve the missing historical migration.
 
 No live schema, policy, grant, migration ledger, Auth setting, branch, patient record or deployment was changed.
+
+
+## 12. Isolated staging project provisioned — 8 November 2026
+
+A separate Supabase project has now been created after the owner explicitly authorised the target project and region and resolved the free-project limit.
+
+- Project: `reflink-synthetic-staging`
+- Project ref: `rcskuzmvyugbanygizri`
+- Organisation: `reflink` (`kczzvburxzfubiqhpcxd`)
+- Region: `eu-west-2`
+- Status at verification: `ACTIVE_HEALTHY`
+- PostgreSQL: 17
+- API URL: `https://rcskuzmvyugbanygizri.supabase.co`
+
+Initial read-only checks on the new project:
+- `public` contains no application tables.
+- Migration ledger is empty.
+- Security advisor returned no lints.
+- Performance advisor returned no lints.
+- No production records, auth users, secrets or storage contents were copied.
+
+The staging project is now an isolated target, but it is not yet a REFLINK application environment. Do not connect the application or create Auth users until the baseline, schema, grants, RLS and required Auth configuration are prepared and reviewed.
+
+## 13. Historical migration recovery attempt — 8 November 2026
+
+A GitHub commit-history query for the exact path `supabase/migrations/20260928203447_reflink_v2_rural_first.sql` returned an empty list. This confirms the migration is not recoverable from the accessible Git history at that path. It does not prove that no separate private archive or owner-held export exists.
+
+The existing `docs/catalog_exports/20261107_live_public_schema_catalog.md` and `docs/catalog_exports/20261107_live_public_routines.md` remain metadata evidence only. Their own headers explicitly exclude complete DDL/dependencies and state that they are not restore artifacts. Do not turn either export into an executable baseline.
+
+**Decision remains:** obtain an owner-approved schema-only export from production using an approved Supabase/PostgreSQL export workflow, excluding all table data, auth records, secrets and storage contents. Include public and required non-public application schemas, extensions, types, functions, triggers, views, policies, grants, ownership and dependencies. Review and sanitize the dump before using it in staging. Production remains read-only.
+
+## 14. Six-step staging execution status
+
+| Step | Status | Evidence / gate |
+|---|---|---|
+| 1. Recover/establish baseline | Blocked | Historical migration absent from branch and accessible Git path history; existing catalog exports are incomplete. |
+| 2. Reconcile proposal migrations | Partial | Eight files and their dependency relationships inventoried; exact baseline/object-level compatibility still needs schema-only export and replay analysis. |
+| 3. Prepare synthetic fixtures | Specification required before execution | No schema or test identities exist yet. Define synthetic facilities, role identities and referrals only after baseline is restored. Never copy production data. |
+| 4. Apply migrations to staging | Not started | Must not apply until the baseline has been reconstructed, reviewed and proven repeatable. |
+| 5. Integration/security tests | Static only | Repository governance tests exist; live PostgreSQL/RLS/trigger/concurrency/aggregate-disclosure tests remain pending. |
+| 6. Advisor verification | Initial clean scan | Security and performance advisors both returned no lints on the empty staging database. Re-run after every schema batch. |
+
+The empty staging advisor scan is only a clean-initial-state result; it is not evidence that the proposed REFLINK schema is secure.
