@@ -540,3 +540,41 @@ test("notification log migration grants exactly the intended metadata columns", 
   assert.doesNotMatch(sql, /drop policy|disable row level security/i);
   assert.match(sql, /begin;[\s\S]*commit;/i);
 });
+
+test("admin referral-volume reporting rejects arbitrary and overlapping date windows", async () => {
+  const sql = await migration(
+    "20261105000100",
+    "admin_aggregate_referral_volume",
+  );
+  const start = sql.indexOf("create function public.get_admin_referral_volume(");
+  assert.notEqual(start, -1, "the aggregate referral-volume RPC must be defined");
+  const end = sql.indexOf("$function$;", start);
+  assert.notEqual(end, -1, "the aggregate referral-volume RPC must be terminated");
+  const definition = sql.slice(start, end);
+
+  assert.match(
+    definition,
+    /p_start_date\s*<>\s*pg_catalog\.date_trunc\('month',\s*p_start_date\)::date/i,
+  );
+  assert.match(
+    definition,
+    /p_end_date\s*<>\s*\(p_start_date\s*\+\s*interval\s*'1 month - 1 day'\)::date/i,
+  );
+  assert.doesNotMatch(definition, /p_end_date\s*-\s*p_start_date\s*>\s*365/i);
+  assert.match(sql, /Arbitrary and overlapping date windows are rejected/i);
+});
+
+test("administrator aggregate reporting UI only requests complete calendar months", async () => {
+  const dashboard = await readFile(
+    new URL("../src/components/dashboards/AdminDashboard.jsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(dashboard, /getPreviousCompleteCalendarMonthRange/);
+  assert.match(dashboard, /Latest complete month/);
+  assert.match(
+    dashboard,
+    /if\s*\(!facilityPeriodEligible\)\s*\{\s*setResult\(null\)/,
+  );
+  assert.doesNotMatch(dashboard, /Last 30 days|Last 90 days|This month<\/button>/);
+});
