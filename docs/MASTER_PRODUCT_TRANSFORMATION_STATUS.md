@@ -196,3 +196,19 @@ Regression tests now cover null, empty-array and populated-array relation shapes
 - The current receiving workspace source (`src/App.jsx`) contains no rejection/decline action, no rejection-reason capture and no rejected status transition in its referral lifecycle controls.
 - This means the planned receiving-facility rejection workflow is not yet demonstrably implemented, despite the master plan requiring rejection with a documented reason.
 - Do not add a guessed status or field: the authoritative historical schema/migration source is still missing, and the production migration ledger cannot safely be reconstructed from the live database. First recover the baseline and verify the allowed status values, reason field (or event design), RLS ownership rules and audit mechanism. Then implement the workflow with a conditional status update, mandatory reason, and an immutable event record in an isolated synthetic database.
+
+## Database baseline reconciliation — fresh read-only cross-check, 8 November 2026
+
+The next database-baseline stage now has a more precise metadata map. A fresh read-only Supabase inspection reconfirmed that the migration ledger contains only `20260928203447_reflink_v2_rural_first`, while the repository has no source for that historical migration. The only Supabase branch remains non-persistent and points to the production project, so it is not an acceptable synthetic integration environment.
+
+### New verified findings
+
+- The live referral status constraint has no `rejected` value. It permits `referred_again` and `cancelled`, which are not semantically equivalent to a receiving-facility decline.
+- The live database already records status changes through `log_referral_status_change()` into `referral_updates`. The timeline should continue to use that status-history model unless a distinct event taxonomy is approved.
+- The database also has row-mutation audit triggers on `referrals` and `counter_referrals`. They copy full OLD/NEW row JSON to `audit_log`, which creates a PHI minimisation, retention and access-review requirement.
+- `referral_events` and `referral_feedback` have RLS enabled but no policies in the current catalog. They remain fail-closed; no broad policies were added.
+- The live schema has no `assessment_started_at` column. No migration was drafted against the live project.
+
+### Decision
+
+The baseline is better documented but is **not yet reconciled or restorable**. Existing metadata exports are not a complete schema dump, and the historical migration source remains missing. Next implementation work is limited to source documentation and a reviewed synthetic-environment plan until an isolated database and authoritative baseline are available. No production schema, migration ledger, RLS policy, grant, Auth setting, patient row or deployment was changed.
