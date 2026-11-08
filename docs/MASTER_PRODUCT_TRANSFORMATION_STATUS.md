@@ -241,3 +241,17 @@ A bounded static review of `src/App.jsx` and the shared workspace styles was com
 5. Run automated accessibility checks, then manual keyboard and screen-reader checks on the supported browsers and mobile layouts. Verify contrast and 200–400% zoom/reflow before claiming WCAG 2.2 AA conformance.
 
 No application source, database schema, policies, patient data, deployment or production configuration was changed during this static review. Accessibility conformance is not claimed.
+
+
+## Synthetic staging environment provisioning — 8 November 2026
+
+The project owner approved creating a separate Supabase project, conditional on strict isolation from the existing REFLINK project. The requested target was `reflink-synthetic-staging` in the `reflink` organisation, region `eu-west-2`, using the Primary Supabase account.
+
+- The quoted project cost was $0/month. The user's approval was obtained and the provider's cost-confirmation step completed.
+- Supabase rejected project creation because the organisation owner has reached the Free-plan limit of two active projects.
+- **No project was created.** No existing project was paused, deleted, upgraded or modified. No database, Auth, Storage, secrets, deployment or production configuration was changed.
+- The staging requirement remains a hard release blocker. Do not repurpose the existing non-persistent branch: it references the production project and is not an independent synthetic environment.
+- Safe next options are for the organisation owner to independently free an eligible project slot or approve a plan upgrade, after reviewing any billing implications. Do not pause or delete any existing project without explicit, project-specific approval.
+- If a separate project becomes available, provision it with independent credentials and environment variables, synthetic-only facilities/users/referrals, and no production secrets or connection strings. Keep production migrations and deployment workflows disabled until staging baseline and tests pass.
+
+The user explicitly conditioned approval on the new environment not affecting the existing project. This condition remains mandatory for any retry.
