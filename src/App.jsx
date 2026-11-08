@@ -3548,9 +3548,16 @@ provisional_diagnosis: "",
   const validateReferralEntry = () => {
     const errors = {};
     if (!form.patient_identifier.trim()) errors.patient_identifier = "Patient identifier is required.";
-    if (form.patient_age_months === "") errors.patient_age_months = "Patient age is required.";
+    if (form.patient_age_months === "") {
+      errors.patient_age_months = "Patient age is required.";
+    } else if (!Number.isInteger(Number(form.patient_age_months)) || Number(form.patient_age_months) < 0) {
+      errors.patient_age_months = "Enter a whole-number age of zero or greater.";
+    }
     if (!form.patient_sex) errors.patient_sex = "Patient sex is required.";
     if (!form.chief_complaint_category && !form.chief_complaint.trim()) errors.chief_complaint_category = "Chief complaint is required.";
+    if (form.chief_complaint_category === "Other" && !form.chief_complaint_other.trim()) {
+      errors.chief_complaint_other = "Describe the other chief complaint.";
+    }
     if (!form.urgency) errors.urgency = "Referral urgency is required.";
     if (!form.receiving_facility_id) errors.receiving_facility_id = "Receiving facility is required.";
     if (form.urgency === "emergency" && !form.physical_findings.trim() && form.physical_findings_structured.length === 0) {
@@ -4367,7 +4374,23 @@ if (!confirmDestination) {
         </select>
         {fieldErrors.chief_complaint_category && <p id="new-referral-chief-complaint-error" className="form-error">{fieldErrors.chief_complaint_category}</p>}
         {form.chief_complaint_category === "Other" && (
-          <input name="chief_complaint_other" value={form.chief_complaint_other} onChange={(e) => setForm((previous) => ({ ...previous, chief_complaint_other: e.target.value, chief_complaint: e.target.value }))} placeholder="Describe the chief complaint" required />
+          <>
+            <input
+              ref={(element) => { fieldRefs.current.chief_complaint_other = element; }}
+              id="new-referral-chief-complaint-other"
+              name="chief_complaint_other"
+              value={form.chief_complaint_other}
+              onChange={(e) => {
+                setForm((previous) => ({ ...previous, chief_complaint_other: e.target.value, chief_complaint: e.target.value }));
+                setFieldErrors((current) => { const next = { ...current }; delete next.chief_complaint_other; return next; });
+              }}
+              placeholder="Describe the chief complaint"
+              required
+              aria-invalid={Boolean(fieldErrors.chief_complaint_other)}
+              aria-describedby={fieldErrors.chief_complaint_other ? "new-referral-chief-complaint-other-error" : undefined}
+            />
+            {fieldErrors.chief_complaint_other && <p id="new-referral-chief-complaint-other-error" className="form-error">{fieldErrors.chief_complaint_other}</p>}
+          </>
         )}
 
         <label>
