@@ -50,6 +50,8 @@ test("active receiving queue excludes closed referrals but keeps discharged refe
   assert.equal(isOpenIncomingReferral({ status: "completed" }), false);
   assert.equal(isOpenIncomingReferral({ status: "discharged", counter_referral: { id: "cr-1" } }), false);
   assert.equal(isOpenIncomingReferral({ status: "discharged", counter_referral: null }), true);
+  assert.equal(isOpenIncomingReferral({ status: "discharged", counter_referral: [] }), true);
+  assert.equal(isOpenIncomingReferral({ status: "discharged", counter_referral: [{ id: "cr-1" }] }), false);
   assert.equal(isOpenIncomingReferral({ status: "under_assessment" }), true);
 });
 
