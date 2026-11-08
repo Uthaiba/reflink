@@ -131,3 +131,18 @@ A staging restore is not complete until all gates pass:
 ## 9. Current decision
 
 **NO-GO for applying the raw export.** Staging is healthy and empty, required platform roles/schemas and key extension versions are present, but no Auth user trigger exists in staging, broad default ACLs are present for both `postgres` and `supabase_admin`, and view security/ownership behavior still require explicit review. The next engineering deliverable is a normalized, staging-only baseline candidate plus a deterministic catalog verification script—not a production migration. The next engineering deliverable is a normalized, staging-only baseline candidate plus a deterministic catalog verification script—not a production migration.
+
+## 11. Independent read-only verification rerun
+
+The SELECT-only catalog verification query was independently executed against staging project `rcskuzmvyugbanygizri` on 2026-11-08. The live result reported:
+
+- PostgreSQL server version: `17.11`.
+- Public application tables: 0.
+- Public views: 0.
+- Public functions: 0.
+- Public tables with RLS enabled: 0 (no tables exist; this is not a post-restore RLS pass).
+- Non-internal triggers on `auth`: none.
+- Public-schema default ACLs: six entries covering tables, functions, and sequences for both `postgres` and `supabase_admin`; the ACLs include broad rights for `anon`, `authenticated`, and `service_role`.
+- The managed schemas also expose their own default ACL entries; these are platform-owned and must not be altered as part of the REFLINK public-schema reconstruction without separate authorization.
+
+This rerun confirms the empty public target and the previously identified default-privilege blocker. It is read-only; no schema, grant, data, or configuration changes were made.
