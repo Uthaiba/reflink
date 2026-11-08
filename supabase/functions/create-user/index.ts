@@ -129,9 +129,18 @@ Deno.serve(async (req) => {
       .single();
 
     if (profileError || !profile) {
-      // Best-effort rollback: do not leave an Auth identity without its REFLINK profile.
-      await admin.auth.admin.deleteUser(created.user.id);
-      return json({ success: false, error: "The profile could not be created; the account creation was rolled back." }, 500, origin);
+      // Compensate for the Auth identity created before the profile insert failed.
+      const { error: rollbackError } = await admin.auth.admin.deleteUser(created.user.id);
+      if (rollbackError) {
+        return json({
+          success: false,
+          error: "The profile could not be created and account cleanup requires administrator review.",
+        }, 500, origin);
+      }
+      return json({
+        success: false,
+        error: "The profile could not be created; the account creation was rolled back.",
+      }, 500, origin);
     }
 
     return json({
