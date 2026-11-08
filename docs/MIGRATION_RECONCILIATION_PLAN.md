@@ -555,3 +555,25 @@ The live migration-ledger read still reports only `20260928203447_reflink_v2_rur
 Before staging baseline creation, obtain metadata-only evidence for: extension versions/schemas; Auth trigger attachment and relevant Auth settings (no users); Storage buckets and Storage policies (no files); publication/Realtime configuration; complete table/column ACLs and default ACLs; function ownership and exact ACLs; and any non-public application-owned schemas. Do not export secrets, Auth records, patient rows or Storage objects.
 
 **Decision:** schema export reviewed; baseline reconciliation is now evidence-backed but not complete. Staging baseline construction and all SQL execution remain blocked until the missing historical migration/baseline strategy and the remaining platform metadata are resolved. Production remains read-only.
+
+
+## 11. Additional platform metadata preflight — 8 November 2026
+
+A second read-only catalog pass completed the metadata that can safely be retrieved through the connected SQL/catalog interface.
+
+### Confirmed platform metadata
+
+- Database engine: PostgreSQL 17.6.1.166 (Supabase project reports PostgreSQL 17).
+- Installed extensions (five): `pg_stat_statements 1.11`, `pgcrypto 1.3`, `plpgsql 1.0`, `supabase_vault 0.3.1`, `uuid-ossp 1.1`. The extension API also lists many available-but-not-installed extensions; do not treat that list as installed state.
+- No additional non-system application schemas were found beyond `public` and Supabase-managed schemas. The private notification schema in the proposed migration does not yet exist.
+- No non-internal triggers were found on the `auth` schema tables in the current catalog snapshot.
+- Storage has one private bucket: `referral-investigation-results`; maximum object size 10 MiB; allowed MIME types are PDF, JPEG, PNG, WebP, plain text and CSV.
+- Five authenticated Storage object policies exist for this bucket: SELECT, INSERT, UPDATE (USING and WITH CHECK), and DELETE. They scope access by matching the first object-path segment to a referral ID and authorise the referring user or a profile whose facility matches the referral's referring or receiving facility.
+- The `supabase_realtime` publication includes `public.referrals` only.
+- The public-schema default ACL is broad for both `postgres` and `supabase_admin`: future tables, sequences and functions receive grants to browser roles (`anon` and/or `authenticated`) in addition to trusted roles. The earlier finding is therefore not limited to objects created by `postgres`. Default ACLs in Storage are also present and must be treated as platform-managed; do not change them as part of the public-schema remediation.
+
+### Remaining platform-level evidence gap
+
+The connected Supabase project metadata/API does not expose Auth security settings such as leaked-password protection or a complete Auth configuration snapshot. The catalog shows no custom trigger on `auth` tables, but that does not replace review of Auth dashboard settings, provider configuration, redirect URLs, rate limits, MFA policy or SMTP configuration. These must be captured through the Dashboard without exposing secrets or user records.
+
+**Preflight result:** public schema, installed extensions, Storage bucket/policy metadata, Realtime publication membership, application-schema inventory and Auth trigger catalog are now documented. The Auth configuration/settings review remains outstanding. Do not export Auth users, Storage objects, secrets or provider credentials.
