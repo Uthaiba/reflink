@@ -11,7 +11,8 @@ test("receiving metrics distinguish acknowledged, arrived, under-assessment, dis
     { status: "patient_arrived" },
     { status: "under_assessment" },
     { status: "discharged", counter_referral: null },
-    { status: "discharged", counter_referral: { id: "counter-1" } },
+    { status: "discharged", counter_referral: [] },
+    { status: "discharged", counter_referral: [{ id: "counter-1" }] },
     { status: "completed" },
     { status: "cancelled", urgency: "emergency" },
   ];
