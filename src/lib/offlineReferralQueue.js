@@ -1,4 +1,5 @@
 import { decryptOfflineReferralPayload, encryptOfflineReferralPayload } from "./offlineQueueCrypto.js";
+import { buildReferralCreatePayload } from "./referralCreation.js";
 
 const DB_NAME = "reflink-offline";
 const DB_VERSION = 3;
@@ -470,6 +471,11 @@ async function syncOwnedQueue(supabaseClient, userId, key) {
         await releaseQueuedReferralClaim(storedItem.client_id, userId, claimToken);
         continue;
       }
+      const { data: { user: authenticatedUser }, error: authCheckError } = await supabaseClient.auth.getUser();
+      if (authCheckError || !authenticatedUser?.id || String(authenticatedUser.id) !== String(userId)) {
+        throw new Error("The authenticated account changed before offline referral synchronization.");
+      }
+
       const { data: existing, error: lookupError } = await supabaseClient
         .from("referrals")
         .select("id, urgency")
@@ -481,13 +487,37 @@ async function syncOwnedQueue(supabaseClient, userId, key) {
       let referral = existing;
       let createdByThisAttempt = false;
       if (!referral) {
-        const payload = {
-          ...item.payload,
-          created_at: item.created_at,
-          offline_client_id: item.client_id,
-          sync_source: "offline",
-          referring_user_id: userId,
-        };
+        const { data: currentProfile, error: profileError } = await supabaseClient
+          .from("profiles")
+          .select("id, facility_id, role")
+          .eq("id", authenticatedUser.id)
+          .maybeSingle();
+        if (profileError) throw profileError;
+        if (!currentProfile?.facility_id || currentProfile.role !== "phc_staff") {
+          throw new Error("The current account is not an assigned PHC staff member.");
+        }
+
+        const requestedDestinationId = item.payload.receiving_facility_id;
+        if (!requestedDestinationId) throw new Error("The queued referral has no receiving facility.");
+
+        const { data: destinationFacility, error: destinationError } = await supabaseClient
+          .from("facilities")
+          .select("id, is_active")
+          .eq("id", requestedDestinationId)
+          .maybeSingle();
+        if (destinationError) throw destinationError;
+        if (!destinationFacility || destinationFacility.is_active !== true) {
+          throw new Error("The queued referral destination is no longer active.");
+        }
+
+        const payload = buildReferralCreatePayload(item.payload, {
+          authenticatedUserId: authenticatedUser.id,
+          profileRole: currentProfile.role,
+          profileFacilityId: currentProfile.facility_id,
+          activeDestinationFacilityId: destinationFacility.id,
+          offlineClientId: item.client_id,
+          syncSource: "offline",
+        });
         const { data: inserted, error: insertError } = await supabaseClient
           .from("referrals")
           .insert(payload)

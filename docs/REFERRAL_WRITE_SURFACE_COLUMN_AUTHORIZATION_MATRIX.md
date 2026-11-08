@@ -8,8 +8,8 @@
 
 | Workflow | Current write | Columns / operation | Existing concurrency guard | Authorization boundary to preserve |
 |---|---|---|---|---|
-| PHC referral creation | INSERT `referrals` | Full referral intake payload; server identity/facility attribution expected | Database entry validation; RLS insert policy | PHC role, authenticated user, own facility as sender; active destination |
-| Offline referral replay | Direct INSERT `referrals` from `syncOwnedQueue()` | Spreads decrypted `item.payload`, then overwrites `created_at`, `offline_client_id`, `sync_source`, `referring_user_id` | Owner-scoped IndexedDB claim; unique-conflict reconciliation by client ID and referring user | Revalidate current JWT identity; database must derive/verify sender facility and validate destination; never trust arbitrary queued columns |
+| PHC referral creation | INSERT `referrals` via `buildReferralCreatePayload()` | Explicit clinical intake allowlist; current user/profile and active destination supplied as trusted context | Required input validation; live destination lookup; fixed initial status | PHC staff role, current authenticated user and current profile facility; database must independently enforce the same predicates |
+| Offline referral replay | INSERT `referrals` from `syncOwnedQueue()` via `buildReferralCreatePayload()` | Explicit allowlist; current Auth user, freshly read profile facility, live active destination, queue-record idempotency key | Owner-scoped IndexedDB claim; pre-write identity check; unique-conflict reconciliation by client ID and referring user | Queued facility/status/test fields are ignored; RLS/RPC must still independently derive/verify sender and enforce destination and role |
 | Initial investigation file metadata | UPDATE `referrals` | `investigation_records` after upload | Referral ID only in reviewed update | Must prove caller is sender or assigned receiver; prevent cross-facility metadata injection |
 | Investigation document upload | Storage upload | `referral-investigation-results` object path includes referral ID | `upsert:false` | Storage policy must bind object to authorized referral and correct participant role |
 | Investigation result edit | UPDATE `referrals` | Entire `investigation_records` JSONB array | Client-side serialized queue; referral ID only | Receiving facility ownership and column-level scope; validate schema and prevent overwrite races |
@@ -29,7 +29,7 @@
 3. Investigation results are stored as a complete JSONB array. A one-tab serialized write queue does not prevent concurrent writes from another browser/device. Consider optimistic versioning or row locking in a server-side transaction.
 4. File upload occurs before referral JSONB metadata update. If metadata persistence fails, an orphaned Storage object may remain. Cleanup must not delete an object referenced by another committed update.
 5. The direct update paths should not be replaced by a broad generic RPC accepting arbitrary JSONB patches. Each operation needs a fixed, validated argument schema and a role/facility/status guard.
-6. **Offline replay is a distinct direct referral INSERT path.** It decrypts and verifies queue ownership, claims the queue item across tabs, looks up an existing row by `offline_client_id` plus `referring_user_id`, and inserts if absent. The insert payload is built with `...item.payload`; only four fields are overwritten afterward. Therefore the queued payload is not a safe authorization boundary. Before narrowing INSERT privileges, enumerate the allowed referral creation columns and make sender facility attribution server-derived or database-verified. Add negative tests for tampered sender facility, destination facility, status, and privileged/system columns. The post-insert `auth.getUser()` account check is useful defense-in-depth but occurs after the write; it does not replace pre-write identity binding.
+6. **Offline replay payload hardening.** The earlier implementation spread decrypted `item.payload` into the INSERT. The current branch replaces that spread with a shared explicit allowlist, rechecks the authenticated user before the lookup/write path, reloads the current PHC profile facility, and requires a live destination row with `is_active = true`. The same builder is used by online submission. This closes the local payload-spread defect, but is not a server-side authorization boundary: a caller can bypass browser code and send PostgREST requests directly. RLS or a fixed-argument `create_referral` RPC must independently bind `auth.uid()`, current profile role/facility, active destination, fixed `sent` status and `is_test = false` before INSERT grants can be narrowed. The database unique key and existing conflict reconciliation remain the idempotency controls.
 7. **Counter-referral RPC is the strongest reviewed write boundary.** It derives actor identity from `auth.uid()`, checks `receiving_staff`, matches the profile facility to `receiving_facility_id`, locks the referral, accepts only a discharged episode, validates fixed fields/outcome, and performs insert plus completion in one transaction. Its retry path returns the existing completion only when the same receiving user owns the existing counter-referral. Retain these properties and add DB integration tests for wrong role, wrong facility, concurrent calls, existing counter-referral and stale status.
 8. **SMS API uses a service-role client only after validating the bearer token and loading the caller profile.** It checks PHC owner/role/facility/status for `referral_sent` and receiving role/facility/acknowledgement for `referral_acknowledged`. It does not expose patient details in the SMS body. However, repeated authorized requests can trigger repeated provider sends and notification rows; there is no idempotency key, atomic send claim, or rate-limit mechanism visible in this route. Move delivery coordination onto the notification outbox/idempotency design before treating this endpoint as reliable at scale.
 9. The production project currently exposes only one active Edge Function, `create-user`; no referral-mutating Edge Function was listed. The repository's root `supabase/functions/index.ts` is historical commentary, not another deployable function.
@@ -81,3 +81,38 @@ Each function must derive identity from `auth.uid()`, verify the canonical profi
 ## 6. Current release status
 
 This is a source-level authorization review, not a live authorization test. No patient rows or Storage objects were accessed; no production or staging schema, policy, data or configuration was changed. The structural ACL candidate remains proposal-only. The offline replay payload spread is now a priority INSERT-hardening dependency. The next safe step is to define the canonical referral-create allowlist and database-side facility derivation, then add synthetic tests before any INSERT grant reduction.
+
+
+## 7. Canonical referral-create payload contract — application remediation
+
+The online PHC form and offline replay use `buildReferralCreatePayload()` from `src/lib/referralCreation.js`. The helper constructs a new payload from an explicit allowlist; it never spreads the online form or decrypted queue object into the INSERT.
+
+**Permitted clinical intake fields**
+
+- Patient/referral details: `referral_number`, `patient_identifier`, age in months, sex, patient and caregiver contact fields.
+- Clinical intake: chief complaint and category, clinical summary, physical findings, diagnosis records and legacy diagnosis fields, investigation categories/records and legacy investigation text, structured treatment and referral reason.
+- Priority: `urgency`.
+
+**Sanitized nested JSON**
+
+- Diagnosis entries are limited to `status`, `category` and `diagnosis`.
+- Investigation entries are limited to the reviewed result and attachment-metadata fields. Binary `File` objects and unknown nested properties are discarded.
+- Structured finding, investigation-category and treatment arrays accept strings only.
+
+**Context/system-controlled fields**
+
+| Column | Source used by the application | Rule |
+|---|---|---|
+| `referring_user_id` | Current `auth.getUser()` result | Never copied from the queue or form |
+| `referring_facility_id` | Fresh `profiles.facility_id` read for the authenticated user | Cached queue facility is ignored |
+| `receiving_facility_id` | Fresh `facilities` row read at submit/sync time | The selected ID must match a row with `is_active = true` |
+| `status` | Fixed application value | Always `sent`; queued status overrides are ignored |
+| `offline_client_id` | Stable online client ID or IndexedDB queue record ID | Must match the queue payload when one is present; retained for idempotency reconciliation |
+| `sync_source` | Fixed call-path value | `online` or `offline`; not copied from intake |
+| `is_test` | Fixed application value | Always `false`; synthetic test fixtures belong in controlled staging tooling |
+| `created_at` | PostgreSQL default | Omitted from the client payload so the database supplies the timestamp |
+
+Offline replay now revalidates the authenticated account before its referral lookup/write path, reloads the canonical PHC profile, rechecks that the requested destination is explicitly active, and builds the same allowlisted payload used by online submission. Existing unique-conflict reconciliation and per-account queue claim/fencing behavior are preserved.
+
+**Security boundary warning:** this JavaScript contract reduces accidental and locally tampered payload fields, but it is not database authorization. A caller can bypass browser code and send PostgREST requests directly. Before reducing INSERT grants or approving multi-facility production, RLS or a narrow transactional `create_referral` RPC must independently enforce `auth.uid()`, the profile's current facility and PHC role, an active destination, initial `sent` status, `is_test = false`, and uniqueness/idempotency. The new tests are source/unit tests; they do not prove live Supabase authorization.
+

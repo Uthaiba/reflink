@@ -1,6 +1,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
+import { buildReferralCreatePayload } from "./lib/referralCreation.js";
 import { cacheValue, createClientId, getCachedValue, getQueueCount, getOfflineKeyVaultEnvelope, saveOfflineKeyVaultEnvelope, queueEncryptedReferral, migratePlaintextQueueToEncrypted, syncQueuedReferrals } from "./lib/offlineReferralQueue.js";
 import { createOfflineKeyVault, unlockOfflineKeyVault } from "./lib/offlineQueueKeyVault.js";
 import { createOfflineVaultLockChannel } from "./lib/offlineVaultLockChannel.js";
@@ -3690,7 +3691,6 @@ provisional_diagnosis: "",
           referral_number: generateReferralNumber(),
           offline_client_id: offlineClientId,
           sync_source: "offline",
-          is_test: import.meta.env.DEV || import.meta.env.VITE_REFLINK_TEST_MODE === "true",
           created_at: createdAt,
           patient_identifier: form.patient_identifier.trim(),
           patient_age_months: normalizePatientAgeToMonths(form.patient_age_months, form.patient_age_unit),
@@ -3804,7 +3804,7 @@ if (destinationCheckError) {
   );
 }
 
-if (!verifiedDestination || verifiedDestination.is_active === false) {
+if (!verifiedDestination || verifiedDestination.is_active !== true) {
   throw new Error(
     "The selected receiving facility is unavailable. Refresh the page and select a facility again."
   );
@@ -3826,7 +3826,7 @@ const confirmDestination = window.confirm(
 if (!confirmDestination) {
   return;
 }
-      const referralPayload = {
+      const referralIntake = {
   referral_number:
     referralNumber,
 
@@ -3842,12 +3842,6 @@ if (!confirmDestination) {
   patient_sex:
     form.patient_sex ||
     null,
-
-  created_at: createdAt,
-  offline_client_id: offlineClientId,
-  sync_source: "online",
-  is_test: import.meta.env.DEV || import.meta.env.VITE_REFLINK_TEST_MODE === "true",
-
   // NEW PATIENT CONTACT INFORMATION
   patient_phone:
     form.patient_phone?.trim() ||
@@ -3943,19 +3937,18 @@ if (!confirmDestination) {
         urgency:
           form.urgency ||
           "routine",
-
-        referring_facility_id:
-          profile.facility_id,
-
         receiving_facility_id:
           form.receiving_facility_id,
-
-        referring_user_id:
-          user.id,
-
-        status:
-          "sent",
       };
+
+      const referralPayload = buildReferralCreatePayload(referralIntake, {
+        authenticatedUserId: user.id,
+        profileRole: profile.role,
+        profileFacilityId: profile.facility_id,
+        activeDestinationFacilityId: verifiedDestination.id,
+        offlineClientId,
+        syncSource: "online",
+      });
 
       const {
         data: insertedReferral,

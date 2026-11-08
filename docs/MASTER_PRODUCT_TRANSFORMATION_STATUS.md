@@ -497,3 +497,15 @@ A significant refinement: broad default privileges apply to future public object
 - Extended `docs/REFERRAL_WRITE_SURFACE_COLUMN_AUTHORIZATION_MATRIX.md` with offline replay, counter-referral RPC and SMS API findings and the resulting permission dependencies. Commit: `5653afc3dca9105e97bb4e39475369cc90bf372b`.
 - No production or staging data, schema, RLS policy, Storage policy, Edge Function, secret, SMS recipient or configuration was changed. No patient row or Storage object was accessed.
 - **Next:** define a canonical referral-create field allowlist shared by online and offline flows, derive sender facility from the authenticated profile, add tampered-payload and idempotency tests, and only then design the INSERT permission/RPC migration. Separately specify SMS idempotency and delivery retry semantics.
+
+
+## Continuation update — canonical referral creation contract (8 November 2026)
+
+- Added `src/lib/referralCreation.js` with one strict allowlisted payload builder shared by online submission and offline replay. It validates core clinical values, sanitizes nested diagnosis/investigation JSON, ignores unexpected columns and never spreads the intake object.
+- Bound authority-bearing fields to fresh context: current authenticated user, current `phc_staff` profile facility, and a receiving facility freshly read as `is_active = true`. Queued sender-facility and status values are not trusted.
+- Fixed normal application writes to `status = 'sent'`, `is_test = false`, and an explicit `sync_source`; `created_at` is omitted so PostgreSQL applies its `now()` default. The stable `offline_client_id` remains the idempotency key.
+- Offline replay now checks authenticated identity before the referral lookup/write path, reloads the current profile and active destination before a new insert, and retains unique-conflict reconciliation and queue claim fencing.
+- Added unit coverage for spoofed identity/facility/status/test flags, unknown fields, nested JSON injection, invalid roles/clinical fields, destination substitution and idempotency-key mismatch; added source-contract checks for both insertion paths.
+- **Not verified yet:** GitHub Actions for this commit; live RLS enforcement; schema-correct synthetic staging execution; role/facility impersonation tests. The helper is defence in depth only and does not make direct PostgREST INSERT secure by itself.
+- No production or staging schema, policy, data, secrets, Edge Function or deployment was changed.
+- **Next:** inspect the current `referrals` INSERT RLS predicate and its dependencies in the supplied schema. Prepare a narrow database-side create contract (prefer a fixed-argument transactional RPC or carefully constrained INSERT policy), then test it in reconstructed synthetic staging before changing grants.

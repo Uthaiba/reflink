@@ -213,3 +213,28 @@ test("offline sync serialization is scoped per authenticated account", () => {
   assert.match(queueSource, /activeSyncPromises\.delete\(owner\)/);
   assert.doesNotMatch(queueSource, /let activeSyncPromise = null/);
 });
+
+
+test("online and offline referral inserts share the canonical allowlisted create contract", () => {
+  assert.match(appSource, /buildReferralCreatePayload\(referralIntake/);
+  assert.match(appSource, /profileRole:\s*profile\.role/);
+  assert.match(appSource, /activeDestinationFacilityId:\s*verifiedDestination\.id/);
+  assert.match(queueSource, /buildReferralCreatePayload\(item\.payload/);
+  assert.match(queueSource, /activeDestinationFacilityId:\s*destinationFacility\.id/);
+  assert.doesNotMatch(queueSource, /\.insert\(\s*\{\s*\.\.\.item\.payload/);
+});
+
+test("offline replay reloads current profile and active destination before a new referral insert", () => {
+  assert.match(queueSource, /\.from\("profiles"\)[\s\S]*?\.select\("id, facility_id, role"\)/);
+  assert.match(queueSource, /\.from\("facilities"\)[\s\S]*?\.select\("id, is_active"\)/);
+  assert.match(queueSource, /destinationFacility\.is_active !== true/);
+  assert.match(queueSource, /profileFacilityId:\s*currentProfile\.facility_id/);
+  assert.match(queueSource, /authenticatedUser\.id/);
+});
+
+test("offline replay keeps client-ID/user reconciliation and unique-conflict handling", () => {
+  assert.match(queueSource, /\.eq\("offline_client_id", item\.client_id\)/);
+  assert.match(queueSource, /\.eq\("referring_user_id", userId\)/);
+  assert.match(queueSource, /if \(insertError\.code === "23505"\)/);
+  assert.match(queueSource, /createdByThisAttempt = true/);
+});
