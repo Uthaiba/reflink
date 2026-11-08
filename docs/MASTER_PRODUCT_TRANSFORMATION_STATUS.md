@@ -125,3 +125,12 @@ A data-projection defect was found during this review: the receiving referral qu
 - **New disclosure-control finding:** the referral-volume RPC permits arbitrary overlapping date ranges up to 366 days, unlike the other aggregate summaries which require a complete calendar month. Repeated overlapping queries may allow differencing to recover suppressed small counts. This risk and the required fixed-period policy decision/tests are recorded in `docs/MIGRATION_RECONCILIATION_PLAN.md` section 10.
 - No SQL, database ACL, RLS, production data, or frontend behavior was changed. No Supabase branch was created. Migration baseline and isolated synthetic database validation remain blocked.
 - Documentation-only follow-up commit: `f9a5b3b750e92208eb8c6d93916de5c8fa6f380e`. Its CI must be polled before treating this commit as fully verified.
+
+## Latest continuation — aggregate reporting disclosure-control hardening (8 November 2026)
+
+- Closed a source-level disclosure inconsistency in the proposed R-PHI reporting migration: the referral-volume RPC previously allowed arbitrary windows up to 366 days while the other breakdown RPCs required complete calendar months.
+- The proposed referral-volume RPC now rejects partial, rolling and overlapping windows and requires exactly one complete calendar month.
+- The administrator report screen now defaults to the latest completed Africa/Lagos month, exposes previous complete-month shortcuts, and does not call aggregate RPCs for invalid periods.
+- Added tests for Lagos-month calculation, year-boundary/leap-year behavior, the SQL guard and UI request gating.
+- This remains a source-only mitigation. The November migrations are unapplied; no live Supabase schema, RLS, ACL, migration ledger, production data, Edge Function, SMS workflow or production deployment was changed.
+- Exact-HEAD GitHub Actions verification is to be checked for the final documentation/source commit. Vercel Preview availability remains separately constrained by the previously reported build-rate-limit failure.
