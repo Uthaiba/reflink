@@ -168,3 +168,25 @@ Two additional source-level defects were corrected during the receiving workflow
 2. The receiving query projects `counter_referral:counter_referrals(*)`, a one-to-many PostgREST relation. An absent relation is represented as an empty array (`[]`), which is truthy in JavaScript. The queue's previous `!referral.counter_referral` checks therefore treated a discharged referral with no counter-referral as closed and omitted it from the pending counter-referral KPI. Added `hasCounterReferral()` to normalise object/array relation shapes and used it for both open-queue status and the pending KPI.
 
 Regression tests now cover null, empty-array and populated-array relation shapes, including metric counts. These are deterministic application tests; they do not replace database relationship/RLS validation or a clinical workflow acceptance test. No production database, patient record, migration or deployment was changed.
+
+## Receiving lifecycle verification — 8 November 2026
+
+### Verified source behavior
+
+- Receiving-facility actions use conditional status updates for acknowledgement (`sent`), patient arrival (`acknowledged`), assessment start (`patient_arrived`), assessment save (`under_assessment`), admission record save (`admitted`), and inpatient discharge (`admitted`).
+- These updates request the changed row with `.select().maybeSingle()`; a stale/no-match result is surfaced to the user rather than reported as success.
+- The counter-referral submission uses the `submit_counter_referral` RPC and checks the returned completion status before updating the UI. The migration source test checks facility ownership, discharged-only submission, row locking and retry behavior.
+- Acknowledgement and patient-arrival timestamps are persisted. Assessment completion, admission and discharge timestamps are also persisted by their respective actions.
+- The SMS request helper catches network and response errors so notification failure does not convert a successful acknowledgement into an unhandled promise rejection.
+
+### Remaining lifecycle gap / release evidence needed
+
+- Starting an assessment changes status to `under_assessment` but does not persist a distinct `assessment_started_at` timestamp. The timeline therefore shows the assessment as in progress without a start time. Do not add a new column until the authoritative production schema baseline and migration history are recovered and a safe migration can be validated.
+- The application source does not itself insert rows into `referral_events` or `referral_updates` during these transitions. Whether database triggers or RPCs provide a complete immutable event history cannot be established from the available historical migration source. Verify this against the recovered schema and trigger definitions before claiming a complete audit trail.
+- The lifecycle regression test is a source-contract test plus synthetic timeline test. It does not execute real Postgres concurrency, RLS, triggers or clinical acceptance workflows. Those remain blocked pending an isolated synthetic database environment and authoritative migration baseline.
+
+### Exact-HEAD quality verification
+
+- GitHub Actions run #731 (run ID `42467165513`) completed successfully on source commit `2c8b4757084eb6096577a47b75d2eeadf85a6a81`. All steps in the Build and lint job passed, including automated unit tests, lint, production bundle build, Chromium installation and real-browser offline queue tests.
+- Vercel Preview for the same commit is READY at `https://reflink-i4l47hf1g-uthaibas-projects.vercel.app`. This is not a production deployment.
+- PR #1 remains draft and unmerged. No live Supabase schema, RLS, ACL, migration ledger, patient data or production deployment was changed.
