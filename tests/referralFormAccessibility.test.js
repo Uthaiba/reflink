@@ -47,3 +47,23 @@ test("investigation classification errors are announced, associated and focus th
   assert.match(source, /resultValueRef : referenceRangeRef/);
   assert.ok(source.includes('setValidationError("");'));
 });
+
+
+test("referral detail views move focus into the view and restore it on close", async () => {
+  const app = await readApp();
+  const phcStart = app.indexOf("function PHCStaffDashboard");
+  const receivingStart = app.indexOf("function ReceivingDashboard", phcStart);
+  const counterStart = app.indexOf("function CounterReferralForm", receivingStart);
+  assert.ok(phcStart >= 0 && receivingStart > phcStart && counterStart > receivingStart);
+  const phc = app.slice(phcStart, receivingStart);
+  const receiving = app.slice(receivingStart, counterStart);
+
+  for (const source of [phc, receiving]) {
+    assert.match(source, /detailHeadingRef\.current\?\.focus\(\)/);
+    assert.match(source, /referralTriggerRef\.current\?\.isConnected/);
+    assert.match(source, /returnTarget\?\.focus\(\)/);
+    assert.match(source, /tabIndex=\{-1\}/);
+  }
+  assert.match(receiving, /inpatientHeadingRef\.current\?\.focus\(\)/);
+  assert.match(receiving, /referralSearchFallbackRef/);
+});
