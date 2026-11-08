@@ -8638,7 +8638,7 @@ function CounterReferralForm({ referral, onCompleted }) {
       {error && <div className="form-error" role="alert">{error}</div>}
       {message && <div className="form-success" role="status">{message}</div>}
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} noValidate>
         <label htmlFor="counter-final-diagnosis">Final diagnosis *</label>
         <textarea
           ref={(element) => { fieldRefs.current.final_diagnosis = element; }}
