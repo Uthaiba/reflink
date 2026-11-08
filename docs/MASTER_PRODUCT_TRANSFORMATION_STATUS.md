@@ -464,3 +464,13 @@ A significant refinement: broad default privileges apply to future public object
 - Both files are review candidates only. No SQL was executed in production or staging. The migration ledger remains unchanged.
 - Remaining ACL work: decide whether authenticated DELETE grants are necessary, review column-level UPDATE access and sequence privileges, and correct default privileges for both postgres and supabase_admin through a separate reviewed plan.
 - **Decision:** critical privilege remediation has a narrowly scoped candidate, not a deployed fix. The candidate must be reviewed and tested in schema-correct synthetic staging before release.
+
+
+## Continuation update — CI repair and referral write-surface inventory (8 November 2026)
+
+- Latest CI initially failed at test discovery because `tests/coreTablePrivilegeProposal.test.js` imported `vitest`, while the repository uses Node's built-in `node:test`. The other 158 tests passed; dependency audit reported zero vulnerabilities. Lint/build/browser steps were skipped after the unit-test failure.
+- Corrected the new test to use `node:assert/strict` and `node:test`. Commit: `499a39fd8cbcd888f80a337292d058e19b0f1710`. A new CI run must verify the correction; no success is claimed yet.
+- Added `docs/REFERRAL_WRITE_SURFACE_COLUMN_AUTHORIZATION_MATRIX.md`, mapping the reviewed frontend's referral insert, investigation JSONB writes, receiving lifecycle changes, assessment/admission/discharge fields, counter-referral RPC and Storage upload flow.
+- Identified important design constraints: keep compare-and-set status guards; do not replace writes with a generic arbitrary JSONB patch RPC; investigate the admission handler's `status='admitted'` filter; and address concurrent JSONB overwrites and possible orphaned Storage objects.
+- No application workflow code, database permissions, RLS policies, Storage policies, patient records, staging schema or production configuration was changed.
+- **Next:** inspect the full assessment update payload and Storage bucket policies; inventory all referral write call sites outside `src/App.jsx`; then design fixed-schema transactional RPCs and synthetic integration tests. Do not revoke UPDATE or DELETE grants until replacements and external dependencies are verified.
