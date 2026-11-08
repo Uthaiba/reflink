@@ -431,3 +431,15 @@ A significant refinement: broad default privileges apply to future public object
 - No Edge Function was deployed or invoked; no Auth user, profile, legacy user row, schema object, secret or production setting was changed.
 
 **Decision:** identity is partially resolved; `profiles` is canonical for the current application. Production account provisioning has source/deployment drift and requires a controlled, separately approved reconciliation. Baseline reconstruction and release remain blocked.
+
+
+## Continuation update — account-provisioning hardening and exact-HEAD CI (8 November 2026)
+
+- Hardened repository `create-user` CORS to exact-origin allowlisting. The canonical Vercel origin is `https://reflink-yobe.vercel.app`; optional additional origins use `REFLINK_ALLOWED_ORIGINS`. No wildcard origin is used by the candidate.
+- Made temporary-password enforcement atomic with profile creation by setting `must_change_password: true` in the initial profile insert; removed the non-atomic follow-up dashboard update.
+- Added compensating Auth-user cleanup result handling when profile creation fails. Cleanup failure is explicitly surfaced for administrator review.
+- Added source-contract regression coverage for CORS, temporary-password enforcement and cleanup success/failure.
+- Exact-HEAD commit `4d8f84dd876d80a227d781bb72e23f07a97993e7` passed both push and PR GitHub Actions runs. Both completed unit tests, lint, production build and Chromium real-browser offline queue tests.
+- Added `docs/ACCOUNT_PROVISIONING_RELEASE_RUNBOOK.md` as a gated pre-release plan and expanded the identity reconciliation record.
+- **Not verified:** full Edge Function integration against schema-correct staging; production CORS runtime configuration; live account provisioning; production deployment. Production function remains ACTIVE version 2 and unchanged. No production or staging DDL, Auth data, secrets or settings were modified.
+- **Decision:** source candidate is CI-green; production provisioning remains NO-GO until schema-correct synthetic tests, origin confirmation, release review and deployment approval are complete.
