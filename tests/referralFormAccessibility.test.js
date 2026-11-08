@@ -15,6 +15,10 @@ test("new-referral custom validation is field-associated and focuses the first i
   assert.match(source, /fieldRefs\.current\[firstInvalidField\]\?\.focus\(\)/);
   assert.match(source, /Enter a whole-number age of zero or greater/);
   assert.match(source, /Describe the other chief complaint/);
+  assert.match(source, /diagnosisDraftErrors\.status/);
+  assert.match(source, /diagnosisDraftErrors\.category/);
+  assert.match(source, /diagnosisDraftErrors\.diagnosis/);
+  assert.match(source, /fieldRefs\.current\[firstMissing\]\?\.focus\(\)/);
 
   for (const [field, inputId, errorId] of [
     ["patient_identifier", "new-referral-patient-identifier", "new-referral-patient-identifier-error"],
