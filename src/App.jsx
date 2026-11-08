@@ -3184,10 +3184,23 @@ function InvestigationResultEditor({ item, onChange, onFileChange }) {
   const resultValueRef = useRef(null);
   const referenceRangeRef = useRef(null);
   const validationErrorId = `investigation-validation-${String(item?.category || "other").replace(/[^a-z0-9]+/gi, "-")}-${String(item?.investigation || "result").replace(/[^a-z0-9]+/gi, "-")}`;
-  const quantitativeNeedsValue = config.type === "quantitative" && !String(item.result_value ?? "").trim();
+  const quantitativeRawValue = String(item.result_value ?? "").trim();
+  const quantitativeNumericValue = Number(quantitativeRawValue.replace(/,/g, "."));
+  const quantitativeNeedsValue = config.type === "quantitative" && (
+    !quantitativeRawValue || !Number.isFinite(quantitativeNumericValue)
+  );
   const quantitativeNeedsRange = config.type === "quantitative" && !parseNumericReferenceRange(item.reference_range);
-  const bloodPressureNeedsSystolic = config.type === "blood_pressure" && !String(item.systolic ?? "").trim();
-  const bloodPressureNeedsDiastolic = config.type === "blood_pressure" && !String(item.diastolic ?? "").trim();
+  const systolicRaw = String(item.systolic ?? "").trim();
+  const diastolicRaw = String(item.diastolic ?? "").trim();
+  const systolicValue = Number(systolicRaw.replace(/,/g, "."));
+  const diastolicValue = Number(diastolicRaw.replace(/,/g, "."));
+  const bloodPressureNeedsSystolic = config.type === "blood_pressure" && (
+    !systolicRaw || !Number.isFinite(systolicValue) || systolicValue <= 0 ||
+    (diastolicRaw && Number.isFinite(diastolicValue) && systolicValue <= diastolicValue)
+  );
+  const bloodPressureNeedsDiastolic = config.type === "blood_pressure" && (
+    !diastolicRaw || !Number.isFinite(diastolicValue) || diastolicValue <= 0
+  );
 
   const handleStatusChange = (status) => {
     const candidate = { ...item, result_status: status };
