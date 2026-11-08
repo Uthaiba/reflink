@@ -190,3 +190,9 @@ Regression tests now cover null, empty-array and populated-array relation shapes
 - GitHub Actions run #731 (run ID `42467165513`) completed successfully on source commit `2c8b4757084eb6096577a47b75d2eeadf85a6a81`. All steps in the Build and lint job passed, including automated unit tests, lint, production bundle build, Chromium installation and real-browser offline queue tests.
 - Vercel Preview for the same commit is READY at `https://reflink-i4l47hf1g-uthaibas-projects.vercel.app`. This is not a production deployment.
 - PR #1 remains draft and unmerged. No live Supabase schema, RLS, ACL, migration ledger, patient data or production deployment was changed.
+
+### Additional lifecycle gap — receiving-facility rejection
+
+- The current receiving workspace source (`src/App.jsx`) contains no rejection/decline action, no rejection-reason capture and no rejected status transition in its referral lifecycle controls.
+- This means the planned receiving-facility rejection workflow is not yet demonstrably implemented, despite the master plan requiring rejection with a documented reason.
+- Do not add a guessed status or field: the authoritative historical schema/migration source is still missing, and the production migration ledger cannot safely be reconstructed from the live database. First recover the baseline and verify the allowed status values, reason field (or event design), RLS ownership rules and audit mechanism. Then implement the workflow with a conditional status update, mandatory reason, and an immutable event record in an isolated synthetic database.
