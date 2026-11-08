@@ -133,4 +133,6 @@ A data-projection defect was found during this review: the receiving referral qu
 - The administrator report screen now defaults to the latest completed Africa/Lagos month, exposes previous complete-month shortcuts, and does not call aggregate RPCs for invalid periods.
 - Added tests for Lagos-month calculation, year-boundary/leap-year behavior, the SQL guard and UI request gating.
 - This remains a source-only mitigation. The November migrations are unapplied; no live Supabase schema, RLS, ACL, migration ledger, production data, Edge Function, SMS workflow or production deployment was changed.
-- Exact-HEAD GitHub Actions verification is to be checked for the final documentation/source commit. Vercel Preview availability remains separately constrained by the previously reported build-rate-limit failure.
+- GitHub Actions quality run #707 (run ID `42466215027`) passed on exact source HEAD `fbeff4fad8ba30159721ddc1372a0dfe16185770`: dependency audit reporting, automated unit tests, lint, production bundle build, Chromium installation and real-browser offline-queue tests all succeeded.
+- Vercel deployment `reflink-9yzjgkd1l-uthaibas-projects.vercel.app` reached READY for that same source HEAD. This is a branch deployment, not a production release.
+- The current status-register update is documentation-only; no production database, production deployment, migration ledger or patient data was changed.
