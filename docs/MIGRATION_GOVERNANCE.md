@@ -103,3 +103,12 @@ A read-only catalog/API pass confirms:
 - No Auth table triggers were found, but this does not establish Auth dashboard configuration.
 
 Auth settings (including leaked-password protection, MFA, providers, redirect URLs, rate limits and SMTP) remain a Dashboard-only verification item. Do not export Auth users or secrets. Storage policies and default ACLs are documented as baseline evidence only; no production settings or privileges were changed.
+
+
+## Database least-privilege hardening proposal — 8 November 2026
+
+Added [SECURITY_HARDENING_PROPOSAL.md](./SECURITY_HARDENING_PROPOSAL.md) and a source-contract regression test. The proposal records the live `audit_log` ACL, broad public-schema defaults for both `postgres` and `supabase_admin`, and the role-membership constraint discovered during read-only catalog inspection.
+
+Important execution constraint: the catalog shows no membership of `postgres` in `supabase_admin`. A migration executed as `postgres` must not assume it can change that creator's default privileges. Obtain an authorised owner-level path or keep new public objects created by `supabase_admin` blocked from release. Existing function grants must be reviewed individually; do not blanket-revoke authenticated EXECUTE because current workflow helpers and policy dependencies rely on selected calls.
+
+The candidate audit-log revoke is limited to `TRUNCATE`, `REFERENCES`, `TRIGGER` and `MAINTAIN`; preserve the existing administrator-only SELECT RLS contract and prove the audit trigger writer path in synthetic staging before narrowing write privileges. This is a proposal, not a migration. No production or staging DDL was executed. The new Node source-contract test checks the proposal's safety gates; it does not execute PostgreSQL.
