@@ -7,7 +7,7 @@ const edgeFunction = await readFile(
   "utf8",
 );
 const profileSchema = await readFile(
-  new URL("../docs/catalog_exports/20261108_public_schema_export_manifest.md", import.meta.url),
+  new URL("../docs/IDENTITY_AND_ACCOUNT_PROVISIONING_RECONCILIATION.md", import.meta.url),
   "utf8",
 );
 const adminDashboard = await readFile(
@@ -23,7 +23,7 @@ test("account provisioning verifies the bearer token and canonical administrator
 
 test("provisioning roles remain aligned with the canonical profile role constraint", () => {
   assert.match(edgeFunction, /new Set\(\["administrator", "phc_staff", "receiving_staff"\]\)/);
-  assert.match(profileSchema, /profiles_role_check/);
+  assert.match(profileSchema, /exactly `phc_staff`, `receiving_staff`, and `administrator`/);
   assert.match(profileSchema, /phc_staff/);
   assert.match(profileSchema, /receiving_staff/);
   assert.match(profileSchema, /administrator/);
