@@ -1,4 +1,5 @@
 import {
+  hasCounterReferral,
   isAcknowledgementOverdue,
   isOpenIncomingReferral,
 } from "./referralPriority.js";
@@ -11,7 +12,7 @@ export function getReceivingReferralMetrics(referrals, now = Date.now()) {
     patientsReceived: records.filter((item) => item?.status === "patient_arrived").length,
     underAssessment: records.filter((item) => item?.status === "under_assessment").length,
     counterReferralPending: records.filter(
-      (item) => item?.status === "discharged" && !item?.counter_referral,
+      (item) => item?.status === "discharged" && !hasCounterReferral(item),
     ).length,
     completed: records.filter((item) => item?.status === "completed").length,
     emergencyIncomingReferrals: records.filter(
