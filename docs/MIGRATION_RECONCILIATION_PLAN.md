@@ -507,3 +507,10 @@ The empty staging advisor scan is only a clean-initial-state result; it is not e
 
 
 Synthetic fixture and database integration acceptance scenarios are specified in [STAGING_SYNTHETIC_TEST_PLAN.md](./STAGING_SYNTHETIC_TEST_PLAN.md). This is a test specification only; no Auth identities, synthetic rows, migrations or schema objects have been created in staging yet.
+
+
+## 15. Controlled schema-only export handoff — 8 November 2026
+
+A reviewed operator runbook is now available at [PRODUCTION_SCHEMA_EXPORT_RUNBOOK.md](./PRODUCTION_SCHEMA_EXPORT_RUNBOOK.md). It uses the documented Supabase CLI schema-dump workflow, explicitly avoids `db pull` against production because that records migration history, and identifies managed-schema exclusions (Auth, Storage and extension-owned schemas). It requires metadata-only follow-up for approved customizations and excludes all patient rows, Auth users, secrets and Storage objects.
+
+The connected Supabase tools available in this workspace do not expose a database dump/download operation. The authorized database owner/operator must run the export in a trusted local environment and provide the sanitized schema-only artifact securely. No credentials should be pasted into chat. Until that artifact is reviewed, no baseline or migrations are applied to staging and production remains read-only.
