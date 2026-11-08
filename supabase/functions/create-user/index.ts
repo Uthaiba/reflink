@@ -1,41 +1,60 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+const canonicalOrigin = "https://reflink-yobe.vercel.app";
+const configuredOrigins = (Deno.env.get("REFLINK_ALLOWED_ORIGINS") ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const allowedOrigins = new Set([canonicalOrigin, ...configuredOrigins]);
+
+const corsHeadersFor = (origin: string | null): HeadersInit => {
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+  if (origin && allowedOrigins.has(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  }
+  return headers;
 };
 
-const json = (body: Record<string, unknown>, status = 200) =>
+const json = (
+  body: Record<string, unknown>,
+  status = 200,
+  origin: string | null = null,
+) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...corsHeadersFor(origin), "Content-Type": "application/json" },
   });
 
 Deno.serve(async (req) => {
+  const origin = req.headers.get("Origin");
+  const corsHeaders = corsHeadersFor(origin);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return json({ success: false, error: "Method not allowed." }, 405);
+  if (req.method !== "POST") return json({ success: false, error: "Method not allowed." }, 405, origin);
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!supabaseUrl || !serviceRoleKey) {
-      return json({ success: false, error: "Account provisioning is temporarily unavailable." }, 500);
+      return json({ success: false, error: "Account provisioning is temporarily unavailable." }, 500, origin);
     }
 
     const authorization = req.headers.get("Authorization");
     if (!authorization?.startsWith("Bearer ")) {
-      return json({ success: false, error: "Authentication required." }, 401);
+      return json({ success: false, error: "Authentication required." }, 401, origin);
     }
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
-    });
+    }, 200, origin);
 
     const token = authorization.slice("Bearer ".length);
     const { data: { user: requester }, error: authError } = await admin.auth.getUser(token);
     if (authError || !requester) {
-      return json({ success: false, error: "Authentication could not be verified." }, 401);
+      return json({ success: false, error: "Authentication could not be verified." }, 401, origin);
     }
 
     const { data: requesterProfile, error: requesterProfileError } = await admin
@@ -45,7 +64,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (requesterProfileError || requesterProfile?.role !== "administrator") {
-      return json({ success: false, error: "Administrator access required." }, 403);
+      return json({ success: false, error: "Administrator access required." }, 403, origin);
     }
 
     const body = await req.json();
@@ -58,19 +77,19 @@ Deno.serve(async (req) => {
 
     const allowedRoles = new Set(["administrator", "phc_staff", "receiving_staff"]);
     if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return json({ success: false, error: "A valid email address is required." }, 400);
+      return json({ success: false, error: "A valid email address is required." }, 400, origin);
     }
     if (!password || !fullName || fullName.length > 160) {
-      return json({ success: false, error: "Password and a valid full name are required." }, 400);
+      return json({ success: false, error: "Password and a valid full name are required." }, 400, origin);
     }
     if (phone.length > 30) {
-      return json({ success: false, error: "Phone number is too long." }, 400);
+      return json({ success: false, error: "Phone number is too long." }, 400, origin);
     }
     if (!allowedRoles.has(role)) {
-      return json({ success: false, error: "Unsupported REFLINK role." }, 400);
+      return json({ success: false, error: "Unsupported REFLINK role." }, 400, origin);
     }
     if (role !== "administrator" && !facilityId) {
-      return json({ success: false, error: "A facility assignment is required for this role." }, 400);
+      return json({ success: false, error: "A facility assignment is required for this role." }, 400, origin);
     }
 
     if (facilityId) {
@@ -81,7 +100,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (facilityError || !facility || facility.is_active !== true) {
-        return json({ success: false, error: "Select an active facility." }, 400);
+        return json({ success: false, error: "Select an active facility." }, 400, origin);
       }
     }
 
@@ -90,10 +109,10 @@ Deno.serve(async (req) => {
       password,
       email_confirm: true,
       user_metadata: { full_name: fullName },
-    });
+    }, 200, origin);
 
     if (createError || !created.user) {
-      return json({ success: false, error: "The account could not be created. Check the details or contact the system administrator." }, 400);
+      return json({ success: false, error: "The account could not be created. Check the details or contact the system administrator." }, 400, origin);
     }
 
     const { data: profile, error: profileError } = await admin
@@ -112,16 +131,16 @@ Deno.serve(async (req) => {
     if (profileError || !profile) {
       // Best-effort rollback: do not leave an Auth identity without its REFLINK profile.
       await admin.auth.admin.deleteUser(created.user.id);
-      return json({ success: false, error: "The profile could not be created; the account creation was rolled back." }, 500);
+      return json({ success: false, error: "The profile could not be created; the account creation was rolled back." }, 500, origin);
     }
 
     return json({
       success: true,
       message: "User created successfully.",
       user: { id: profile.id, email: created.user.email, ...profile },
-    }, 201);
+    }, 201, origin);
   } catch {
     // Never log request bodies, credentials, tokens or patient information.
-    return json({ success: false, error: "Unexpected account-provisioning error." }, 500);
+    return json({ success: false, error: "Unexpected account-provisioning error." }, 500, origin);
   }
-});
+}, 200, origin);
