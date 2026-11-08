@@ -3286,6 +3286,8 @@ provisional_diagnosis: "",
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const fieldRefs = useRef({});
 
   // Multiple diagnosis entries: each diagnosis carries its own status and category.
   const [diagnosisEntries, setDiagnosisEntries] = useState([]);
@@ -3366,6 +3368,12 @@ provisional_diagnosis: "",
       ...previous,
       [name]: value,
     }));
+    setFieldErrors((current) => {
+      if (!current[name]) return current;
+      const next = { ...current };
+      delete next[name];
+      return next;
+    });
   };
 
 
@@ -3376,6 +3384,8 @@ provisional_diagnosis: "",
       setError(
         "Select a diagnosis status, diagnosis category and diagnosis before adding it."
       );
+      const firstMissing = !status ? "diagnosis_status" : !category ? "diagnosis_category" : "provisional_diagnosis";
+      fieldRefs.current[firstMissing]?.focus();
       return;
     }
 
@@ -3388,6 +3398,7 @@ provisional_diagnosis: "",
 
     if (duplicate) {
       setError("That diagnosis has already been added.");
+      fieldRefs.current.provisional_diagnosis?.focus();
       return;
     }
 
@@ -3535,14 +3546,17 @@ provisional_diagnosis: "",
   };
 
   const validateReferralEntry = () => {
-    if (!form.patient_identifier.trim()) return "Patient identifier is required.";
-    if (form.patient_age_months === "") return "Patient age is required.";
-    if (!form.patient_sex) return "Patient sex is required.";
-    if (!form.chief_complaint_category && !form.chief_complaint.trim()) return "Chief complaint is required.";
-    if (!form.urgency) return "Referral urgency is required.";
-    if (!form.receiving_facility_id) return "Receiving facility is required.";
-    if (form.urgency === "emergency" && !form.physical_findings.trim() && form.physical_findings_structured.length === 0) return "Emergency referrals require clinical findings.";
-    return "";
+    const errors = {};
+    if (!form.patient_identifier.trim()) errors.patient_identifier = "Patient identifier is required.";
+    if (form.patient_age_months === "") errors.patient_age_months = "Patient age is required.";
+    if (!form.patient_sex) errors.patient_sex = "Patient sex is required.";
+    if (!form.chief_complaint_category && !form.chief_complaint.trim()) errors.chief_complaint_category = "Chief complaint is required.";
+    if (!form.urgency) errors.urgency = "Referral urgency is required.";
+    if (!form.receiving_facility_id) errors.receiving_facility_id = "Receiving facility is required.";
+    if (form.urgency === "emergency" && !form.physical_findings.trim() && form.physical_findings_structured.length === 0) {
+      errors.physical_findings_structured = "Emergency referrals require clinical findings.";
+    }
+    return errors;
   };
 
   const buildStructuredText = (items, other, fallback = "") => {
@@ -3576,11 +3590,15 @@ provisional_diagnosis: "",
     setError("");
     setSavedReferralInfo(null);
     setMessage("");
-    const validationError = validateReferralEntry();
-    if (validationError) {
-      setError(validationError);
+    const validationErrors = validateReferralEntry();
+    if (Object.keys(validationErrors).length) {
+      setFieldErrors(validationErrors);
+      const firstInvalidField = Object.keys(validationErrors)[0];
+      fieldRefs.current[firstInvalidField]?.focus();
+      setError("Review the highlighted fields before creating this referral.");
       return;
     }
+    setFieldErrors({});
     if (diagnosisEntries.length === 0) {
       const proceed = window.confirm("No diagnosis category has been selected. This will reduce referral analytics quality. Continue?");
       if (!proceed) return;
@@ -4075,7 +4093,7 @@ if (!confirmDestination) {
       )}
 
       {error && (
-        <div className="login-error">
+        <div className="login-error" role="alert" aria-live="assertive">
           {error}
         </div>
       )}
@@ -4083,34 +4101,41 @@ if (!confirmDestination) {
       <form
   className="new-referral-form"
   onSubmit={handleSubmit}
+  noValidate
 >
 
         <h3>
           {t("patientInformation")}
         </h3>
 
-        <label>
+        <label htmlFor="new-referral-patient-identifier">
           Patient Identifier *
         </label>
 
         <input
+          ref={(element) => { fieldRefs.current.patient_identifier = element; }}
+          id="new-referral-patient-identifier"
           name="patient_identifier"
           value={form.patient_identifier}
           onChange={handleChange}
           placeholder="e.g. PT-001"
           required
+          aria-invalid={Boolean(fieldErrors.patient_identifier)}
+          aria-describedby={fieldErrors.patient_identifier ? "new-referral-patient-identifier-error" : undefined}
         />
+        {fieldErrors.patient_identifier && <p id="new-referral-patient-identifier-error" className="form-error">{fieldErrors.patient_identifier}</p>}
 
         <div className="patient-information-grid">
 
   {/* Patient Age */}
   <div className="form-group">
     <label htmlFor="patient_age_months">
-      Patient Age
+      Patient Age *
     </label>
 
     <div className="age-input-row">
       <input
+        ref={(element) => { fieldRefs.current.patient_age_months = element; }}
         id="patient_age_months"
         type="number"
         name="patient_age_months"
@@ -4124,6 +4149,9 @@ if (!confirmDestination) {
             : "e.g. 22"
         }
         aria-label="Patient age value"
+        required
+        aria-invalid={Boolean(fieldErrors.patient_age_months)}
+        aria-describedby={fieldErrors.patient_age_months ? "new-referral-patient-age-error" : "new-referral-patient-age-help"}
       />
 
       <select
@@ -4137,11 +4165,12 @@ if (!confirmDestination) {
       </select>
     </div>
 
-    <div className="form-help-text">
+    <div id="new-referral-patient-age-help" className="form-help-text">
       Use months for infants and young children; use years for older
       children and adults. REFLINK stores the normalized value in
       months for consistent analytics.
     </div>
+    {fieldErrors.patient_age_months && <p id="new-referral-patient-age-error" className="form-error">{fieldErrors.patient_age_months}</p>}
 
     <div className="form-help-text age-normalized-preview">
       {form.patient_age_months !== ""
@@ -4159,14 +4188,18 @@ if (!confirmDestination) {
   {/* Sex */}
   <div className="form-group">
     <label htmlFor="patient_sex">
-      Sex
+      Sex *
     </label>
 
     <select
+      ref={(element) => { fieldRefs.current.patient_sex = element; }}
       id="patient_sex"
       name="patient_sex"
       value={form.patient_sex}
       onChange={handleChange}
+      required
+      aria-invalid={Boolean(fieldErrors.patient_sex)}
+      aria-describedby={fieldErrors.patient_sex ? "new-referral-patient-sex-error" : undefined}
     >
       <option value="">
         Select sex
@@ -4184,6 +4217,7 @@ if (!confirmDestination) {
         Other
       </option>
     </select>
+    {fieldErrors.patient_sex && <p id="new-referral-patient-sex-error" className="form-error">{fieldErrors.patient_sex}</p>}
   </div>
 
 
@@ -4313,17 +4347,25 @@ if (!confirmDestination) {
           {t("clinicalInformation")}
         </h3>
 
-        <label>
+        <label htmlFor="new-referral-chief-complaint">
           Chief Complaint *
         </label>
         <select
+          ref={(element) => { fieldRefs.current.chief_complaint_category = element; }}
+          id="new-referral-chief-complaint"
           value={form.chief_complaint_category}
-          onChange={(e) => setForm((previous) => ({ ...previous, chief_complaint_category: e.target.value, chief_complaint: e.target.value === "Other" ? previous.chief_complaint_other : e.target.value }))}
+          onChange={(e) => {
+            setForm((previous) => ({ ...previous, chief_complaint_category: e.target.value, chief_complaint: e.target.value === "Other" ? previous.chief_complaint_other : e.target.value }));
+            setFieldErrors((current) => { const next = { ...current }; delete next.chief_complaint_category; return next; });
+          }}
           required
+          aria-invalid={Boolean(fieldErrors.chief_complaint_category)}
+          aria-describedby={fieldErrors.chief_complaint_category ? "new-referral-chief-complaint-error" : undefined}
         >
           <option value="">Select chief complaint</option>
           {CHIEF_COMPLAINT_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
+        {fieldErrors.chief_complaint_category && <p id="new-referral-chief-complaint-error" className="form-error">{fieldErrors.chief_complaint_category}</p>}
         {form.chief_complaint_category === "Other" && (
           <input name="chief_complaint_other" value={form.chief_complaint_other} onChange={(e) => setForm((previous) => ({ ...previous, chief_complaint_other: e.target.value, chief_complaint: e.target.value }))} placeholder="Describe the chief complaint" required />
         )}
@@ -4342,14 +4384,24 @@ if (!confirmDestination) {
         <label>
           Physical Findings {form.urgency === "emergency" ? "*" : ""}
         </label>
-        <div className="checkbox-grid reflink-clinical-checks">
-          {PHYSICAL_FINDING_OPTIONS.map((item) => (
+        <div className="checkbox-grid reflink-clinical-checks" aria-describedby={fieldErrors.physical_findings_structured ? "new-referral-physical-findings-error" : undefined}>
+          {PHYSICAL_FINDING_OPTIONS.map((item, index) => (
             <label key={item} className={`selection-checkbox ${form.physical_findings_structured.includes(item) ? "is-selected" : ""}`}>
-              <input type="checkbox" checked={form.physical_findings_structured.includes(item)} onChange={() => toggleStructuredValue("physical_findings_structured", item)} />
+              <input
+                ref={(element) => { if (index === 0) fieldRefs.current.physical_findings_structured = element; }}
+                type="checkbox"
+                checked={form.physical_findings_structured.includes(item)}
+                onChange={() => {
+                  toggleStructuredValue("physical_findings_structured", item);
+                  setFieldErrors((current) => { const next = { ...current }; delete next.physical_findings_structured; return next; });
+                }}
+                aria-invalid={Boolean(fieldErrors.physical_findings_structured)}
+              />
               <span>{item}</span>
             </label>
           ))}
         </div>
+        {fieldErrors.physical_findings_structured && <p id="new-referral-physical-findings-error" className="form-error">{fieldErrors.physical_findings_structured}</p>}
         {form.physical_findings_structured.includes("Other") && (
           <input name="physical_findings_other" value={form.physical_findings_other} onChange={handleChange} placeholder="Other physical finding" />
         )}
@@ -4648,33 +4700,42 @@ if (!confirmDestination) {
           placeholder="Why is the patient being referred?"
         />
 
-        <label>
+        <label htmlFor="new-referral-urgency">
           Urgency *
         </label>
 
         <select
+          ref={(element) => { fieldRefs.current.urgency = element; }}
+          id="new-referral-urgency"
           name="urgency"
           value={form.urgency}
           onChange={handleChange}
           required
+          aria-invalid={Boolean(fieldErrors.urgency)}
+          aria-describedby={fieldErrors.urgency ? "new-referral-urgency-error" : undefined}
         >
           <option value="routine">Routine — acknowledgement target 24 hours</option>
           <option value="urgent">Urgent — acknowledgement target 2 hours</option>
           <option value="emergency">Emergency — acknowledgement target 15 minutes</option>
         </select>
+        {fieldErrors.urgency && <p id="new-referral-urgency-error" className="form-error">{fieldErrors.urgency}</p>}
         <div className={`reflink-urgency-help ${urgencyMeta(form.urgency).className}`}>
           <strong>{urgencyMeta(form.urgency).label}</strong> · {urgencyMeta(form.urgency).sla}. Emergency and urgent referrals trigger SMS + dashboard notifications when configured.
         </div>
 
-        <label>
+        <label htmlFor="new-referral-receiving-facility">
           Receiving Facility *
         </label>
 
         <select
+          ref={(element) => { fieldRefs.current.receiving_facility_id = element; }}
+          id="new-referral-receiving-facility"
           name="receiving_facility_id"
           value={form.receiving_facility_id}
           onChange={handleChange}
           required
+          aria-invalid={Boolean(fieldErrors.receiving_facility_id)}
+          aria-describedby={fieldErrors.receiving_facility_id ? "new-referral-receiving-facility-error" : undefined}
         >
 
           <option value="">
@@ -4693,6 +4754,7 @@ if (!confirmDestination) {
           )}
 
         </select>
+        {fieldErrors.receiving_facility_id && <p id="new-referral-receiving-facility-error" className="form-error">{fieldErrors.receiving_facility_id}</p>}
 
         <button
           type="submit"
