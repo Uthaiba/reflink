@@ -504,3 +504,6 @@ The existing `docs/catalog_exports/20261107_live_public_schema_catalog.md` and `
 | 6. Advisor verification | Initial clean scan | Security and performance advisors both returned no lints on the empty staging database. Re-run after every schema batch. |
 
 The empty staging advisor scan is only a clean-initial-state result; it is not evidence that the proposed REFLINK schema is secure.
+
+
+Synthetic fixture and database integration acceptance scenarios are specified in [STAGING_SYNTHETIC_TEST_PLAN.md](./STAGING_SYNTHETIC_TEST_PLAN.md). This is a test specification only; no Auth identities, synthetic rows, migrations or schema objects have been created in staging yet.
