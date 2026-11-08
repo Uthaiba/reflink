@@ -162,3 +162,39 @@ The following cases must be executed only after a schema-correct isolated synthe
 - The isolated staging project still lacks a reconstructed application schema; the required integration tests cannot yet be executed there.
 
 **Decision:** referral lifecycle source protections are improving, but facility isolation is not ready for multi-facility production sign-off. The authenticated TRUNCATE grant is the first remediation blocker. Do not deploy ACL or RLS changes until the complete client call-site matrix, migration baseline, synthetic test environment and rollback plan are reviewed.
+
+
+## 9. Additional source and Storage findings
+
+### Assessment payload clarified
+
+The assessment save handler writes the following columns when the receiving clinician submits the assessment:
+
+- `assessment_findings`, `final_diagnosis`, `diagnosis_category`, `diagnosis_status`
+- `treatment_provided`, `procedures_performed`, `clinical_feedback`
+- `disposition`, `assessment_completed_at`, `status`
+- For discharge disposition: `discharge_diagnosis`, `condition_at_discharge`, `discharge_medications`, `follow_up_plan`, `discharged_at`
+- For admission disposition: `admission_at`
+
+It uses a compare-and-set predicate `status='under_assessment'`. Preserve this expected-state guard in any RPC replacement. The separate inpatient admission handler edits fields on a row already in `admitted` state; the assessment handler performs the initial transition to `admitted`.
+
+### Storage bucket configuration
+
+Read-only inspection of `storage.buckets` found `referral-investigation-results` is private, has a 10 MiB file-size limit, and allows PDF, JPEG, PNG, WebP, plain text and CSV MIME types.
+
+### Storage object policy scope
+
+The five authenticated object policies for this bucket authorize access by referral participation using any of:
+- `referring_user_id = auth.uid()`
+- `referring_facility_id = caller profile facility_id`
+- `receiving_facility_id = caller profile facility_id`
+
+These predicates do not explicitly constrain the caller's role. Consequently, any authenticated profile attached to the referring or receiving facility can satisfy the facility branch, subject to the referral row being visible to the policy subquery. The same broad participant predicate is used for upload, download, update and delete. This is wider than a narrowly defined clinical attachment workflow.
+
+**Recommendation:** separate object permissions by action and actor role. Define whether PHC staff may upload, receiving staff may upload, and which participant roles may download or delete. Prefer immutable object names and no ordinary client DELETE/overwrite unless the workflow explicitly needs it. Verify the `storage.objects` policies against the referral RLS behavior using synthetic identities; catalog inspection alone does not establish the effective runtime result for every JWT role.
+
+### Storage orphan and integrity risk
+
+The client uploads a file under `<referral-id>/<timestamp>-<index>-<sanitized-name>` and only afterwards updates the referral's `investigation_records` JSONB metadata. If the metadata write fails, the uploaded object may be orphaned. The bucket's private status and file limits are positive controls, but they do not solve object-to-record integrity or role scoping.
+
+A future upload design should bind object path, referral ID, actor and content metadata through a server-validated workflow, and provide a controlled orphan reconciliation process. Do not automatically delete objects during retries without verifying they are not referenced by a committed record.
