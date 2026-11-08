@@ -728,22 +728,6 @@ function AdminDashboard({
           );
         }
 
-        // Mark newly created accounts as temporary-password accounts.
-        // The profile column is optional for backward compatibility.
-        try {
-          await supabase
-            .from("profiles")
-            .update({
-              must_change_password: true,
-            })
-            .eq("id", createData.user?.id || createData.user_id || "");
-        } catch (passwordFlagError) {
-          console.warn(
-            "TEMPORARY PASSWORD FLAG UPDATE SKIPPED:",
-            passwordFlagError
-          );
-        }
-
         setMessage(
           createData.message ||
             "User created successfully."
