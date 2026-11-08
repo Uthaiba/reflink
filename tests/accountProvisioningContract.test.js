@@ -44,6 +44,8 @@ test("untrusted Auth metadata cannot assign an application role or facility", ()
 test("profile creation failure attempts to compensate by deleting the Auth identity", () => {
   assert.match(edgeFunction, /if \(profileError \|\| !profile\)/);
   assert.match(edgeFunction, /admin\.auth\.admin\.deleteUser\(created\.user\.id\)/);
+  assert.match(edgeFunction, /if \(rollbackError\)/);
+  assert.match(edgeFunction, /cleanup requires administrator review/);
   assert.match(edgeFunction, /account creation was rolled back/);
 });
 
