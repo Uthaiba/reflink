@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
-    }, 200, origin);
+    });
 
     const token = authorization.slice("Bearer ".length);
     const { data: { user: requester }, error: authError } = await admin.auth.getUser(token);
@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
     const facilityId = typeof body.facility_id === "string" ? body.facility_id : null;
 
     const allowedRoles = new Set(["administrator", "phc_staff", "receiving_staff"]);
-    if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!email || email.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
       return json({ success: false, error: "A valid email address is required." }, 400, origin);
     }
     if (!password || !fullName || fullName.length > 160) {
@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
       password,
       email_confirm: true,
       user_metadata: { full_name: fullName },
-    }, 200, origin);
+    });
 
     if (createError || !created.user) {
       return json({ success: false, error: "The account could not be created. Check the details or contact the system administrator." }, 400, origin);
@@ -143,4 +143,4 @@ Deno.serve(async (req) => {
     // Never log request bodies, credentials, tokens or patient information.
     return json({ success: false, error: "Unexpected account-provisioning error." }, 500, origin);
   }
-}, 200, origin);
+});
