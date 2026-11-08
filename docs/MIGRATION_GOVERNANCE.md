@@ -86,3 +86,20 @@ New findings that must be included in staging remediation design:
 - `log_referral_print()` uses `MAX(print_number)+1` without a uniqueness constraint on referral/print number; concurrency-safe allocation remains a staging test requirement.
 
 The public export does not include Auth/Storage managed schemas, Auth settings, Storage bucket configuration, Realtime publication metadata or extension inventory. These remain separate metadata-only preflight requirements. Production remains read-only; no migration or ACL change has been applied.
+
+
+## Additional Supabase platform metadata — 8 November 2026
+
+A read-only catalog/API pass confirms:
+
+- PostgreSQL 17.6.1.166.
+- Installed extensions: `pg_stat_statements 1.11`, `pgcrypto 1.3`, `plpgsql 1.0`, `supabase_vault 0.3.1`, `uuid-ossp 1.1`.
+- No additional application-owned schema beyond `public` was found. The proposed `private` notification schema is not present.
+- No custom non-internal triggers were found on `auth` tables.
+- One private Storage bucket exists: `referral-investigation-results`, 10 MiB maximum, PDF/JPEG/PNG/WebP/text/plain/CSV MIME allowlist.
+- Five authenticated Storage policies cover SELECT, INSERT, UPDATE and DELETE, with referral-path matching and referring-user/facility membership checks.
+- Realtime publication `supabase_realtime` contains only `public.referrals`.
+- Default privileges on future public objects are broad for both `postgres` and `supabase_admin`, not just `postgres`. New public tables/sequences/functions can inherit browser-role grants. This increases the priority of default-privilege remediation in staging.
+- No Auth table triggers were found, but this does not establish Auth dashboard configuration.
+
+Auth settings (including leaked-password protection, MFA, providers, redirect URLs, rate limits and SMTP) remain a Dashboard-only verification item. Do not export Auth users or secrets. Storage policies and default ACLs are documented as baseline evidence only; no production settings or privileges were changed.
