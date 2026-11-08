@@ -427,3 +427,37 @@ The receiving referral projection uses `counter_referral:counter_referrals(*)`. 
 The source now normalises the relation shape: arrays are present only when `length > 0`, while a non-null object represents a present relation. Both active-queue classification and pending-counter-referral metrics use the shared helper. Regression fixtures cover null, empty and populated arrays.
 
 This is an application-level data-shape correction. It does not establish the database foreign-key relationship, RLS visibility or production PostgREST response contract; those remain subject to synthetic-database validation after baseline reconciliation.
+
+## 18. Fresh schema-baseline cross-check — 8 November 2026, 14:06 UTC
+
+A second read-only inspection was performed against the linked Supabase project using the migration ledger, verbose public table inventory, and PostgreSQL catalogs for public/private routines, non-internal triggers, policies and selected indexes. The query scope was metadata only; no patient/application rows, auth-user rows, secrets or storage contents were selected.
+
+### Migration and environment facts
+
+- The remote migration ledger still contains only `20260928203447_reflink_v2_rural_first`.
+- The connected project's only listed branch remains `main`, non-persistent, `with_data=false`, with both `project_ref` and `parent_project_ref` equal to the production project. It is not isolated staging.
+- The repository contains eight November 2026 proposal migrations and no source file for the sole recorded historical migration.
+- The public schema inventory confirms the current production referral status CHECK permits: `draft`, `sent`, `acknowledged`, `patient_arrived`, `under_assessment`, `admitted`, `discharged`, `referred_again`, `completed`, and `cancelled`. It does not permit `rejected`.
+- The current status-transition trigger permits cancellation at pre-completion stages and `referred_again` transitions, but has no rejection transition. A receiving-facility rejection must not be silently represented as cancellation; a distinct status and mandatory reason need a reviewed schema/application contract.
+
+### Confirmed referral audit and trigger model
+
+The live catalog confirms the following trigger functions and triggers on the current public schema:
+
+- `referral_status_transition_validation` invokes `validate_referral_status_transition()` before status updates.
+- `referral_status_audit_trigger` invokes `log_referral_status_change()` after status updates. That function inserts the new status, actor and standard note into `public.referral_updates`.
+- `referral_counter_referral_guard` invokes `require_counter_referral_before_completion()` before status updates and blocks transition to `completed` until a structured counter-referral exists.
+- `referral_ack_due_at_trigger` maintains `ack_due_at` from urgency and creation time.
+- `referrals_audit_mutation` and `counter_referrals_audit_mutation` invoke `audit_referral_mutation()` after row insert/update/delete. That function writes full OLD/NEW row JSON into `public.audit_log`; this means referral and counter-referral PHI may be duplicated in audit storage and requires a dedicated retention, access and data-minimisation review.
+
+The application status timeline is therefore backed by a database status-history trigger writing to `referral_updates`. This is not evidence of an append-only/immutable audit guarantee: the current table has a participant SELECT policy and no demonstrated immutability enforcement in the reviewed trigger/function set. The `referral_events` table has no policy in the current catalog and no writer trigger in the reviewed trigger inventory; the current frontend source does not write to it. `referral_feedback` likewise has no policy. Keep both fail-closed until a least-privilege use case is defined.
+
+### Consequences for the next implementation steps
+
+1. Preserve the existing `referral_updates` status-history mechanism; do not duplicate status events in `referral_events` without a clear event taxonomy and idempotency contract.
+2. Design rejection as a distinct terminal or recoverable pathway only after clinical governance defines who may reject, allowed reasons, whether the referring facility can resubmit, and what status transition follows. Do not reuse `cancelled`.
+3. Add a separate assessment-start timestamp only after schema baseline recovery and a synthetic migration test; the current live schema inventory has no `assessment_started_at` column.
+4. Review full-row audit JSON capture for PHI minimisation, access control, retention, and safe redaction. Do not inspect existing audit rows as part of this work.
+5. Obtain a complete schema-only export / authoritative migration history and establish a separate synthetic-data database. The current metadata exports are valuable reconciliation evidence but are not a restorable schema dump and do not resolve the missing historical migration.
+
+No live schema, policy, grant, migration ledger, Auth setting, branch, patient record or deployment was changed.
