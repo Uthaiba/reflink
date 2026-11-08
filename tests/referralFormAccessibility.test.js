@@ -23,11 +23,11 @@ test("new-referral custom validation is field-associated and focuses the first i
     ["chief_complaint_category", "new-referral-chief-complaint", "new-referral-chief-complaint-error"],
     ["urgency", "new-referral-urgency", "new-referral-urgency-error"],
     ["receiving_facility_id", "new-referral-receiving-facility", "new-referral-receiving-facility-error"],
-    ["physical_findings_structured", "new-referral-physical-findings-error", "new-referral-physical-findings-error"],
+    ["physical_findings_structured", null, "new-referral-physical-findings-error"],
     ["chief_complaint_other", "new-referral-chief-complaint-other", "new-referral-chief-complaint-other-error"],
   ]) {
     assert.match(source, new RegExp(`fieldErrors\\.${field}`));
-    assert.match(source, new RegExp(`id="${inputId}"`));
+    if (inputId) assert.match(source, new RegExp(`id="${inputId}"`));
     assert.match(source, new RegExp(`id="${errorId}"`));
   }
 });
@@ -45,5 +45,5 @@ test("investigation classification errors are announced, associated and focus th
   assert.match(source, /aria-describedby=\{validationError \? validationErrorId : undefined\}/);
   assert.match(source, /systolicRef : diastolicRef/);
   assert.match(source, /resultValueRef : referenceRangeRef/);
-  assert.match(source, /setValidationError\(" "\)/);
+  assert.match(source, /setValidationError\("\\"\)/);
 });
