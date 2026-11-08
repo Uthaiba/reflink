@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase.js";
-import { isCompleteCalendarMonth } from "../../lib/rphiFacilityReporting.js";
+import { getPreviousCompleteCalendarMonthRange, isCompleteCalendarMonth } from "../../lib/rphiFacilityReporting.js";
 
 function formatRphiMinutes(value) {
   if (value === null || value === undefined || !Number.isFinite(Number(value))) {
@@ -2680,41 +2680,13 @@ function AdminDashboard({
 
 }
 function AdminAggregateReports() {
-  const toLagosDateInput = (date) => {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Africa/Lagos",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(date);
-    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-    return `${values.year}-${values.month}-${values.day}`;
-  };
-  const todayValue = toLagosDateInput(new Date());
-  const getLagosMonthStart = (date) => `${toLagosDateInput(date).slice(0, 7)}-01`;
-  const shiftLagosDate = (value, days) => {
-    const [year, month, day] = value.split("-").map(Number);
-    const shifted = new Date(Date.UTC(year, month - 1, day + days, 12));
-    return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
-  };
-  const [startDate, setStartDate] = useState(getLagosMonthStart(new Date()));
-  const [endDate, setEndDate] = useState(todayValue);
-  const applyReportingPreset = (preset) => {
-    const today = toLagosDateInput(new Date());
-    if (preset === "month") {
-      setStartDate(getLagosMonthStart(new Date()));
-      setEndDate(today);
-      return;
-    }
-    if (preset === "previous-month") {
-      const [year, month] = today.split("-").map(Number);
-      const previousEnd = new Date(Date.UTC(year, month - 1, 0, 12));
-      setStartDate(`${previousEnd.getUTCFullYear()}-${String(previousEnd.getUTCMonth() + 1).padStart(2, "0")}-01`);
-      setEndDate(`${previousEnd.getUTCFullYear()}-${String(previousEnd.getUTCMonth() + 1).padStart(2, "0")}-${String(previousEnd.getUTCDate()).padStart(2, "0")}`);
-      return;
-    }
-    setStartDate(shiftLagosDate(today, preset === "90-days" ? -89 : -29));
-    setEndDate(today);
+  const initialPeriod = getPreviousCompleteCalendarMonthRange();
+  const [startDate, setStartDate] = useState(initialPeriod.startDate);
+  const [endDate, setEndDate] = useState(initialPeriod.endDate);
+  const applyReportingPreset = (monthsAgo) => {
+    const period = getPreviousCompleteCalendarMonthRange(new Date(), monthsAgo);
+    setStartDate(period.startDate);
+    setEndDate(period.endDate);
   };
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -2724,6 +2696,7 @@ function AdminAggregateReports() {
   const [facilityLoading, setFacilityLoading] = useState(false);
   const [facilityError, setFacilityError] = useState("");
   const facilityPeriodEligible = isCompleteCalendarMonth(startDate, endDate);
+  const latestCompletePeriod = getPreviousCompleteCalendarMonthRange();
   const [lgaRows, setLgaRows] = useState([]);
   const [lgaLoading, setLgaLoading] = useState(false);
   const [lgaError, setLgaError] = useState("");
@@ -2739,6 +2712,13 @@ function AdminAggregateReports() {
 
   useEffect(() => {
     let active = true;
+    if (!facilityPeriodEligible) {
+      setResult(null);
+      setError("");
+      setLoading(false);
+      return () => { active = false; };
+    }
+
     const loadReport = async () => {
       setLoading(true);
       setError("");
@@ -2760,7 +2740,7 @@ function AdminAggregateReports() {
     };
     loadReport();
     return () => { active = false; };
-  }, [startDate, endDate, refreshKey]);
+  }, [startDate, endDate, refreshKey, facilityPeriodEligible]);
 
   useEffect(() => {
     let active = true;
@@ -2967,11 +2947,10 @@ function AdminAggregateReports() {
       <span className="eyebrow">PRIVACY-PRESERVING REPORTING</span>
       <h3 id="admin-aggregate-heading">Referral service activity</h3>
       <p>Aggregate referral workflow indicators and a timestamp-quality signal. No patient names, identifiers, diagnoses or individual referral records are returned.</p>
-      <div className="aggregate-report-presets" role="group" aria-label="Reporting period shortcuts">
-        <button type="button" className={startDate === getLagosMonthStart(new Date()) && endDate === todayValue ? "is-active" : ""} onClick={() => applyReportingPreset("month")}>This month</button>
-        <button type="button" onClick={() => applyReportingPreset("previous-month")}>Previous month</button>
-        <button type="button" onClick={() => applyReportingPreset("30-days")}>Last 30 days</button>
-        <button type="button" onClick={() => applyReportingPreset("90-days")}>Last 90 days</button>
+      <div className="aggregate-report-presets" role="group" aria-label="Complete calendar month reporting period shortcuts">
+        <button type="button" className={startDate === latestCompletePeriod.startDate && endDate === latestCompletePeriod.endDate ? "is-active" : ""} onClick={() => applyReportingPreset(1)}>Latest complete month</button>
+        <button type="button" onClick={() => applyReportingPreset(2)}>2 months ago</button>
+        <button type="button" onClick={() => applyReportingPreset(3)}>3 months ago</button>
       </div>
       <div className="dashboard-actions">
         <label>
@@ -2982,10 +2961,15 @@ function AdminAggregateReports() {
           To
           <input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} />
         </label>
-        <button type="button" className="primary-button" onClick={() => setRefreshKey((current) => current + 1)} disabled={loading || !startDate || !endDate || startDate > endDate}>
+        <button type="button" className="primary-button" onClick={() => setRefreshKey((current) => current + 1)} disabled={loading || !facilityPeriodEligible}>
           {loading ? "Loading..." : "Refresh report"}
         </button>
       </div>
+      {!facilityPeriodEligible && (
+        <p className="admin-facility-hint" role="status">
+          Select one complete calendar month. Partial and rolling date windows are not available for aggregate reporting because repeated overlapping queries can expose suppressed small counts.
+        </p>
+      )}
       {error && <p className="error-message" role="status">{error}</p>}
       {result && (
         <>
