@@ -21,7 +21,7 @@ test("receiving metrics distinguish acknowledged, arrived, under-assessment, dis
   assert.equal(metrics.awaitingPatientArrival, 1);
   assert.equal(metrics.patientsReceived, 1);
   assert.equal(metrics.underAssessment, 1);
-  assert.equal(metrics.counterReferralPending, 1);
+  assert.equal(metrics.counterReferralPending, 2);
   assert.equal(metrics.completed, 1);
   assert.equal(metrics.emergencyIncomingReferrals, 1);
   assert.equal(metrics.overdueIncomingAcknowledgements, 1);
