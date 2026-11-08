@@ -109,3 +109,25 @@ test("both facility workspaces subscribe to referral changes within their own fa
   assert.ok(app.includes("void loadIncomingReferrals()"));
   assert.ok(app.includes("loadMyReferrals();"));
 });
+
+test("direct discharge from assessment requires and persists a discharge summary", async () => {
+  const app = await read("../src/App.jsx");
+  const start = app.indexOf("const handleSaveAssessment");
+  const end = app.indexOf("INITIAL LOAD", start + 1);
+  assert.ok(start >= 0 && end > start);
+  const handler = app.slice(start, end);
+
+  assert.ok(handler.includes('assessmentForm.disposition === "discharged"'));
+  assert.ok(handler.includes("!assessmentForm.discharge_diagnosis.trim()"));
+  assert.ok(handler.includes("!assessmentForm.condition_at_discharge.trim()"));
+  assert.ok(handler.includes("!assessmentForm.follow_up_plan.trim()"));
+  assert.ok(handler.includes("updateData.discharge_diagnosis = assessmentForm.discharge_diagnosis.trim()"));
+  assert.ok(handler.includes("updateData.condition_at_discharge = assessmentForm.condition_at_discharge.trim()"));
+  assert.ok(handler.includes("updateData.follow_up_plan = assessmentForm.follow_up_plan.trim()"));
+  assert.ok(handler.includes("updateData.discharged_at = new Date().toISOString()"));
+
+  assert.ok(app.includes('assessmentForm.disposition === "discharged" && ('));
+  assert.ok(app.includes('id="assessment-discharge-diagnosis"'));
+  assert.ok(app.includes('id="assessment-condition-at-discharge"'));
+  assert.ok(app.includes('id="assessment-follow-up-plan"'));
+});
