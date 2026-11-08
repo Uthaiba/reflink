@@ -136,3 +136,11 @@ A data-projection defect was found during this review: the receiving referral qu
 - GitHub Actions quality run #707 (run ID `42466215027`) passed on exact source HEAD `fbeff4fad8ba30159721ddc1372a0dfe16185770`: dependency audit reporting, automated unit tests, lint, production bundle build, Chromium installation and real-browser offline-queue tests all succeeded.
 - Vercel deployment `reflink-9yzjgkd1l-uthaibas-projects.vercel.app` reached READY for that same source HEAD. This is a branch deployment, not a production release.
 - The current status-register update is documentation-only; no production database, production deployment, migration ledger or patient data was changed.
+
+## Live Supabase gate recheck — 8 November 2026
+
+- Supabase project is healthy, but the migration ledger still contains only `20260928203447_reflink_v2_rural_first`; the historical SQL source is still absent from the repository.
+- The sole listed branch is non-persistent, data-free and references the same project as its parent. It is not treated as isolated migration-test staging.
+- Security advisor: 2 RLS-enabled tables without policies, 5 authenticated-callable SECURITY DEFINER functions, and leaked-password protection disabled.
+- Performance advisor: 16 unindexed foreign keys, 17 RLS init-plan warnings, 5 unused-index candidates and 4 multiple-permissive-policy warnings.
+- These are read-only findings. No live schema, RLS, ACL, Auth setting, migration ledger, patient row or deployment was changed.
