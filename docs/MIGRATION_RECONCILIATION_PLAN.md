@@ -528,7 +528,7 @@ A schema-only export was supplied by the project owner and reviewed locally. The
 - 9 triggers.
 - 23 foreign-key constraints.
 - 30 RLS policies.
-- 9 explicit indexes in the dump.
+- 10 explicit indexes in the dump (corrected by the 8 November static manifest review).
 - Foreign keys from public tables to Supabase-managed `auth.users` are present; the Auth schema itself is not part of this export.
 
 The live migration-ledger read still reports only `20260928203447_reflink_v2_rural_first`. The production schema export therefore improves object-level reconciliation but does not recover the missing historical migration source or explain whether later live objects were applied outside migration history. Treat all eight November migration files as proposals until each is reconciled and tested.
@@ -588,3 +588,16 @@ Fresh read-only catalog evidence confirms `public.audit_log` is owned by `postgr
 Default ACLs are broad for both `postgres` and `supabase_admin`. Direct `pg_auth_members` inspection did not show `postgres` as a member of `supabase_admin`; therefore the proposal explicitly prohibits assuming a `postgres`-executed migration can change `supabase_admin` defaults. That owner-level path must be separately authorised and validated, or creation of new public objects by that role remains a release blocker. Existing function ACLs are individually scoped and must not be blanket-revoked.
 
 The proposal defines a positive/negative staging matrix, catalog diff, advisor rerun, rollback requirements and explicit release gates. It is not an executable migration. No SQL was applied to production or staging. Baseline reconstruction remains the prerequisite for all database execution.
+
+
+## 20. Public schema export manifest and restore-readiness review — 8 November 2026
+
+The supplied `reflink-production-schema.sql` artifact was materialized for local static inspection and hashed. The SHA-256 is `72c5fc6ecce0cb44f348605ab1d371021c1e87c75d75c1d1a11367794a8224c3` (64,434 bytes; 1,612 lines). The machine-counted inventory is 14 public tables, 16 functions, 2 views, 30 RLS policies, 9 triggers, 10 explicit indexes, 23 foreign keys and RLS enabled on all 14 tables. This corrects the earlier index inventory from 9 to 10.
+
+No standalone top-level table-data `INSERT` or `COPY` statements were found; INSERT statements occur inside stored function bodies. The export contains no `CREATE EXTENSION` statements and references managed `auth.users`. It creates only `public`. It is therefore not a complete Supabase platform restore artifact and has not been parsed or executed by PostgreSQL.
+
+A critical mismatch is now explicit: the SQL export contains default-privilege statements for `postgres` but none for `supabase_admin`, while separate live catalog evidence confirms broad public defaults for both creators. The export alone does not reproduce all live ACL/default-ACL state. Reconcile the creator-specific catalog evidence separately; do not assume the dump is a complete grant manifest.
+
+The detailed artifact identity, inventory, exclusions and restore gates are recorded in [20261108_public_schema_export_manifest.md](./catalog_exports/20261108_public_schema_export_manifest.md). The artifact is suitable as an input to a reviewed staging baseline, but is **not yet approved as a restore script**. The historical migration source remains unavailable; any reviewed squash/baseline must be described honestly as a new baseline derived from the reviewed current schema, not as a reconstruction of the missing historical migration.
+
+Fresh environment checks on 8 November 2026 confirm staging `rcskuzmvyugbanygizri` still has no public application tables and an empty migration ledger; production still has only `20260928203447_reflink_v2_rural_first`. No SQL was applied to either environment.
