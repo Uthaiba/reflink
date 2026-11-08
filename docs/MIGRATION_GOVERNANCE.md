@@ -69,3 +69,20 @@ The detailed source migration inventory, dependency graph, read-only evidence, o
 ## Index review status
 
 A prior read-only catalog review reported 16 foreign-key columns without a supporting index. The exact table/column list and index definitions were not preserved in the source-controlled evidence available to this branch. No index migration should be generated from the count alone: first export the exact foreign-key constraints and existing index definitions, then verify column order, partial-index predicates, uniqueness, workload/query plans and write overhead. Add only indexes demonstrated to be missing and useful, and validate them in a disposable database. Do not run `CREATE INDEX` or `CREATE INDEX CONCURRENTLY` against production as part of this source-only work.
+
+
+## Public-schema export review — 8 November 2026
+
+The project owner supplied a schema-only `public` export. It contains 14 public tables, all with RLS enabled; 16 functions; 2 views; 9 triggers; 23 foreign keys; and 30 RLS policies. No table data was included.
+
+New findings that must be included in staging remediation design:
+
+- `authenticated` has `TRUNCATE`, `TRIGGER`, `REFERENCES`, `MAINTAIN` and `SELECT` privileges on `public.audit_log`. RLS does not protect against TRUNCATE. Reduce this ACL while preserving administrator-only SELECT via RLS and trusted audit writes.
+- Default privileges for `postgres` in `public` grant ALL on future tables and sequences to `anon`, `authenticated` and `service_role`. Replace broad defaults with least-privilege defaults and explicit grants per object.
+- Referral and counter-referral audit triggers write full OLD/NEW row JSON. Review audit-field minimisation, retention and access.
+- `public.referral_analytics` contains referral-level and patient-identifier fields; its explicit grant is service-role-only. Do not expose it to browser roles or use it as the R-PHI aggregate source.
+- `referral_events` and `referral_feedback` are RLS-enabled and service-role-only in the exported ACL/policy state. Do not add broad policies.
+- A separate `public.users` table exists alongside Auth-linked `public.profiles`; clarify the authoritative identity source before using either for recipient selection or analytics.
+- `log_referral_print()` uses `MAX(print_number)+1` without a uniqueness constraint on referral/print number; concurrency-safe allocation remains a staging test requirement.
+
+The public export does not include Auth/Storage managed schemas, Auth settings, Storage bucket configuration, Realtime publication metadata or extension inventory. These remain separate metadata-only preflight requirements. Production remains read-only; no migration or ACL change has been applied.
