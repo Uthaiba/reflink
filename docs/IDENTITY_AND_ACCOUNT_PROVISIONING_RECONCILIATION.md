@@ -136,3 +136,22 @@ After a reviewed baseline is reconstructed, test:
 - This is a source/catalog reconciliation, not a live integration test.
 
 **Decision:** identity design is partially resolved: `profiles` is the canonical active application identity model, while `public.users` is legacy/parallel. The deployed provisioning function is not source-aligned. Baseline reconstruction and production release remain NO-GO until the decisions and staging tests above are completed.
+
+
+## Continuation addendum — hardened repository candidate (8 November 2026)
+
+The remediation branch now contains additional source changes beyond the initial comparison above. This addendum supersedes the earlier statement that wildcard CORS remains in repository source and that the temporary-password flag is set in a separate dashboard request.
+
+- The repository candidate now uses an exact-origin CORS allowlist. The canonical attached Vercel domain is `https://reflink-yobe.vercel.app`; optional additional origins are read from the comma-separated `REFLINK_ALLOWED_ORIGINS` Edge Function environment variable. Unapproved origins receive no `Access-Control-Allow-Origin` header. This is a browser-origin control only; bearer-token and administrator authorization remain mandatory.
+- The Auth user and initial profile creation flow now sets `must_change_password: true` in the profile insert. The former non-atomic follow-up dashboard update was removed.
+- If profile insertion fails after Auth user creation, the candidate attempts compensating Auth deletion and checks the deletion result. A failed cleanup is surfaced as requiring administrator review rather than being reported as a successful rollback.
+- Regression tests cover allowed/denied CORS behavior, the atomic temporary-password profile field, cleanup success and cleanup failure.
+- Exact-HEAD GitHub Actions for commit `4d8f84dd876d80a227d781bb72e23f07a97993e7` passed on both push and pull-request events. Both runs completed unit tests, lint, production build and Chromium real-browser offline queue tests.
+
+### Remaining release gates
+
+This is still repository source, not deployed behavior. Production `create-user` remains ACTIVE at version 2 and has not been replaced or invoked. The optional `REFLINK_ALLOWED_ORIGINS` runtime variable has not been configured in production. Before any release, confirm every legitimate browser origin, the Edge Function runtime environment, exact deployed source/version, and a rollback procedure. Do not add preview or wildcard origins merely for convenience.
+
+The synthetic staging project still has no reconstructed application schema, so the candidate has not been exercised against a working Auth/profile schema or mocked Supabase integration. The test suite currently provides source-contract regression coverage, not a full Edge Function integration guarantee. Required staging cases remain those in Section 6, including duplicate email, role/facility authorization, profile insert failure, compensation failure, metadata trust boundaries and allowed/denied CORS origins.
+
+**Decision:** repository-side account provisioning is materially hardened and exact-HEAD CI-verified. Production release remains NO-GO pending reviewed schema baseline, functional staging tests, origin confirmation and controlled deployment approval.
