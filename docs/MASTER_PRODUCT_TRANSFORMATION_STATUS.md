@@ -144,3 +144,18 @@ A data-projection defect was found during this review: the receiving referral qu
 - Security advisor: 2 RLS-enabled tables without policies, 5 authenticated-callable SECURITY DEFINER functions, and leaked-password protection disabled.
 - Performance advisor: 16 unindexed foreign keys, 17 RLS init-plan warnings, 5 unused-index candidates and 4 multiple-permissive-policy warnings.
 - These are read-only findings. No live schema, RLS, ACL, Auth setting, migration ledger, patient row or deployment was changed.
+
+## Receiving assessment discharge-summary hardening — 8 November 2026
+
+A focused workflow review found that the assessment form allowed a receiving clinician to select `discharged` directly from `under_assessment`, setting `discharged_at` and changing status without requiring the discharge diagnosis, condition at discharge or follow-up plan required by the separate inpatient discharge form.
+
+### Source correction
+
+- The assessment form now conditionally presents a discharge-summary section when the disposition is `discharged`.
+- Discharge diagnosis, condition at discharge and follow-up plan are required in both browser validation and the save handler; discharge medications remain optional.
+- The handler persists these fields with the discharge status and timestamp.
+- Existing referral values are loaded when reopening an assessment, and the form state is reset after submission.
+- Assessment progress reflects the additional required discharge fields when the discharged disposition is selected.
+- Added a source-contract regression test covering required-field validation, persistence and conditional UI fields.
+
+This is a source-level workflow completeness correction, not a clinical rule defining when discharge is appropriate. The receiving clinician remains responsible for the clinical decision. The source test does not establish database trigger behavior, authorization or persisted data integrity. No live database, clinical record, migration, notification or production deployment was changed.
