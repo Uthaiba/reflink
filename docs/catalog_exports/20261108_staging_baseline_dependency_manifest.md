@@ -26,16 +26,16 @@ All 14 exported public tables have RLS enabled in the export. There are no stand
 | Dependency | Evidence | Staging status | Required action |
 |---|---|---|---|
 | PostgreSQL | Export targets PostgreSQL objects; prior production inventory is PG17 | PG17.11.0.018 | Dry-run and validate |
-| `auth` schema / `auth.uid()` | Policies/functions reference managed Auth objects | Not yet catalog-verified in this pass | Verify read-only before restore |
-| `anon`, `authenticated`, `service_role` | Explicit ACL and policy targets | Not yet catalog-verified in this pass | Verify role attributes and memberships |
-| `postgres` | Object owner and default ACL target | Platform-managed | Verify ownership capability |
-| `pg_database_owner` | Public schema owner | Platform-managed | Verify existence/semantics |
+| `auth` schema / `auth.uid()` | Policies/functions reference managed Auth objects | `auth` schema exists; owned by `supabase_admin` | Confirm function presence/signatures before restore |
+| `anon`, `authenticated`, `service_role` | Explicit ACL and policy targets | All exist; `service_role` has BYPASSRLS; anon/authenticated do not | Preserve managed roles; verify only required memberships |
+| `postgres` | Object owner and default ACL target | Exists; BYPASSRLS, CREATEROLE, CREATEDB | Confirm execution context before ownership statements |
+| `pg_database_owner` | Public schema owner | Exists; owns staging `public` schema | Keep managed schema ownership |
 | `pgcrypto` 1.3 | UUID default function dependency | Installed 1.3 in `extensions` | Confirm resolution |
 | `uuid-ossp` 1.1 | Installed in production; no clear direct use identified in inspected excerpt | Installed 1.1 in `extensions` | Do not assume needed |
 | `plpgsql` 1.0 | PL/pgSQL functions | Installed 1.0 | Available |
-| Auth signup trigger | `handle_new_user()` SECURITY DEFINER function | Not yet verified on `auth.users` | Inspect exact trigger; do not duplicate |
+| Auth signup trigger | `handle_new_user()` SECURITY DEFINER function | No non-internal trigger on staging `auth.users` | Retrieve/review production trigger definition; do not invent or duplicate |
 | Views | Analytics view includes patient identifier and diagnosis data | Export is service-role-only | Preserve narrow grants; review security mode |
-| Default ACLs | Dump includes only `postgres`; production live catalog previously showed `postgres` and `supabase_admin` | Must inspect staging catalog | Reconcile; do not blindly replay |
+| Default ACLs | Dump includes only `postgres`; live production catalog showed `postgres` and `supabase_admin` | Staging also has broad defaults for both roles on tables, sequences, functions | Reconcile to least privilege; do not blindly replay |
 
 ## Export characteristics
 
