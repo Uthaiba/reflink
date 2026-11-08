@@ -29,7 +29,7 @@ test("public schema inventory includes all object classes and correct index coun
 });
 
 test("manifest records missing creator-specific defaults and staging-only restore boundary", () => {
-  assert.match(manifest, /does **not** contain statements for creator `supabase_admin`/i);
+  assert.match(manifest, /does \\*\\*not\\*\\* contain statements for creator `supabase_admin`/i);
   assert.match(manifest, /broad public-schema default ACLs for both/i);
   assert.match(manifest, /not yet approved as a restore script/i);
   assert.match(manifest, /Production remains read-only/i);
