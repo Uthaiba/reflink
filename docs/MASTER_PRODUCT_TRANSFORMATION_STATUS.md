@@ -454,3 +454,13 @@ A significant refinement: broad default privileges apply to future public object
 - Added `docs/REFERRAL_LIFECYCLE_FACILITY_ISOLATION_AUDIT.md` with findings, risk priorities and a synthetic acceptance matrix.
 - No RLS policy, ACL, schema, patient data, storage policy, realtime setting or production deployment was changed. Staging remains schema-empty; live role-impersonation tests remain blocked.
 - **Decision:** facility isolation is not yet approved for multi-facility production. First priority is a least-privilege ACL proposal to remove authenticated TRUNCATE/TRIGGER/REFERENCES and review unnecessary DELETE grants, followed by role/column-scoped policy design and synthetic integration tests.
+
+
+## Continuation update — core-table ACL proposal (8 November 2026)
+
+- Read-only ACL expansion confirmed the structural privileges are direct grants to `authenticated`, granted by `postgres`; no PUBLIC grant was shown for these privileges in the inspected ACL entries.
+- Added proposal migration `20261108000100_restrict_core_table_structural_privileges.sql`. It revokes only `TRUNCATE`, `TRIGGER`, and `REFERENCES` from `authenticated` on referrals, counter_referrals, profiles and facilities, with post-change privilege assertions. It deliberately leaves ordinary DML grants and all RLS policies unchanged pending call-site review.
+- Added `tests/coreTablePrivilegeProposal.test.js` to protect the candidate's scope and no-execution status.
+- Both files are review candidates only. No SQL was executed in production or staging. The migration ledger remains unchanged.
+- Remaining ACL work: decide whether authenticated DELETE grants are necessary, review column-level UPDATE access and sequence privileges, and correct default privileges for both postgres and supabase_admin through a separate reviewed plan.
+- **Decision:** critical privilege remediation has a narrowly scoped candidate, not a deployed fix. The candidate must be reviewed and tested in schema-correct synthetic staging before release.
