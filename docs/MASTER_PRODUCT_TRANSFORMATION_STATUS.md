@@ -385,3 +385,37 @@ A second read-only pass confirmed PostgreSQL 17.6.1.166 and five installed exten
 The only Storage bucket is private `referral-investigation-results` (10 MiB limit; PDF/JPEG/PNG/WebP/text/plain/CSV). Five authenticated Storage policies constrain object operations using referral ID path matching and referring-user/facility membership. Realtime publication currently includes only `public.referrals`.
 
 A significant refinement: broad default privileges apply to future public objects created by **both postgres and supabase_admin**. This is broader than the initial finding. Auth dashboard settings (MFA, leaked-password protection, providers, redirect URLs, rate limits and SMTP) remain unverified and require a controlled Dashboard review without exporting secrets or user data.
+
+## Continuation update — 8 November 2026, database security and production-gate review
+
+### Completed in this continuation
+
+- Added `docs/AUDIT_LOG_DATA_MINIMIZATION_MIGRATION_CANDIDATE.md`: review-only metadata audit design; stops future full-row JSON snapshots while preserving trigger semantics. No migration applied.
+- Added `docs/AUDIT_LOG_PRIVILEGE_RESTRICTION_CANDIDATE.md`: preferred no-direct-client-access model and administrator-read alternative; synthetic acceptance matrix. No ACL changed.
+- Added `docs/REFERRAL_PRINT_EVENT_INTEGRITY_CANDIDATE.md`: review-only per-referral transaction lock, unique print-number invariant, direct-client write restriction and concurrency tests. No migration applied.
+- Added `docs/STAGING_BASELINE_RECONSTRUCTION_REVIEW_PACKET.md`: ordered nine-phase reconstruction sequence and ten explicit blockers.
+- Re-ran the SELECT-only staging catalog verification. It reconfirmed PostgreSQL 17.11, zero public application tables/functions/views, no non-internal Auth triggers, and broad default ACL entries for both `postgres` and `supabase_admin`. The result is documented in the staging runbook. No staging or production changes were made.
+- Corrected two CI contract issues: a malformed regular expression in `tests/schemaExportManifest.test.js`, and the production read-only status wording expected by `tests/securityHardeningProposal.test.js`.
+
+### Exact-HEAD CI evidence
+
+- Current branch HEAD at this update: `6a2746648fd219715622b8d03fd5e822caad8681`.
+- GitHub Actions workflow run #862 completed successfully: https://github.com/Uthaiba/reflink/actions/runs/42517753294
+- Automated tests: 150 passed, 0 failed.
+- Lint: passed.
+- Production bundle build: passed.
+- Chromium installation and real-browser offline queue tests: passed.
+- Vercel commit status is tracked separately; the passing GitHub workflow does not itself establish a Preview or production deployment.
+- Earlier run #859 failed because of the two documentation/test-contract mismatches; both were corrected and the subsequent exact-HEAD run passed.
+
+### Remaining master-plan gates
+
+1. Historical migration source remains unavailable. The new snapshot-derived baseline must be formally approved and must not be misrepresented as historical recovery.
+2. The isolated staging public schema remains empty. No DDL has been applied. Default-ACL authority for `supabase_admin` is unresolved; do not alter platform-managed schemas or defaults.
+3. The `profiles` versus `users` authoritative identity model and exact Auth signup-trigger provenance remain unresolved.
+4. Function-by-function SECURITY DEFINER hardening, analytics-view security validation and a complete transformed SQL diff remain required before baseline reconstruction.
+5. The current staging project was created, but the current free-plan project limit and the no-impact condition prohibit creating or repurposing another paid/shared project without separate owner action. Existing production data must never be used as test fixtures.
+6. Receiving lifecycle server-side atomicity, clinical acceptance, RLS/role/facility integration, notification worker/provider delivery, R-PHI SQL execution, FHIR/DHIS2, multi-browser offline resilience, full WCAG 2.2 AA and operational recovery tests remain incomplete.
+7. PR #1 remains draft and unmerged. Production schema, migration ledger, Auth configuration, Storage, Edge Functions, Vercel production settings and patient data remain unchanged.
+
+**Current decision:** source-level quality gates are green for this exact HEAD, but the product is not production-ready. Database baseline, synthetic database integration, clinical/security acceptance and release approvals remain hard blockers.
