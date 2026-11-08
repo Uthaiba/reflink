@@ -82,7 +82,7 @@ A data-projection defect was found during this review: the receiving referral qu
 2. No approved non-production Supabase environment with synthetic facilities, users and referrals is available. Do not create a billable branch or use production as a test database.
 3. Proposed aggregate RPC, counter-referral RPC, outbox, acknowledgement hooks and notification-log grant migration have not been applied.
 4. The notification inbox UI remains intentionally unmounted; the inbox table/RPC and RLS have not been validated. User-recipient eligibility requires an authoritative notification-duty assignment source; facility-wide fan-out is not approved.
-5. The canonical create-user Edge Function source has not been deployed.
+5. The production `create-user` Edge Function is ACTIVE (version 2, JWT verification enabled), but its deployed implementation materially differs from the hardened repository source. Role validation, facility validation, error disclosure and CORS require controlled reconciliation; no deployment was performed.
 6. The legacy SMS endpoint has remaining delivery/idempotency and operational governance limitations. Exactly-once delivery is not claimed.
 7. No full clinical, RLS, authenticated integration, accessibility or multi-browser acceptance has been completed.
 
@@ -419,3 +419,14 @@ A significant refinement: broad default privileges apply to future public object
 7. PR #1 remains draft and unmerged. Production schema, migration ledger, Auth configuration, Storage, Edge Functions, Vercel production settings and patient data remain unchanged.
 
 **Current decision:** source-level quality gates are green for this exact HEAD, but the product is not production-ready. Database baseline, synthetic database integration, clinical/security acceptance and release approvals remain hard blockers.
+
+## Identity and account-provisioning reconciliation — 8 November 2026
+
+- Confirmed the canonical active application identity model is `auth.users` plus `public.profiles`. The exported `profiles.id` references `auth.users(id)`; current AdminDashboard loads and updates profiles and provisions accounts through `create-user`.
+- Identified `public.users` as a separate legacy/parallel directory model with no Auth-user FK. Legacy `src/UserManagement.jsx` directly inserts into that table and offers role values inconsistent with the current role vocabulary. It is not imported or routed by the current `src/App.jsx`; do not treat it as an active provisioning workflow or delete its data without separate review.
+- Production read-only catalog query found no non-internal trigger on `auth.users`. The exported `handle_new_user()` function is not proof of an installed signup trigger. Do not attach it without an approved signup policy; doing so could conflict with the Edge Function's explicit profile insert.
+- Production Edge Function inventory confirms `create-user` is ACTIVE, version 2, with `verify_jwt=true`. Retrieved deployed source differs from current repository source: it accepts roles not permitted by the exported profile CHECK constraint, does not validate active facility assignments, returns profile database details, and logs caught errors. Repository source has tighter validation and generic error handling but is not deployed. Wildcard CORS remains in repository source and needs an explicit origin decision.
+- Added `docs/IDENTITY_AND_ACCOUNT_PROVISIONING_RECONCILIATION.md` with source/deployment comparison, canonical contract, synthetic acceptance matrix and no-go conditions.
+- No Edge Function was deployed or invoked; no Auth user, profile, legacy user row, schema object, secret or production setting was changed.
+
+**Decision:** identity is partially resolved; `profiles` is canonical for the current application. Production account provisioning has source/deployment drift and requires a controlled, separately approved reconciliation. Baseline reconstruction and release remain blocked.
