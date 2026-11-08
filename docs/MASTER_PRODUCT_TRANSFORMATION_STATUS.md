@@ -327,3 +327,24 @@ Advisor references:
 - [RLS enabled with no policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
 - [Authenticated users can execute SECURITY DEFINER functions](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)
 - [Leaked password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
+
+
+## Isolated synthetic staging environment provisioned — 2026-11-08
+
+- Supabase project: `reflink-synthetic-staging`
+- Project reference: `rcskuzmvyugbanygizri`
+- Organisation: `reflink` (`kczzvburxzfubiqhpcxd`)
+- Region: `eu-west-2`
+- Initial status: `ACTIVE_HEALTHY`
+- Database engine: PostgreSQL 17
+- Project API URL: `https://rcskuzmvyugbanygizri.supabase.co`
+- Initial public schema inspection: no application tables.
+- Initial migration ledger: empty.
+- Initial Supabase security and performance advisor results: no lints.
+- No production records, credentials, or patient data were copied.
+- No production database or Auth configuration was changed.
+
+### Staging safety gates
+
+This project is an isolated, clean environment for synthetic-data testing only. Do not connect it to production data or production secrets. Before schema deployment, reconstruct and review the authoritative migration baseline: the production project has a historical migration-ledger entry whose source migration is absent from the repository, while the repository's newer migrations are proposals. Resolve that baseline gap before applying schema changes. Configure separate staging-only environment variables and test identities; never reuse production service-role credentials. Validate RLS, grants, functions, triggers, storage policies, and Supabase advisors in staging before considering any production rollout.
+
