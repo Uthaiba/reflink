@@ -368,3 +368,18 @@ If the dashboard requires a custom date range, implement the aggregation as a su
 The existing complementary suppression rule also needs formal test cases for multiple small groups, one small group plus a visible complement, zero-count groups, and combinations across separate reporting RPCs. It is a basic disclosure-control measure, not a formal privacy guarantee. Administrator-only access reduces the audience but does not eliminate the risk.
 
 No SQL or frontend behavior was changed as part of this review. This is a source-level finding requiring a design decision and synthetic database validation before any migration is applied.
+
+## 14. Aggregate reporting period disclosure control — 8 November 2026
+
+A source review identified that `public.get_admin_referral_volume(date, date)` accepted any date interval up to 366 days, while the facility, LGA, coverage and pathway reporting RPCs required one complete calendar month. Repeated overlapping windows could allow a caller to infer counts hidden by the 1–4 small-cell suppression rule.
+
+### Source-level mitigation
+
+- The proposed referral-volume function now accepts exactly one complete calendar month: the start date must be the first day of that month and the end date must be its final day.
+- The administrator reporting UI defaults to the latest completed Africa/Lagos calendar month and offers prior complete-month shortcuts only.
+- Manually selected partial, rolling or cross-month windows do not trigger aggregate RPC requests. The screen explains the disclosure-control restriction.
+- Regression coverage checks the SQL date guard, the UI request guard, and complete-month calculation across Lagos timezone boundaries, year changes and leap February.
+
+### Validation and limits
+
+This is a source-only correction to an unapplied proposal migration and the working branch UI. It does not alter the live Supabase schema, ACLs, RLS, migration ledger, production data or deployment. The SQL guard still requires execution in an approved isolated synthetic-data environment after the missing historical migration baseline is reconciled. Complementary suppression and cross-filter testing for each aggregate dimension remain release requirements.
