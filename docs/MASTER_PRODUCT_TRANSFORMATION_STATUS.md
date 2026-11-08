@@ -159,3 +159,12 @@ A focused workflow review found that the assessment form allowed a receiving cli
 - Added a source-contract regression test covering required-field validation, persistence and conditional UI fields.
 
 This is a source-level workflow completeness correction, not a clinical rule defining when discharge is appropriate. The receiving clinician remains responsible for the clinical decision. The source test does not establish database trigger behavior, authorization or persisted data integrity. No live database, clinical record, migration, notification or production deployment was changed.
+
+## Receiving workflow handover and counter-referral queue correction — 8 November 2026
+
+Two additional source-level defects were corrected during the receiving workflow review:
+
+1. Direct discharge from the assessment form previously allowed a `discharged` status/timestamp without requiring discharge diagnosis, condition at discharge and follow-up plan. These are now conditionally required and persisted; discharge medications remain optional.
+2. The receiving query projects `counter_referral:counter_referrals(*)`, a one-to-many PostgREST relation. An absent relation is represented as an empty array (`[]`), which is truthy in JavaScript. The queue's previous `!referral.counter_referral` checks therefore treated a discharged referral with no counter-referral as closed and omitted it from the pending counter-referral KPI. Added `hasCounterReferral()` to normalise object/array relation shapes and used it for both open-queue status and the pending KPI.
+
+Regression tests now cover null, empty-array and populated-array relation shapes, including metric counts. These are deterministic application tests; they do not replace database relationship/RLS validation or a clinical workflow acceptance test. No production database, patient record, migration or deployment was changed.
