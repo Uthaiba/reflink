@@ -355,3 +355,8 @@ This project is an isolated, clean environment for synthetic-data testing only. 
 The isolated Supabase project `reflink-synthetic-staging` (`rcskuzmvyugbanygizri`, `eu-west-2`) is provisioned and healthy. Its public schema and migration ledger are empty; initial security and performance advisor scans returned no lints. No production data or secrets were copied.
 
 The six-step migration workstream is tracked in `docs/MIGRATION_RECONCILIATION_PLAN.md`. The historical migration source `20260928203447_reflink_v2_rural_first.sql` is absent from the current branch and its accessible Git path history. Existing catalog exports are metadata snapshots, not restorable schema dumps. Consequently, baseline reconstruction, synthetic identity creation, migration application and database integration tests remain gated. No SQL has been applied to staging or production in this checkpoint; production remains read-only.
+
+
+## Production schema export handoff — 8 November 2026
+
+Added `docs/PRODUCTION_SCHEMA_EXPORT_RUNBOOK.md` and linked it from the migration reconciliation plan. The runbook documents the schema-only export procedure, managed-schema exclusions, data/secret sanitization, metadata follow-up and staging restore acceptance gates. The connected Supabase tools do not expose a database dump/download operation, so the database owner/operator must run the approved export locally and share the sanitized artifact securely. Do not use `supabase db pull` against production for this handoff because it records a migration in the remote history. No production database or Auth changes were made. No migrations, users or synthetic records were created in staging.
