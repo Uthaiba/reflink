@@ -44,7 +44,7 @@ test("untrusted Auth metadata cannot assign an application role or facility", ()
 test("profile creation failure attempts to compensate by deleting the Auth identity", () => {
   assert.match(edgeFunction, /if \(profileError \|\| !profile\)/);
   assert.match(edgeFunction, /admin\.auth\.admin\.deleteUser\(created\.user\.id\)/);
-  assert.match(edgeFunction, /Account creation was rolled back/);
+  assert.match(edgeFunction, /account creation was rolled back/);
 });
 
 test("administrator dashboard provisions accounts through the Edge Function", () => {
