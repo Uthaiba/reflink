@@ -13,7 +13,7 @@ Create a reproducible, reviewable staging schema baseline from the supplied curr
 
 The export contains no standalone table-data INSERT/COPY statements. It is not a full Supabase project backup: it does not recreate Auth users, Storage objects/buckets/policies, Realtime publication membership, project Auth settings, secrets, edge functions, or every managed-schema object. Do not describe it as a full environment restore.
 
-No DDL has been applied to staging as part of this preparation. Staging was confirmed healthy and empty in `public`, with an empty migration ledger.
+No DDL has been applied to staging as part of this preparation. Staging was confirmed healthy and empty in `public`, with an empty migration ledger. A committed read-only catalog verifier at `supabase/verification/staging_baseline_catalog_verification.sql` was executed successfully against staging; it reported zero application objects and confirmed the previously observed default ACL and Auth-trigger state.
 
 ## 2. Verified environment compatibility
 
@@ -102,7 +102,7 @@ Before staging DDL is authorized, capture and review:
 - Exact object inventory and dependency graph.
 - A parser/restore dry run against a disposable local PostgreSQL 17 + Supabase-compatible environment, followed by SQL review.
 
-## 6. Post-restore acceptance gates
+## 6. Read-only verification baseline\n\nThe committed verifier `supabase/verification/staging_baseline_catalog_verification.sql` uses SELECT-only catalog queries. It was executed against staging on 2026-11-08. Results: 0 public tables, 0 public functions, 0 public views, 0 public indexes, 0 foreign keys, 0 public triggers, 0 public policies, and 0 RLS-enabled public tables. All object-count comparisons correctly report false because the target is intentionally empty; `all_tables_rls_enabled` is vacuously true for zero tables and must not be treated as a successful post-restore RLS acceptance test. The verifier also confirmed the six broad default ACL entries (three object types each for `postgres` and `supabase_admin`) and no non-internal trigger on `auth.users`.\n\n## 7. Post-restore acceptance gates
 
 A staging restore is not complete until all gates pass:
 
@@ -119,7 +119,7 @@ A staging restore is not complete until all gates pass:
 11. Application smoke tests run against staging only; no production endpoint or credential is used.
 12. Staging restore procedure is repeatable from a fresh empty staging database.
 
-## 7. Execution controls
+## 8. Execution controls
 
 - This runbook does not authorize production changes.
 - No production SQL, migrations, grants, Auth settings, Storage changes, or data changes are permitted.
@@ -128,6 +128,6 @@ A staging restore is not complete until all gates pass:
 - Any staging DDL execution requires an explicitly reviewed candidate SQL artifact, a recorded preflight, a rollback/recreate plan, and a post-restore verification report.
 - Keep the historical migration ledger distinction explicit: a new baseline migration records a new reconstruction point; it does not recreate the missing historical source.
 
-## 8. Current decision
+## 9. Current decision
 
 **NO-GO for applying the raw export.** Staging is healthy and empty, required platform roles/schemas and key extension versions are present, but no Auth user trigger exists in staging, broad default ACLs are present for both `postgres` and `supabase_admin`, and view security/ownership behavior still require explicit review. The next engineering deliverable is a normalized, staging-only baseline candidate plus a deterministic catalog verification script—not a production migration. The next engineering deliverable is a normalized, staging-only baseline candidate plus a deterministic catalog verification script—not a production migration.
