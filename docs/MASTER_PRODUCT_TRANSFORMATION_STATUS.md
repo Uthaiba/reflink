@@ -474,3 +474,14 @@ A significant refinement: broad default privileges apply to future public object
 - Identified important design constraints: keep compare-and-set status guards; do not replace writes with a generic arbitrary JSONB patch RPC; investigate the admission handler's `status='admitted'` filter; and address concurrent JSONB overwrites and possible orphaned Storage objects.
 - No application workflow code, database permissions, RLS policies, Storage policies, patient records, staging schema or production configuration was changed.
 - **Next:** inspect the full assessment update payload and Storage bucket policies; inventory all referral write call sites outside `src/App.jsx`; then design fixed-schema transactional RPCs and synthetic integration tests. Do not revoke UPDATE or DELETE grants until replacements and external dependencies are verified.
+
+
+## Continuation update — assessment payload and attachment authorization (8 November 2026)
+
+- Confirmed the assessment save handler's full column set and its compare-and-set guard `status='under_assessment'`. The assessment handler performs the initial admitted/discharged transition; the separate inpatient handler edits an already admitted record.
+- Read-only Storage catalog inspection found the investigation-results bucket is private, limited to 10 MiB per object, and allows PDF/JPEG/PNG/WebP/plain-text/CSV.
+- Identified that the bucket's authenticated upload, download, update and delete policies all use participant identity OR referring-facility OR receiving-facility membership, without explicit role restrictions. This may authorize more facility users and actions than the clinical attachment workflow requires.
+- Extended `docs/REFERRAL_LIFECYCLE_FACILITY_ISOLATION_AUDIT.md` with assessment payload, Storage policy and orphaned-upload findings.
+- The CI test-runner import issue was corrected in commit `499a39fd8cbcd888f80a337292d058e19b0f1710`. Subsequent workflow runs were cancelled by newer commits before completion; current runs for commit `7471b010e0156b13592f805520757f3263fe4aeb` are in progress. No green result is claimed yet.
+- No production or staging data/schema/policy was changed. No file object or patient record was accessed.
+- **Next:** inspect every repository write surface outside the main UI (API routes, Edge Functions, offline sync and counter-referral RPC), then prepare separate role-specific Storage and referral permission candidates with negative tests.
