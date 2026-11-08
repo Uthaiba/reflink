@@ -443,3 +443,14 @@ A significant refinement: broad default privileges apply to future public object
 - Added `docs/ACCOUNT_PROVISIONING_RELEASE_RUNBOOK.md` as a gated pre-release plan and expanded the identity reconciliation record.
 - **Not verified:** full Edge Function integration against schema-correct staging; production CORS runtime configuration; live account provisioning; production deployment. Production function remains ACTIVE version 2 and unchanged. No production or staging DDL, Auth data, secrets or settings were modified.
 - **Decision:** source candidate is CI-green; production provisioning remains NO-GO until schema-correct synthetic tests, origin confirmation, release review and deployment approval are complete.
+
+
+## Continuation update — referral lifecycle and facility-isolation audit (8 November 2026)
+
+- Performed read-only production catalog inspection of RLS policies and table grants for `referrals`, `counter_referrals`, `profiles` and `facilities`; no patient rows were queried.
+- Confirmed RLS is enabled on all four tables, but the authenticated role also has table-level DELETE, REFERENCES, TRIGGER and TRUNCATE grants on each. **TRUNCATE is not governed by RLS**, making this a critical ACL remediation priority. No destructive operation was attempted.
+- Identified policy refinements: receiving-side referral and counter-referral SELECT predicates do not explicitly require the receiving-staff role; receiving UPDATE policy is row/facility scoped but not column scoped; PHC SELECT is individual-user scoped rather than facility-team scoped; PHC INSERT policy does not enforce active destination status at the database boundary.
+- Confirmed the database transition trigger validates status sequence and completion requires a counter-referral, while the entry trigger does not validate active destination facility.
+- Added `docs/REFERRAL_LIFECYCLE_FACILITY_ISOLATION_AUDIT.md` with findings, risk priorities and a synthetic acceptance matrix.
+- No RLS policy, ACL, schema, patient data, storage policy, realtime setting or production deployment was changed. Staging remains schema-empty; live role-impersonation tests remain blocked.
+- **Decision:** facility isolation is not yet approved for multi-facility production. First priority is a least-privilege ACL proposal to remove authenticated TRUNCATE/TRIGGER/REFERENCES and review unnecessary DELETE grants, followed by role/column-scoped policy design and synthetic integration tests.
