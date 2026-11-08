@@ -376,3 +376,12 @@ The export adds several concrete security priorities to Phase 1:
 - Resolve concurrent print-number allocation before treating print audit numbering as reliable.
 
 The export is a public-schema baseline only. Auth/Storage metadata, extension inventory, Realtime publication configuration and project-level settings remain outstanding. The migration ledger still records only `20260928203447_reflink_v2_rural_first`; its historical SQL source remains missing from the repository. Therefore migration baseline reconciliation is **partially advanced, not complete**, and staging SQL execution remains blocked. No production schema, data, ACL, Auth setting or deployment was changed.
+
+
+## Supabase platform metadata preflight — 8 November 2026
+
+A second read-only pass confirmed PostgreSQL 17.6.1.166 and five installed extensions: pg_stat_statements 1.11, pgcrypto 1.3, plpgsql 1.0, supabase_vault 0.3.1 and uuid-ossp 1.1. No extra application schema exists; the proposed private notification schema is not deployed. No custom Auth-table triggers were found.
+
+The only Storage bucket is private `referral-investigation-results` (10 MiB limit; PDF/JPEG/PNG/WebP/text/plain/CSV). Five authenticated Storage policies constrain object operations using referral ID path matching and referring-user/facility membership. Realtime publication currently includes only `public.referrals`.
+
+A significant refinement: broad default privileges apply to future public objects created by **both postgres and supabase_admin**. This is broader than the initial finding. Auth dashboard settings (MFA, leaked-password protection, providers, redirect URLs, rate limits and SMTP) remain unverified and require a controlled Dashboard review without exporting secrets or user data.
