@@ -25,3 +25,30 @@ export function isCompleteCalendarMonth(startDate, endDate) {
     month === endMonth
   );
 }
+
+export function getPreviousCompleteCalendarMonthRange(referenceDate = new Date(), monthsAgo = 1) {
+  if (!(referenceDate instanceof Date) || !Number.isFinite(referenceDate.getTime())) {
+    throw new TypeError("A valid reference date is required.");
+  }
+  if (!Number.isSafeInteger(monthsAgo) || monthsAgo < 1) {
+    throw new TypeError("monthsAgo must be a positive safe integer.");
+  }
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Lagos",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(referenceDate);
+  const year = Number(parts.find((part) => part.type === "year")?.value);
+  const month = Number(parts.find((part) => part.type === "month")?.value);
+
+  const start = new Date(Date.UTC(year, month - 1 - monthsAgo, 1));
+  const end = new Date(Date.UTC(year, month - monthsAgo, 0));
+  const formatDate = (date) => [
+    String(date.getUTCFullYear()).padStart(4, "0"),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+
+  return { startDate: formatDate(start), endDate: formatDate(end) };
+}
