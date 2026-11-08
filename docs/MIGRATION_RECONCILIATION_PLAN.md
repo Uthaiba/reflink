@@ -419,3 +419,11 @@ A source-level review found a path from `under_assessment` directly to `discharg
 The application now requires those three fields for the direct-discharge path and persists them with the status/timestamp update. Discharge medications remain optional. Existing values are restored when reopening the assessment. A regression source-contract test protects the validation and persistence contract.
 
 This change does not define clinical discharge eligibility, replace professional judgement, or prove database enforcement. The status update remains a client-side compare-and-set operation. A database-side invariant and authenticated synthetic-role integration test still require the reconciled schema baseline and approved isolated database. No production database was modified.
+
+## 17. Receiving queue counter-referral relation shape — 8 November 2026
+
+The receiving referral projection uses `counter_referral:counter_referrals(*)`. Because this is a one-to-many PostgREST relation, a referral without a counter-referral is returned with an empty array rather than necessarily `null`. JavaScript treats `[]` as truthy, so checks using `!referral.counter_referral` incorrectly classified discharged referrals with no counter-referral as closed and excluded them from the pending KPI.
+
+The source now normalises the relation shape: arrays are present only when `length > 0`, while a non-null object represents a present relation. Both active-queue classification and pending-counter-referral metrics use the shared helper. Regression fixtures cover null, empty and populated arrays.
+
+This is an application-level data-shape correction. It does not establish the database foreign-key relationship, RLS visibility or production PostgREST response contract; those remain subject to synthetic-database validation after baseline reconciliation.
