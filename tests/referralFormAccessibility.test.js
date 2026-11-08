@@ -45,5 +45,5 @@ test("investigation classification errors are announced, associated and focus th
   assert.match(source, /aria-describedby=\{validationError \? validationErrorId : undefined\}/);
   assert.match(source, /systolicRef : diastolicRef/);
   assert.match(source, /resultValueRef : referenceRangeRef/);
-  assert.match(source, /setValidationError\("\\"\)/);
+  assert.ok(source.includes('setValidationError("");'));
 });
