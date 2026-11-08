@@ -3604,11 +3604,11 @@ provisional_diagnosis: "",
     if (form.chief_complaint_category === "Other" && !form.chief_complaint_other.trim()) {
       errors.chief_complaint_other = "Describe the other chief complaint.";
     }
-    if (!form.urgency) errors.urgency = "Referral urgency is required.";
-    if (!form.receiving_facility_id) errors.receiving_facility_id = "Receiving facility is required.";
     if (form.urgency === "emergency" && !form.physical_findings.trim() && form.physical_findings_structured.length === 0) {
       errors.physical_findings_structured = "Emergency referrals require clinical findings.";
     }
+    if (!form.urgency) errors.urgency = "Referral urgency is required.";
+    if (!form.receiving_facility_id) errors.receiving_facility_id = "Receiving facility is required.";
     return errors;
   };
 
