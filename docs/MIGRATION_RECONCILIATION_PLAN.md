@@ -577,3 +577,14 @@ A second read-only catalog pass completed the metadata that can safely be retrie
 The connected Supabase project metadata/API does not expose Auth security settings such as leaked-password protection or a complete Auth configuration snapshot. The catalog shows no custom trigger on `auth` tables, but that does not replace review of Auth dashboard settings, provider configuration, redirect URLs, rate limits, MFA policy or SMTP configuration. These must be captured through the Dashboard without exposing secrets or user records.
 
 **Preflight result:** public schema, installed extensions, Storage bucket/policy metadata, Realtime publication membership, application-schema inventory and Auth trigger catalog are now documented. The Auth configuration/settings review remains outstanding. Do not export Auth users, Storage objects, secrets or provider credentials.
+
+
+## 19. Database least-privilege hardening — 8 November 2026
+
+A dedicated source-only proposal is recorded in [SECURITY_HARDENING_PROPOSAL.md](./SECURITY_HARDENING_PROPOSAL.md), with regression guard `tests/securityHardeningProposal.test.js`.
+
+Fresh read-only catalog evidence confirms `public.audit_log` is owned by `postgres` and the authenticated ACL includes SELECT, TRUNCATE, REFERENCES, TRIGGER and MAINTAIN. The proposal removes only the unnecessary dangerous browser privileges first; administrator SELECT remains subject to the existing RLS policy. Trigger writer privileges must be proven with synthetic referral mutations before any write ACL is narrowed.
+
+Default ACLs are broad for both `postgres` and `supabase_admin`. Direct `pg_auth_members` inspection did not show `postgres` as a member of `supabase_admin`; therefore the proposal explicitly prohibits assuming a `postgres`-executed migration can change `supabase_admin` defaults. That owner-level path must be separately authorised and validated, or creation of new public objects by that role remains a release blocker. Existing function ACLs are individually scoped and must not be blanket-revoked.
+
+The proposal defines a positive/negative staging matrix, catalog diff, advisor rerun, rollback requirements and explicit release gates. It is not an executable migration. No SQL was applied to production or staging. Baseline reconstruction remains the prerequisite for all database execution.
