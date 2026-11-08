@@ -514,3 +514,44 @@ Synthetic fixture and database integration acceptance scenarios are specified in
 A reviewed operator runbook is now available at [PRODUCTION_SCHEMA_EXPORT_RUNBOOK.md](./PRODUCTION_SCHEMA_EXPORT_RUNBOOK.md). It uses the documented Supabase CLI schema-dump workflow, explicitly avoids `db pull` against production because that records migration history, and identifies managed-schema exclusions (Auth, Storage and extension-owned schemas). It requires metadata-only follow-up for approved customizations and excludes all patient rows, Auth users, secrets and Storage objects.
 
 The connected Supabase tools available in this workspace do not expose a database dump/download operation. The authorized database owner/operator must run the export in a trusted local environment and provide the sanitized schema-only artifact securely. No credentials should be pasted into chat. Until that artifact is reviewed, no baseline or migrations are applied to staging and production remains read-only.
+
+
+## 10. Production public-schema export reviewed — 8 November 2026
+
+A schema-only export was supplied by the project owner and reviewed locally. The export was produced with the Supabase CLI using `--schema public`; it contains no table data. It is a public-schema baseline, not a complete Supabase platform export: managed Auth/Storage schemas, Auth configuration, Storage bucket configuration/policies outside the exported schema, project settings and extension inventory still require separate metadata-only verification.
+
+### Inventory in the export
+
+- 14 public tables, all with RLS enabled.
+- 16 public functions, including trigger functions and privileged RPCs.
+- 2 public views.
+- 9 triggers.
+- 23 foreign-key constraints.
+- 30 RLS policies.
+- 9 explicit indexes in the dump.
+- Foreign keys from public tables to Supabase-managed `auth.users` are present; the Auth schema itself is not part of this export.
+
+The live migration-ledger read still reports only `20260928203447_reflink_v2_rural_first`. The production schema export therefore improves object-level reconciliation but does not recover the missing historical migration source or explain whether later live objects were applied outside migration history. Treat all eight November migration files as proposals until each is reconciled and tested.
+
+### Newly confirmed security and governance findings
+
+1. **Audit-log ACL is over-broad.** The export grants `SELECT, REFERENCES, TRIGGER, TRUNCATE, MAINTAIN` on `public.audit_log` to `authenticated`. RLS controls row access; it does not protect a table from the table-level `TRUNCATE` privilege. Remove unnecessary table-level privileges in a reviewed staging migration. Preserve administrator-only SELECT through RLS and preserve trusted trigger/service-role write paths.
+2. **Default privileges are over-broad.** Default privileges for objects created by `postgres` in `public` grant ALL on future tables and sequences to `anon`, `authenticated` and `service_role`. Future tables may not automatically have RLS enabled. Replace this with restrictive defaults and explicit per-object grants; test object creation and PostgREST access in staging.
+3. **Audit snapshots duplicate potentially sensitive data.** `audit_referral_mutation()` serializes complete OLD/NEW rows to `audit_log` for referrals and counter-referrals. Review a field allowlist, redaction/minimisation, retention, access, and audit integrity before extending analytics or retention.
+4. **Legacy identity model needs clarification.** Both `public.profiles` (linked to `auth.users`) and a separate `public.users` table (with its own email/role/facility fields) exist. Do not treat them as interchangeable identity sources. Confirm ownership, usage and migration/deprecation plan before new features rely on `users`.
+5. **Analytics view is row-level and contains patient identifiers.** `public.referral_analytics` selects `patient_identifier` and referral-level fields. Its current explicit grant is service-role-only; keep it out of authenticated R-PHI reporting and do not expose it through new RPCs or views.
+6. **Service-only event tables are fail-closed.** `referral_events` and `referral_feedback` have RLS enabled, no policies, and service-role-only table grants in the export. Do not add authenticated policies without an approved access contract.
+7. **Print sequence concurrency remains unresolved.** `log_referral_print()` computes `MAX(print_number)+1` without a uniqueness constraint on `(referral_id, print_number)`. Design and test a transaction-safe allocator and uniqueness enforcement in staging; do not alter production directly.
+
+### Migration implications
+
+- The existing `referral_notifications` table has RLS participant/admin SELECT policies and currently broad authenticated table grants. Proposal `20261107000100_restrict_notification_log_column_access.sql` is directionally consistent with least privilege, but its column-level grants and every frontend/PostgREST projection must be integration-tested in staging.
+- The proposed private notification schema must explicitly override the broad `public` default-privilege posture where relevant and retain no browser-role access.
+- The exported status constraint confirms the live workflow values: `draft`, `sent`, `acknowledged`, `patient_arrived`, `under_assessment`, `admitted`, `discharged`, `referred_again`, `completed`, `cancelled`. There is no `rejected` status. Decline/rejection must remain a separately governed workflow decision, not be silently mapped to `cancelled` or `referred_again`.
+- The dump confirms the current referral lifecycle, audit and acknowledgement-deadline triggers described in earlier sections. Any migration that updates referral status must preserve their ordering and transactional effects.
+
+### Remaining baseline evidence
+
+Before staging baseline creation, obtain metadata-only evidence for: extension versions/schemas; Auth trigger attachment and relevant Auth settings (no users); Storage buckets and Storage policies (no files); publication/Realtime configuration; complete table/column ACLs and default ACLs; function ownership and exact ACLs; and any non-public application-owned schemas. Do not export secrets, Auth records, patient rows or Storage objects.
+
+**Decision:** schema export reviewed; baseline reconciliation is now evidence-backed but not complete. Staging baseline construction and all SQL execution remain blocked until the missing historical migration/baseline strategy and the remaining platform metadata are resolved. Production remains read-only.
