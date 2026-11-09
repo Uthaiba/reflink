@@ -15,6 +15,8 @@ The current administrator route is materially safer than the legacy analytics co
 
 **Important correction:** The legacy `AnalysisHub.jsx` source contains a broad direct query against `public.referrals`, including patient identifiers, age, sex, address, diagnoses, and facility data. `AnalyticsDashboard.jsx` also directly queries referral-level diagnosis fields. However, neither component is imported by the current `App.jsx` or `AdminDashboard.jsx` route inspected in this review. Treat these as dormant/legacy components, not evidence that the active administrator workspace currently mounts them. They remain a risk if reintroduced without a privacy review.
 
+The administrator dashboard also retains an older patient-level referral JSX branch later in the component. An earlier `if (view === "referrals" || view === "active-referrals")` branch returns a privacy notice first, making the later `if (view === "referrals")` patient-level display branch unreachable for that state. In addition, the current `loadReferrals()` implementation clears the referral array and does not query the referrals table. This is a useful privacy safeguard, but the duplicate unreachable UI should be removed in a separately reviewed cleanup so a future refactor cannot accidentally expose it.
+
 ## 2. Current administrator route
 
 The route in `src/App.jsx`:
@@ -96,3 +98,8 @@ For each current and future administrator reporting RPC:
 ## 7. Decision
 
 **Current administrator aggregate reporting is the preferred architecture and should be preserved.** The legacy row-level analytics components should remain unmounted until refactored. No production migration or application deployment is approved by this review.
+
+
+## 8. Residual dead-code cleanup
+
+The current privacy guard and empty `loadReferrals()` stub prevent the legacy administrator referral list from loading patient-level data. The later duplicate `view === "referrals"` rendering branch is unreachable under the current condition ordering. Do not delete it in this security change without a full dependency review; schedule removal with a focused UI regression test and retain the earlier privacy notice.
