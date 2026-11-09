@@ -509,3 +509,16 @@ A significant refinement: broad default privileges apply to future public object
 - **Not verified yet:** GitHub Actions for this commit; live RLS enforcement; schema-correct synthetic staging execution; role/facility impersonation tests. The helper is defence in depth only and does not make direct PostgREST INSERT secure by itself.
 - No production or staging schema, policy, data, secrets, Edge Function or deployment was changed.
 - **Next:** inspect the current `referrals` INSERT RLS predicate and its dependencies in the supplied schema. Prepare a narrow database-side create contract (prefer a fixed-argument transactional RPC or carefully constrained INSERT policy), then test it in reconstructed synthetic staging before changing grants.
+
+
+## Continuation update — referral creation database boundary (9 November 2026)
+
+- Confirmed from the supplied production schema that the current `PHC staff can create referrals` INSERT policy checks authenticated user identity, PHC role and sender-facility attribution, but does not enforce an active destination or force initial lifecycle/system values.
+- Verified that online PHC submission and offline replay both use the shared allowlisted `buildReferralCreatePayload()`; offline replay also revalidates the current user, profile and active destination before insertion.
+- Found and corrected a schema compatibility defect: `referrals.diagnosis_status` permits only one of `suspected`, `provisional`, or `confirmed` (or NULL), while the form previously sent comma-separated values for mixed-status diagnoses. The builder now stores a single status only when all diagnosis records share it; mixed statuses remain fully represented in `diagnosis_records` with the legacy scalar NULL. Added regression tests.
+- Confirmed `offline_client_id` has a global partial unique index, not a per-user composite index. Client reconciliation remains scoped to the authenticated user and fails closed on a key collision owned by another user.
+- Added proposal migration `20261109000100_enforce_referral_create_context.sql` and static contract tests. The trigger is SECURITY INVOKER with an empty search path, derives identity/facility from auth/profile, validates an active destination, forces initial `sent`/non-test state and database timestamp, and clears receiving/lifecycle fields on insert.
+- Added `docs/REFERRAL_CREATE_DATABASE_BOUNDARY_REVIEW.md` with the source/schema findings, proposal scope and staging acceptance gates.
+- The trigger migration is proposal-only. It does not alter table grants or replace RLS; it has not been executed. Static tests are not PostgreSQL integration tests.
+- No production or staging schema, RLS policy, grant, patient data, Storage object, secret, Edge Function or deployment was changed.
+- **Next:** run exact-HEAD CI, then reconstruct the schema in isolated synthetic staging and execute role/RLS/trigger integration tests. Only after those pass should the online/offline call sites be moved to the approved database contract and INSERT privileges be reconsidered.
