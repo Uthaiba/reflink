@@ -117,9 +117,9 @@ test("audit minimization design excludes patient and clinical payloads from futu
 
 test("referral print numbering design requires serialization and database uniqueness", () => {
   assert.match(printConcurrencyDesign, /Design proposal only — NOT an executable migration and NOT applied/);
-  assert.match(printConcurrencyDesign, /MAX\\(print_number\\)/);
+  assert.match(printConcurrencyDesign, /MAX\(print_number\)/);
   assert.match(printConcurrencyDesign, /FOR UPDATE/);
-  assert.match(printConcurrencyDesign, /unique constraint on \\(referral_id, print_number\\)/);
+  assert.match(printConcurrencyDesign, /unique constraint on \(referral_id, print_number\)/);
   assert.match(printConcurrencyDesign, /genuinely concurrent database sessions/);
   assert.match(printConcurrencyDesign, /does not explicitly require the caller's profile role/i);
   assert.match(printConcurrencyDesign, /Production remains read-only/);
