@@ -80,3 +80,92 @@ export function buildInitialProfile({
     must_change_password: true,
   };
 }
+
+export async function provisionAccount({
+  requesterProfile,
+  body,
+  findActiveFacility,
+  createAuthUser,
+  createProfile,
+  deleteAuthUser,
+}) {
+  if (!isAdministratorProfile(requesterProfile)) {
+    return {
+      status: 403,
+      body: { success: false, error: "Administrator access required." },
+    };
+  }
+
+  const parsed = normalizeProvisioningInput(body);
+  if (!parsed.ok) {
+    return {
+      status: 400,
+      body: { success: false, error: parsed.error },
+    };
+  }
+
+  const { email, password, fullName, phone, role, facilityId } = parsed.value;
+
+  if (facilityId) {
+    const facilityIsActive = await findActiveFacility(facilityId);
+    if (!facilityIsActive) {
+      return {
+        status: 400,
+        body: { success: false, error: "Select an active facility." },
+      };
+    }
+  }
+
+  const { user, error: createError } = await createAuthUser({
+    email,
+    password,
+    fullName,
+  });
+  if (createError || !user) {
+    return {
+      status: 400,
+      body: {
+        success: false,
+        error: "The account could not be created. Check the details or contact the system administrator.",
+      },
+    };
+  }
+
+  const profileInput = buildInitialProfile({
+    id: user.id,
+    fullName,
+    phone,
+    role,
+    facilityId,
+  });
+  const { profile, error: profileError } = await createProfile(profileInput);
+
+  if (profileError || !profile) {
+    const { error: rollbackError } = await deleteAuthUser(user.id);
+    if (rollbackError) {
+      return {
+        status: 500,
+        body: {
+          success: false,
+          error: "The profile could not be created and account cleanup requires administrator review.",
+        },
+      };
+    }
+    return {
+      status: 500,
+      body: {
+        success: false,
+        error: "The profile could not be created; the account creation was rolled back.",
+      },
+    };
+  }
+
+  return {
+    status: 201,
+    body: {
+      success: true,
+      message: "User created successfully.",
+      user: { id: profile.id, email: user.email, ...profile },
+    },
+  };
+}
