@@ -6,6 +6,10 @@ const proposal = await readFile(
   new URL("../docs/SECURITY_HARDENING_PROPOSAL.md", import.meta.url),
   "utf8",
 );
+const functionReview = await readFile(
+  new URL("../docs/BASELINE_FUNCTION_SECURITY_REVIEW.md", import.meta.url),
+  "utf8",
+);
 
 test("database hardening remains a proposal and cannot be mistaken for an applied migration", () => {
   assert.match(proposal, /source-level proposal only — NOT an executable migration and NOT applied/i);
@@ -56,4 +60,20 @@ test("function default hardening revokes global PUBLIC execution, not only schem
   assert.match(proposal, /REVOKE ALL ON TABLES FROM anon, authenticated, service_role/i);
   assert.match(proposal, /REVOKE ALL ON SEQUENCES FROM anon, authenticated, service_role/i);
   assert.match(proposal, /REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated, service_role/i);
+});
+
+test("live function execute grants are documented without broadening authenticated access", () => {
+  assert.match(functionReview, /All 16 functions in the inventory above/);
+  for (const fn of [
+    "get_facility_user_count(uuid)",
+    "get_facility_user_counts()",
+    "is_administrator()",
+    "log_referral_print(uuid,text)",
+    "log_referral_read(uuid)",
+  ]) {
+    assert.ok(functionReview.includes(fn), `Missing authenticated EXECUTE dependency: ${fn}`);
+  }
+  assert.match(functionReview, /`anon` \| None recorded/);
+  assert.match(functionReview, /`PUBLIC` \| None recorded in the captured per-function ACLs/);
+  assert.match(functionReview, /Preserve the five authenticated grants/);
 });
