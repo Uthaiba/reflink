@@ -595,3 +595,9 @@ A significant refinement: broad default privileges apply to future public object
 - Added synthetic tests for thrown profile-adapter and cleanup-adapter failures in addition to returned error cases. These tests verify cleanup is attempted even when profile persistence rejects rather than returning a normal Supabase error object.
 - This reduces orphan-identity risk under transport exceptions but does not make Auth and Postgres operations transactional. A cleanup request can still fail or be ambiguous after a network timeout; production-grade reconciliation/idempotency and an operational orphan-account review process remain required.
 - Latest source commit for this set: `320f38ec4aa8af1cd7c5056a5ebdddecd2963c9b`; exact-HEAD CI is pending.
+
+
+### Provisioning harness CI correction (9 November 2026)
+- The first workflow run for the injectable orchestration correctly exposed one stale source-contract assertion after the input-validation logic moved from the Edge Function entry point into the shared workflow. The failing test expected the old inline parser call; the implementation itself was not the cause.
+- Updated the test to assert the new handler-to-workflow request-body hand-off. The failure was isolated to one test assertion; 191 of 192 tests passed on the run that exposed it.
+- Added a follow-up exact-HEAD workflow run for commit `a612c5b34b0191eb5ab7404668c821130ee6aef9`; its result must be checked before treating the harness as CI-verified.
