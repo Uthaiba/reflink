@@ -35,6 +35,12 @@ test("active administrator dashboard uses aggregate RPCs, not direct referral-ro
   assert.match(adminDashboard, /get_admin_referral_pathway_summary/);
   assert.match(adminDashboard, /get_admin_acknowledgement_delay_alerts/);
   assert.match(adminDashboard, /setReferrals\(\[\]\)/);
+  assert.match(adminDashboard, /Patient-level referral records are not available in the administrator workspace/);
+  assert.ok(
+    adminDashboard.indexOf('if (view === "referrals" || view === "active-referrals")') <
+      adminDashboard.indexOf('if (\n    view ===\n    "referrals"'),
+    "the privacy notice must execute before the legacy patient-level referral branch",
+  );
 });
 
 test("legacy row-level analytics components remain unmounted from the administrator route", () => {
