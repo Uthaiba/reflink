@@ -42,6 +42,8 @@ This corrects the earlier assumption that a production Auth trigger existed and 
 
 ## Application source review
 
+This finding does **not** mean REFLINK has no account-provisioning workflow. The canonical AdminDashboard invokes the `create-user` Supabase Edge Function. The deployed production function is ACTIVE version 2 with JWT verification enabled, while the repository contains a hardened candidate whose release is separately gated. See `docs/IDENTITY_AND_ACCOUNT_PROVISIONING_RECONCILIATION.md` and `docs/ACCOUNT_PROVISIONING_RELEASE_RUNBOOK.md` for the deployed-versus-source comparison and release acceptance criteria.
+
 - `src/App.jsx` uses `supabase.auth.signInWithPassword()` for the visible login flow and then loads the matching `profiles` row.
 - No `signUp()` flow was found in the reviewed `src/App.jsx` authentication section.
 - `src/UserManagement.jsx` inserts administrative user metadata into `public.users`; this is not the same as creating an Auth identity or a `public.profiles` row.
