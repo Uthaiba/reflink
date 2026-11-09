@@ -79,5 +79,5 @@ test("email validation regex accepts normal addresses and rejects malformed inpu
   assert.equal(emailRegex.test("staff.member+test@example.org"), true);
   assert.equal(emailRegex.test("bad email@example.org"), false);
   assert.equal(emailRegex.test("missing-at-example.org"), false);
-  assert.equal(emailRegex.test("staff@invalid"), true);
+  assert.equal(emailRegex.test("staff@invalid"), false);
 });
