@@ -56,7 +56,7 @@ The proposed BEFORE INSERT trigger:
 
 The trigger name begins with `a_` so PostgreSQL's alphabetical ordering for same-kind triggers makes the trusted creation context run before the existing acknowledgement-due trigger and referral-entry validation trigger. This ordering must be confirmed against the actual target catalog before execution.
 
-The proposal deliberately does **not** revoke table INSERT/UPDATE privileges or replace the existing RLS policy. It is an incremental database guard, not the final least-privilege design. It also deliberately preserves the privileged database/service-role path; that bypass must remain limited to trusted backend credentials.
+The proposal deliberately avoids deprecated `auth.role()` and uses the active database role (`current_user`) for the privileged service-role/database-owner bypass. The proposal deliberately does **not** revoke table INSERT/UPDATE privileges or replace the existing RLS policy. It is an incremental database guard, not the final least-privilege design. It also deliberately preserves the privileged database/service-role path; that bypass must remain limited to trusted backend credentials.
 
 Added `tests/referralCreateDatabaseBoundary.test.js` to protect the SQL proposal's invoker mode, empty search path, identity/facility derivation, active-destination check, lifecycle defaults, idempotency requirements and no-grant-change scope. These are static source-contract tests, not PostgreSQL integration tests.
 
