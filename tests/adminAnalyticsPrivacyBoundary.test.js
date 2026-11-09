@@ -8,6 +8,7 @@ const app = await read("../src/App.jsx");
 const adminDashboard = await read("../src/components/dashboards/AdminDashboard.jsx");
 const legacyAnalysisHub = await read("../src/components/dashboards/AnalysisHub.jsx");
 const legacyAnalyticsDashboard = await read("../src/components/dashboards/AnalyticsDashboard.jsx");
+const privilegeVerifier = await read("../supabase/verification/admin_analytics_privilege_review.sql");
 
 const aggregateMigrations = await Promise.all([
   read("../supabase/migrations/20261105000100_admin_aggregate_referral_volume.sql"),
@@ -89,4 +90,14 @@ test("aggregate reporting enforces complete-month windows and small-cell protect
   assert.match(sql, /complementary_suppression/i);
   assert.match(sql, /Africa\/Lagos/i);
   assert.match(sql, /coalesce\(r\.is_test, false\) = false/i);
+});
+
+test("analytics privilege verifier is read-only and checks effective execution access", () => {
+  assert.match(privilegeVerifier, /READ-ONLY/i);
+  assert.match(privilegeVerifier, /to_regprocedure/i);
+  assert.match(privilegeVerifier, /aclexplode/i);
+  assert.match(privilegeVerifier, /has_function_privilege/i);
+  assert.match(privilegeVerifier, /pg_get_functiondef/i);
+  assert.match(privilegeVerifier, /does not test future default privileges/i);
+  assert.doesNotMatch(privilegeVerifier, /\\b(CREATE|ALTER|GRANT|REVOKE|INSERT|UPDATE|DELETE|DROP|TRUNCATE)\\b/i);
 });
