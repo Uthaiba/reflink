@@ -186,3 +186,16 @@ A further source review was completed against the current branch head after the 
 ### Current release boundary
 
 These are source-review findings and policy gates, not live Auth integration tests. No staging or production database, Auth identity, Edge Function deployment, secret, or application deployment was changed. The candidate remains un-deployed; the PR remains draft.
+
+
+## Continuation addendum — routine administrator delegation blocked (9 November 2026)
+
+A conservative source-level safeguard has now been added while the administrator-delegation governance decision remains unresolved:
+
+- `STAFF_PROVISIONING_ROLES` explicitly contains only `phc_staff` and `receiving_staff`.
+- The shared `provisionAccount()` workflow rejects `administrator` as a target role before facility lookup or Auth creation, even though `administrator` remains a valid canonical profile role for existing accounts.
+- `buildInitialProfile()` now accepts only the two staff roles.
+- The active AdminDashboard no longer offers administrator as a role for new users or non-administrator edits. When editing an existing administrator, the role selector displays the existing role but is disabled; routine profile edits cannot change it through this form.
+- The save handler also rejects attempts to submit administrator as a new/changed role.
+
+**Important residual database/API boundary:** this is not a complete privilege-delegation control. The dashboard's ordinary profile update path still writes `profiles` directly, and a sufficiently privileged authenticated client may call Supabase APIs outside this UI. The current production profile RLS/column-grant model must be reviewed in a reconstructed staging baseline and hardened so ordinary administrator sessions cannot change another profile's role to `administrator`. Until database enforcement or a separately approved privileged workflow exists, administrator-role updates remain a release blocker. Existing administrator profiles and their current roles are not changed by this source patch.
