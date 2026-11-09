@@ -75,7 +75,7 @@ export function buildInitialProfile({
   role,
   facilityId,
 }) {
-  if (!id || !PROVISIONING_ROLES.includes(role)) {
+  if (!id || !STAFF_PROVISIONING_ROLES.includes(role)) {
     throw new TypeError("A valid Auth identity and supported role are required.");
   }
   if (requiresFacility(role) && !facilityId) {
