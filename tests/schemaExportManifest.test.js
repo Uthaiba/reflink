@@ -58,3 +58,19 @@ test("live trigger snapshot contains the nine catalog-confirmed trigger attachme
     assert.match(snapshot, new RegExp("CREATE TRIGGER " + name + "\\b"));
   }
 });
+
+test("staging reconstruction documents preserve trigger provenance", async () => {
+  const [runbook, dependencyManifest, reviewPacket] = await Promise.all([
+    readFile(new URL("../docs/STAGING_BASELINE_RECONSTRUCTION_RUNBOOK.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/catalog_exports/20261108_staging_baseline_dependency_manifest.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/STAGING_BASELINE_RECONSTRUCTION_REVIEW_PACKET.md", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(runbook, /zero `CREATE TRIGGER` statements/i);
+  assert.match(runbook, /supplemental live-catalog snapshot/i);
+  assert.match(dependencyManifest, /`CREATE TRIGGER` statements in schema export | 0/);
+  assert.match(dependencyManifest, /Live public trigger attachments in supplemental catalog snapshot | 9/);
+  assert.match(reviewPacket, /`CREATE TRIGGER` statements in schema export | 0/);
+  assert.match(reviewPacket, /supplemental live catalog snapshot contains nine public trigger attachments/i);
+  assert.doesNotMatch(reviewPacket, /nine exported triggers/i);
+});
