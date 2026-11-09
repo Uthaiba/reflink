@@ -56,7 +56,7 @@ Nine definer functions currently use `SET search_path = public`. Application rol
 
 ### P1 — Eliminate print-number concurrency race
 
-`log_referral_print()` allocates a number with `MAX(print_number)+1`. Two concurrent calls can select the same number. Add a database-enforced unique key on `(referral_id, print_number)` and choose a concurrency-safe allocator (for example, a per-referral locked counter or a retry-safe insert strategy). Validate simultaneous calls in staging.
+`log_referral_print()` allocates a number with `MAX(print_number)+1`. Two concurrent calls can select the same number. The row-lock plus unique-constraint design and synthetic-staging acceptance tests are documented in `docs/REFERRAL_PRINT_SEQUENCE_CONCURRENCY_DESIGN.md`. The same review also flags that the receiving-facility branch does not explicitly check the caller's role; trace call sites and approve the role contract before changing it.
 
 ### P1 — Reconcile administrator helper duplication and grants
 
@@ -93,3 +93,11 @@ The read-only catalog script is maintained at `supabase/verification/staging_bas
 ## Follow-up design artifact
 
 The P0 audit minimization finding is expanded in `docs/AUDIT_LOG_PHI_MINIMIZATION_DESIGN.md`. It is design-only and does not change the production trigger, audit schema, historical audit rows, or permissions.
+
+
+## Follow-up design artifacts
+
+- Audit PHI minimization: `docs/AUDIT_LOG_PHI_MINIMIZATION_DESIGN.md`.
+- Referral print-number concurrency: `docs/REFERRAL_PRINT_SEQUENCE_CONCURRENCY_DESIGN.md`.
+
+Both are design-only; no production or staging database objects were changed.
