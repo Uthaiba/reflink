@@ -71,7 +71,10 @@ FROM expected AS e
 LEFT JOIN pg_catalog.pg_proc AS p
   ON p.oid = pg_catalog.to_regprocedure(e.signature)
 LEFT JOIN LATERAL pg_catalog.aclexplode(
-  COALESCE(p.proacl, pg_catalog.acldefault('f', p.proowner))
+  CASE
+    WHEN p.oid IS NULL THEN NULL::pg_catalog.aclitem[]
+    ELSE COALESCE(p.proacl, pg_catalog.acldefault('f', p.proowner))
+  END
 ) AS a ON p.oid IS NOT NULL
 ORDER BY e.signature, grantee_name, a.privilege_type;
 
