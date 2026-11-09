@@ -522,3 +522,17 @@ A significant refinement: broad default privileges apply to future public object
 - The trigger migration is proposal-only. It does not alter table grants or replace RLS; it has not been executed. Static tests are not PostgreSQL integration tests.
 - No production or staging schema, RLS policy, grant, patient data, Storage object, secret, Edge Function or deployment was changed.
 - **Next:** run exact-HEAD CI, then reconstruct the schema in isolated synthetic staging and execute role/RLS/trigger integration tests. Only after those pass should the online/offline call sites be moved to the approved database contract and INSERT privileges be reconsidered.
+
+
+## Continuation update — live catalog reconciliation and staging baseline (9 November 2026)
+
+- Confirmed both push and PR quality workflows passed for commit `01a0608333f6d7a35b52e31b02d83d5fcd722a18`, including unit tests, lint, production build and real-browser offline queue tests.
+- Located the existing active `reflink-synthetic-staging` Supabase project. It has no public application tables, no migration entries and no development branches.
+- Performed read-only metadata/catalog inspection of the linked production project. The production migration ledger contains only `20260928203447_reflink_v2_rural_first`.
+- Found and corrected a material schema-export manifest error: the 64,434-byte public SQL export contains zero `CREATE TRIGGER` statements. The live production catalog independently confirms nine public triggers. Added `docs/catalog_exports/20261109_live_public_trigger_snapshot.sql` with the exact trigger attachments and updated `tests/schemaExportManifest.test.js` to prevent this mismatch recurring.
+- Added `docs/REFLINK_SYNTHETIC_STAGING_BASELINE_RECONCILIATION.md` with the verified environment inventory, live authorization findings, trigger evidence, default ACL discrepancy and staging gates.
+- Confirmed the receiving-facility SELECT policy checks facility equality but does not explicitly require `receiving_staff`. The receiving UPDATE policy does require role and facility in both USING and WITH CHECK, but the authenticated role retains broad table UPDATE privileges, so row-level restrictions alone do not protect individual columns.
+- Confirmed broad structural table grants, including authenticated TRUNCATE privileges, and broad default ACLs for both `postgres` and `supabase_admin`. The supplied schema export contains only the `postgres` default-privilege statements and therefore does not fully reproduce the live default ACL state.
+- Production inspection was limited to schema/catalog metadata. No application rows were queried or modified. No production schema, grants, RLS policies, functions, triggers, Auth users, Storage objects or deployments were changed.
+- **Staging restore remains blocked:** the export is incomplete without trigger attachments and creator-specific ACL reconciliation. The trigger snapshot closes the missing trigger evidence gap, but staging target ACL strategy and managed-service dependencies still need approval. No migration was applied to staging.
+- **Next:** assemble a reviewed staging-only baseline, choose whether to reproduce the existing broad ACLs for controlled regression testing or use a least-privilege staging baseline, then restore only synthetic users/facilities/referrals and run the role-specific authorization suite. Do not apply the referral-create trigger candidate until this baseline is verified.
