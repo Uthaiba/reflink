@@ -143,7 +143,8 @@ test("initial profile builder binds the Auth UUID and enforces password-change r
   assert.deepEqual(buildInitialProfile({ id: "auth-user-123", fullName: "Nurse Example", phone: "", role: "receiving_staff", facilityId: "facility-2" }), {
     id: "auth-user-123", full_name: "Nurse Example", phone: null, role: "receiving_staff", facility_id: "facility-2", must_change_password: true,
   });
-  assert.throws(() => buildInitialProfile({ id: "auth-user-124", fullName: "Nurse Example", phone: "", role: "phc_staff", facilityId: null }), /facility assignment/);\n  assert.throws(() => buildInitialProfile({ id: "auth-user-125", fullName: "New Administrator", phone: "", role: "administrator", facilityId: null }), /supported role/);
+  assert.throws(() => buildInitialProfile({ id: "auth-user-124", fullName: "Nurse Example", phone: "", role: "phc_staff", facilityId: null }), /facility assignment/);
+  assert.throws(() => buildInitialProfile({ id: "auth-user-125", fullName: "New Administrator", phone: "", role: "administrator", facilityId: null }), /supported role/);
 });
 
 
