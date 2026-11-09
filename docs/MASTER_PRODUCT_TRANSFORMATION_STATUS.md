@@ -570,3 +570,13 @@ A significant refinement: broad default privileges apply to future public object
 - Added detailed findings and synthetic acceptance cases to `docs/IDENTITY_AND_ACCOUNT_PROVISIONING_RECONCILIATION.md`.
 - No database, Auth identity, Edge Function deployment, secrets, or production/staging application settings were changed. PR remains draft and unmerged.
 - **Next:** resolve administrator delegation and facility scope as explicit product/security policy; then build a synthetic Auth/profile provisioning test harness and validate failure compensation, duplicate email, metadata trust boundaries, and role/facility isolation before reconstructing staging.
+
+
+## Continuation update — shared provisioning policy and behavioral test foundation (9 November 2026)
+
+- Latest pre-change commit `9917191543591540d3c5eaba718f5600d36690e4` passed the full quality workflow, including unit tests, lint, production build and Chromium offline-queue browser tests.
+- Extracted deterministic account-provisioning policy into `supabase/functions/_shared/accountProvisioningPolicy.js` and wired the `create-user` Edge Function to use the same functions for requester-role checking, request normalization, staff facility requirements and initial profile construction.
+- Replaced regex-only email checks with behavioral tests against the imported policy module. Tests now cover normalization, malformed email rejection, unsupported legacy role aliases, missing PHC/receiving facility assignments, canonical profile-role authorization (not user metadata), Auth UUID binding and atomic `must_change_password` profile data.
+- The helper preserves the current role policy, including administrator provisioning, and preserves facilityless administrator support at the API boundary. These are deliberately not changed pending explicit administrator-delegation and administrator-facility-scope decisions documented in the identity reconciliation report.
+- This is a deterministic policy-unit test foundation, **not** a mocked Supabase Auth/PostgREST integration test. Active-facility lookup, Auth create/delete behavior, duplicate-email handling, profile-insert failure compensation and cleanup failure still require a controlled synthetic integration harness.
+- No database, Auth identity, Edge Function deployment, secret, or production/staging setting was changed. The PR remains draft and unmerged.
