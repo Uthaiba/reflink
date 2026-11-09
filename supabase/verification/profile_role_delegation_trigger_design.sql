@@ -1,0 +1,78 @@
+-- DESIGN ONLY — NOT A MIGRATION AND NOT APPROVED FOR EXECUTION.
+-- Target: public.profiles in the REFLINK canonical identity model.
+-- Environment inspected: production catalog (read-only); synthetic staging currently has
+-- no public application tables, so this design has NOT been integration-tested.
+--
+-- Objective:
+--   Prevent browser-authenticated administrators from creating or promoting a profile
+--   whose role is 'administrator', even though the existing broad administrator UPDATE
+--   policy and column grants otherwise permit profile role updates.
+--
+-- Proposed narrow enforcement:
+--   * Allow trusted database/system contexts (postgres, supabase_admin, service_role).
+--   * For every other execution context, reject INSERT of administrator profiles.
+--   * For every other execution context, reject a transition into administrator role.
+--   * Do not block ordinary profile updates or role changes among staff roles.
+--   * Do not alter the existing guard_profile_security_fields trigger/function.
+--
+-- Candidate SQL for a future migration after the complete staging baseline is restored:
+--
+-- CREATE OR REPLACE FUNCTION public.prevent_profile_admin_role_escalation()
+-- RETURNS trigger
+-- LANGUAGE plpgsql
+-- SECURITY INVOKER
+-- SET search_path = ''
+-- AS $function$
+-- BEGIN
+--   IF current_user IN ('postgres', 'supabase_admin', 'service_role') THEN
+--     RETURN NEW;
+--   END IF;
+--
+--   IF NEW.role = 'administrator'
+--      AND (
+--        TG_OP = 'INSERT'
+--        OR OLD.role IS DISTINCT FROM NEW.role
+--      )
+--   THEN
+--     RAISE EXCEPTION
+--       'Administrator role assignment requires the approved privileged delegation workflow.'
+--       USING ERRCODE = '42501';
+--   END IF;
+--
+--   RETURN NEW;
+-- END;
+-- $function$;
+--
+-- DROP TRIGGER IF EXISTS profiles_prevent_admin_role_escalation ON public.profiles;
+--
+-- CREATE TRIGGER profiles_prevent_admin_role_escalation
+-- BEFORE INSERT OR UPDATE ON public.profiles
+-- FOR EACH ROW
+-- EXECUTE FUNCTION public.prevent_profile_admin_role_escalation();
+--
+-- Required staging verification before promoting this design into a migration:
+--   1. authenticated administrator INSERT with role='administrator' -> SQLSTATE 42501.
+--   2. authenticated administrator UPDATE staff profile to role='administrator' -> 42501.
+--   3. authenticated administrator UPDATE profile name/phone/facility -> preserves current
+--      intended behavior and existing trigger checks.
+--   4. authenticated administrator change phc_staff <-> receiving_staff -> allowed only if
+--      current application policy intends to allow it and all facility constraints pass.
+--   5. authenticated self-service must_change_password update -> remains allowed.
+--   6. service_role provisioning INSERT for phc_staff / receiving_staff -> allowed.
+--   7. service_role administrator INSERT is technically allowed by this trigger but remains
+--      prohibited in the current create-user Edge Function policy. A future delegation
+--      workflow must have its own approval and audit controls.
+--   8. postgres/supabase_admin maintenance and rollback -> allowed.
+--   9. Ordinary authenticated non-admin writes remain subject to existing RLS and the
+--      existing guard_profile_security_fields trigger.
+--  10. Confirm PostgREST executes the trigger with current_user='authenticated' for a
+--      normal browser JWT and current_user='service_role' for service-key-only calls.
+--
+-- Important:
+--   This proposal intentionally does not revoke the broad authenticated UPDATE column
+--   grants, because that could break unrelated profile fields and the self-service
+--   password-change flow. The trigger is the narrow enforcement layer. A separate
+--   least-privilege review may still narrow column grants after the full UI write matrix
+--   is reconciled.
+--
+-- Never run this file against production. The production database has not been modified.
