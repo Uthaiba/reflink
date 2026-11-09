@@ -99,5 +99,6 @@ test("analytics privilege verifier is read-only and checks effective execution a
   assert.match(privilegeVerifier, /has_function_privilege/i);
   assert.match(privilegeVerifier, /pg_get_functiondef/i);
   assert.match(privilegeVerifier, /does not test future default privileges/i);
-  assert.doesNotMatch(privilegeVerifier, /\b(CREATE|ALTER|GRANT|REVOKE|INSERT|UPDATE|DELETE|DROP|TRUNCATE)\b/i);
+  const executableSql = privilegeVerifier.replace(/^\s*--.*$/gm, "");
+  assert.doesNotMatch(executableSql, /\b(CREATE|ALTER|GRANT|REVOKE|INSERT|UPDATE|DELETE|DROP|TRUNCATE)\b/i);
 });
