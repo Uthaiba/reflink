@@ -36,7 +36,7 @@ Staging has many additional extensions available but not installed. Do not insta
 
 The schema depends on the managed `auth` schema and functions, notably `auth.uid()`, and on platform roles including `anon`, `authenticated`, `service_role`, `postgres`, and `pg_database_owner`. The export does not create these roles or Auth objects. Read-only staging catalog inspection confirmed all six roles (`anon`, `authenticated`, `service_role`, `postgres`, `pg_database_owner`, `supabase_admin`) and the `auth`, `public`, `extensions`, and `vault` schemas exist. `auth` and `vault` are owned by `supabase_admin`; `public` is owned by `pg_database_owner`; `extensions` is owned by `postgres`. The role attributes show `postgres` and `supabase_admin` are privileged platform roles and `service_role` has BYPASSRLS. Keep these managed roles/schemas intact.
 
-The `handle_new_user()` function is a SECURITY DEFINER trigger function intended to participate in Auth user provisioning. The export's public-schema trigger definitions must be inspected alongside the managed Auth trigger state. Read-only inspection found **no non-internal trigger on staging `auth.users`**. This means the staging project does not currently mirror any production Auth provisioning hook. Do not create one from assumption: first retrieve and review the exact intended production trigger definition and validate signup behavior in staging.
+The `handle_new_user()` function is a SECURITY DEFINER function intended for Auth user provisioning, but the export does not attach it to `auth.users`. The supplemental live catalog snapshot records nine public-table trigger attachments; it does not establish an Auth trigger. Inspect those public trigger attachments separately from the managed Auth trigger state. Read-only inspection found **no non-internal trigger on staging `auth.users`**. This means the staging project does not currently mirror any production Auth provisioning hook. Do not create one from assumption: first retrieve and review the exact intended production trigger definition and validate signup behavior in staging.
 
 ### Extensions and built-ins
 
@@ -47,7 +47,7 @@ The `handle_new_user()` function is a SECURITY DEFINER trigger function intended
 
 ### Object and dependency order
 
-The export defines 16 public functions, 14 public tables, 2 views, 10 explicit indexes, 23 foreign keys, 9 triggers, and 30 RLS policies. A reviewed restore candidate should be applied in this order:
+The schema export contains 16 public functions, 14 public tables, 2 views, 10 explicit indexes, 23 foreign keys, and 30 RLS policies, but **zero `CREATE TRIGGER` statements**. A separate read-only live-catalog snapshot, `docs/catalog_exports/20261109_live_public_trigger_snapshot.sql`, records nine public trigger attachments. Those nine triggers are supplemental reconstruction evidence, not objects defined by the schema export. A reviewed restore candidate should be applied in this order:
 
 1. Preflight managed roles, schemas, Auth functions, extension versions/schemas, ownership capabilities, and clean target state.
 2. Create/confirm the public schema and required functions whose dependencies are available.
@@ -57,7 +57,7 @@ The export defines 16 public functions, 14 public tables, 2 views, 10 explicit i
 6. Create views only after their base tables exist; review view security semantics before granting access.
 7. Apply table and sequence ownership/ACLs only where the staging role model permits them.
 8. Enable RLS on every exposed public table, then create and verify each policy.
-9. Create table triggers after their functions and tables exist.
+9. Reconcile and, after separate review, create the nine public trigger attachments from the supplemental live-catalog snapshot after their functions and tables exist. Do not treat the schema export as their source.
 10. Apply function EXECUTE grants and narrowly scoped schema/table/sequence grants.
 11. Apply reviewed default privileges only after resolving the production-vs-snapshot discrepancy below.
 12. Run catalog assertions, Supabase security/performance advisors, and application-level smoke tests.
@@ -106,7 +106,7 @@ Before staging DDL is authorized, capture and review:
 
 A staging restore is not complete until all gates pass:
 
-1. Object counts reconcile: 14 tables, 16 functions, 2 views, 10 explicit indexes, 23 FKs, 9 triggers, 30 policies.
+1. Object counts reconcile: 14 tables, 16 functions, 2 views, 10 explicit indexes, 23 FKs, 30 policies from the schema export, plus nine public trigger attachments from the supplemental live-catalog snapshot.
 2. All 14 public tables have RLS enabled.
 3. No unexpected public/anon/authenticated access exists on analytics views or audit records.
 4. Function owners, SECURITY DEFINER flags, safe search paths, and EXECUTE grants match the reviewed manifest.
@@ -130,9 +130,9 @@ A staging restore is not complete until all gates pass:
 
 ## 9. Current decision
 
-**NO-GO for applying the raw export.** Staging is healthy and empty, required platform roles/schemas and key extension versions are present, but no Auth user trigger exists in staging, broad default ACLs are present for both `postgres` and `supabase_admin`, and view security/ownership behavior still require explicit review. The next engineering deliverable is a normalized, staging-only baseline candidate plus a deterministic catalog verification script—not a production migration. The next engineering deliverable is a normalized, staging-only baseline candidate plus a deterministic catalog verification script—not a production migration.
+**NO-GO for applying the raw export.** Staging is healthy and empty, required platform roles/schemas and key extension versions are present, but no Auth user trigger exists in staging, broad default ACLs are present for both `postgres` and `supabase_admin`, and view security/ownership behavior still require explicit review. The next engineering deliverable is a normalized, staging-only baseline candidate plus a deterministic catalog verification script—not a production migration.
 
-## 11. Independent read-only verification rerun
+## 10. Independent read-only verification rerun
 
 The SELECT-only catalog verification query was independently executed against staging project `rcskuzmvyugbanygizri` on 2026-11-08. The live result reported:
 
