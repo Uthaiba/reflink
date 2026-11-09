@@ -155,3 +155,34 @@ This is still repository source, not deployed behavior. Production `create-user`
 The synthetic staging project still has no reconstructed application schema, so the candidate has not been exercised against a working Auth/profile schema or mocked Supabase integration. The test suite currently provides source-contract regression coverage, not a full Edge Function integration guarantee. Required staging cases remain those in Section 6, including duplicate email, role/facility authorization, profile insert failure, compensation failure, metadata trust boundaries and allowed/denied CORS origins.
 
 **Decision:** repository-side account provisioning is materially hardened and exact-HEAD CI-verified. Production release remains NO-GO pending reviewed schema baseline, functional staging tests, origin confirmation and controlled deployment approval.
+
+
+## Continuation addendum — identity authority and role-assignment policy gap (9 November 2026)
+
+A further source review was completed against the current branch head after the latest CI run passed.
+
+### Confirmed source behavior
+
+- The active `AdminDashboard.jsx` reads and edits canonical `profiles`, and invokes the `create-user` Edge Function for new Auth identities.
+- The current Edge Function verifies the bearer token, reads the caller's `profiles.role`, and permits provisioning only when that role is `administrator`.
+- The Edge Function accepts all three schema roles, including `administrator`. Therefore, **any account already holding the administrator role can currently create another administrator** through this candidate. The code does not implement a separate super-administrator approval or second-person authorization rule.
+- The current dashboard's account form requires a facility selection for every role, including administrator. The Edge Function itself permits a null facility for administrator accounts, while validating any supplied facility as active. This is a UI/API contract mismatch: a facilityless administrator is valid at the function boundary but cannot be created through the current form.
+- The old `src/UserManagement.jsx` still directly inserts rows into `public.users` and exposes legacy role labels (`receiver`, `facility_manager`). It is not imported or routed from the active `App.jsx` path reviewed. Keep it isolated; do not treat those rows as authenticated users or as authorization profiles.
+
+### Decisions required before provisioning release
+
+1. **Administrator delegation:** decide whether every administrator may create another administrator, whether only a designated root/super-administrator may do so, or whether a second approver is required. Until explicitly approved, the candidate's administrator-creation capability is a release blocker. Do not silently choose a new governance model in code.
+2. **Administrator facility assignment:** decide whether administrator profiles must be facility-scoped or may be global. Then align both the dashboard validation and Edge Function contract with that single policy. PHC and receiving staff must remain facility-bound.
+3. **Legacy directory disposition:** formally mark `public.users` / `UserManagement.jsx` as retired, or identify a verified consumer and define a migration. Do not delete the table or data as part of this work.
+
+### Additional staging acceptance tests
+
+- An administrator attempting to create another administrator follows the approved delegation policy; rejected attempts create neither an Auth identity nor a profile.
+- Facilityless administrator creation is either accepted end-to-end or rejected consistently by both UI and Edge Function, according to the approved policy.
+- PHC and receiving staff cannot be created without an existing active facility.
+- The retired legacy component is absent from reachable routes/build entry points and cannot act as an alternate provisioning path.
+- A profile role change and a new-account role assignment are both checked against the same approved role-delegation policy.
+
+### Current release boundary
+
+These are source-review findings and policy gates, not live Auth integration tests. No staging or production database, Auth identity, Edge Function deployment, secret, or application deployment was changed. The candidate remains un-deployed; the PR remains draft.
