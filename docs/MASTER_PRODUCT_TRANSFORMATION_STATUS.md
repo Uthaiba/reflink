@@ -558,3 +558,15 @@ A significant refinement: broad default privileges apply to future public object
 - Added behavioral regression tests that extract and exercise the actual source regex against valid addresses and malformed input.
 - Updated `docs/AUTH_PROVISIONING_SECURITY_REVIEW.md` with the defect, correction and release boundary.
 - This is a repository-only correction. The deployed production Edge Function remains unchanged; exact-head CI is required before the candidate can be considered release-ready.
+
+
+## Continuation update — identity delegation and facility policy review (9 November 2026)
+
+- Latest-head CI run #970 completed successfully: automated unit tests, lint, production bundle build, Chromium installation and real-browser offline queue tests all passed. PR-triggered workflow #971 also completed successfully on the same commit before this documentation update.
+- Reviewed the active AdminDashboard provisioning path, the canonical `create-user` Edge Function candidate, and the legacy `UserManagement.jsx` component.
+- Confirmed the candidate currently allows any administrator to create another administrator. This is a role-delegation policy decision, not something to assume from the generic administrator role. Documented it as a release blocker pending explicit policy.
+- Found a UI/API mismatch: the dashboard requires a facility for every new account, while the Edge Function permits facilityless administrator profiles. Documented the need to decide whether administrators are global or facility-scoped and align both layers.
+- Confirmed the legacy `UserManagement.jsx` still writes to `public.users` with noncanonical role labels but is not imported/routed by the active `App.jsx` path reviewed. No legacy rows were migrated or deleted.
+- Added detailed findings and synthetic acceptance cases to `docs/IDENTITY_AND_ACCOUNT_PROVISIONING_RECONCILIATION.md`.
+- No database, Auth identity, Edge Function deployment, secrets, or production/staging application settings were changed. PR remains draft and unmerged.
+- **Next:** resolve administrator delegation and facility scope as explicit product/security policy; then build a synthetic Auth/profile provisioning test harness and validate failure compensation, duplicate email, metadata trust boundaries, and role/facility isolation before reconstructing staging.
