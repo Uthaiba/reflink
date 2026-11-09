@@ -16,8 +16,7 @@ DECLARE
 BEGIN
   -- Preserve explicitly privileged database/service operations. Ordinary
   -- authenticated browser requests must pass the checks below.
-  IF current_user IN ('postgres', 'supabase_admin', 'service_role')
-     OR COALESCE(auth.role(), '') = 'service_role' THEN
+  IF current_user IN ('postgres', 'supabase_admin', 'service_role') THEN
     RETURN NEW;
   END IF;
 
