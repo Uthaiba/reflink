@@ -652,6 +652,15 @@ function AdminDashboard({
         );
       }
 
+      if (
+        userForm.role === "administrator" &&
+        (!editingUser || editingUser.role !== "administrator")
+      ) {
+        throw new Error(
+          "Administrator privileges require the separately approved administrator-delegation process."
+        );
+      }
+
       if (!userForm.facility_id) {
         throw new Error(
           "Healthcare facility is required."
@@ -1478,15 +1487,18 @@ function AdminDashboard({
                 onChange={
                   handleUserFormChange
                 }
+                disabled={editingUser?.role === "administrator"}
                 required
               >
                 <option value="">
                   Select user role
                 </option>
 
-                <option value="administrator">
-                  Administrator
-                </option>
+                {editingUser?.role === "administrator" && (
+                  <option value="administrator">
+                    Administrator (existing account)
+                  </option>
+                )}
 
                 <option value="phc_staff">
                   PHC Staff
