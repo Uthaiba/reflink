@@ -48,7 +48,7 @@ This is a point-in-time ACL inventory, not proof of effective privileges after r
 
 ### P0 — Protect audit records from unnecessary PHI duplication
 
-`audit_referral_mutation()` stores full row snapshots via `to_jsonb(NEW)` and `to_jsonb(OLD)`. Referral rows may contain patient identifiers and clinical information. Before baseline reconstruction, replace broad snapshots with an allowlist of operational fields or a carefully designed redacted diff. Confirm that audit access, retention, export, and deletion policies are appropriate for health data.
+`audit_referral_mutation()` stores full row snapshots via `to_jsonb(NEW)` and `to_jsonb(OLD)`. Referral rows may contain patient identifiers and clinical information. The design requirements, candidate allowlists, actor semantics, compatibility gates, and synthetic-staging acceptance tests are documented in `docs/AUDIT_LOG_PHI_MINIMIZATION_DESIGN.md`. Do not replace broad snapshots until audit consumers, historical-data governance, and the trigger writer privilege path are verified.
 
 ### P1 — Make SECURITY DEFINER execution context explicit
 
@@ -88,3 +88,8 @@ The audit and status-history triggers use `auth.uid()`. Service jobs and Auth-tr
 ## Staging catalog verification note
 
 The read-only catalog script is maintained at `supabase/verification/staging_baseline_catalog_verification.sql`. Its latest staging execution reported PostgreSQL 17.11, zero public tables/views/functions, no non-internal Auth triggers, and broad default ACL entries on the public schema for the `postgres` and `supabase_admin` owners. Application roles lacked CREATE on `public`. These are staging-platform facts, not evidence that the production schema has the same live catalog state.
+
+
+## Follow-up design artifact
+
+The P0 audit minimization finding is expanded in `docs/AUDIT_LOG_PHI_MINIMIZATION_DESIGN.md`. It is design-only and does not change the production trigger, audit schema, historical audit rows, or permissions.
