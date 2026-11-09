@@ -70,6 +70,8 @@ The dump includes default-privilege statements for `postgres` only. Read-only st
 
 Do not blindly replay the dump's broad default grants to `anon` and `authenticated`. Reconcile effective default ACLs for each object-creating role against a documented least-privilege target. Do not attempt to alter `supabase_admin` defaults unless the connected role is demonstrably authorized.
 
+For functions, also account for PostgreSQL's built-in global `PUBLIC EXECUTE` default. A per-schema `REVOKE EXECUTE ... FROM PUBLIC` cannot cancel a global default grant; the global default must be revoked for each creator role separately, then direct per-schema grants to `anon`, `authenticated`, and `service_role` must be reconciled. Verify effective execution with `has_function_privilege` on a disposable function created by each approved creator. See `docs/SECURITY_HARDENING_PROPOSAL.md` and the PostgreSQL `ALTER DEFAULT PRIVILEGES` documentation.
+
 ### B. View security semantics
 
 The exported `referral_analytics` view includes patient identifiers and diagnosis information; the export does not show `security_invoker = true`. Its explicit grant is service-role-only. The `referral_analytics_summary` view is also service-role-only. Confirm view options, owners, effective grants, and RLS behavior on staging. Never broaden view access to `anon` or `authenticated` during baseline restoration. Treat any decision to change view security mode as a separate reviewed security change, not a silent restore edit.
