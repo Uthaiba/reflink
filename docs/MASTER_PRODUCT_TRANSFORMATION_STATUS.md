@@ -549,3 +549,12 @@ A significant refinement: broad default privileges apply to future public object
 - Added `docs/AUTH_PROVISIONING_SECURITY_REVIEW.md` and read-only verifier `supabase/verification/auth_provisioning_security_review.sql`. Executed the verifier against both production and staging; it confirmed the above findings.
 - No production or staging DDL, DML, grants, policies, functions, triggers, Auth configuration or user records were changed.
 - **Next:** reconcile the user-directory/profile/Auth identity model and define a trusted administrator-controlled provisioning workflow. Do not add an Auth trigger until role assignment, facility validation, safe search_path, grants, idempotency and audit behavior pass synthetic staging tests.
+
+
+## Continuation update — account-provisioning source defect (9 November 2026)
+
+- Reviewed the canonical `create-user` Edge Function candidate and its existing source-contract tests.
+- Found an over-escaped email-validation regex in the candidate source. Corrected it to use the intended whitespace and literal-dot escapes.
+- Added behavioral regression tests that extract and exercise the actual source regex against valid addresses and malformed input.
+- Updated `docs/AUTH_PROVISIONING_SECURITY_REVIEW.md` with the defect, correction and release boundary.
+- This is a repository-only correction. The deployed production Edge Function remains unchanged; exact-head CI is required before the candidate can be considered release-ready.
