@@ -88,7 +88,7 @@ For each current and future administrator reporting RPC:
 ## 6. Required next tests and implementation sequence
 
 1. Add source-contract tests proving the current administrator dashboard uses the approved aggregate RPC surface and does not import legacy row-level analytics components.
-2. Add/extend SQL verification for the aggregate functions' owner, `prosecdef`, `proconfig`, ACLs, and effective privileges.
+2. Run the read-only verifier `supabase/verification/admin_analytics_privilege_review.sql` against the reconstructed environment to inspect function owner, `prosecdef`, `proconfig`, direct ACLs, and effective privileges. It does not mutate the database or prove future default-privilege behavior.
 3. Review the complete SQL definitions for facility summary and facility reporting coverage, including suppression and small-cell behavior.
 4. Build synthetic test cases with small groups, rare categories, missing facility geography, cross-month boundaries, test referrals, and invalid chronology.
 5. Conduct a query-composition review for differencing across all aggregate endpoints and reporting periods.
@@ -103,3 +103,8 @@ For each current and future administrator reporting RPC:
 ## 8. Residual dead-code cleanup
 
 The current privacy guard and empty `loadReferrals()` stub prevent the legacy administrator referral list from loading patient-level data. The later duplicate `view === "referrals"` rendering branch is unreachable under the current condition ordering. Do not delete it in this security change without a full dependency review; schedule removal with a focused UI regression test and retain the earlier privacy notice.
+
+
+## 9. Read-only verification artifact
+
+`supabase/verification/admin_analytics_privilege_review.sql` inspects the six current administrator reporting RPCs. It reports function existence, owner, SECURITY DEFINER status, function settings, direct PUBLIC ACL entries, and effective EXECUTE access for `anon`, `authenticated`, and `service_role`. It also returns definitions for manual review. The query is read-only and does not execute referral analytics or expose referral rows.
