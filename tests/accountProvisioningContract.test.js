@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { PROVISIONING_ROLES, buildInitialProfile, isAdministratorProfile, normalizeProvisioningInput, requiresFacility } from "../supabase/functions/_shared/accountProvisioningPolicy.js";
 
 const edgeFunction = await readFile(
   new URL("../supabase/functions/create-user/index.ts", import.meta.url),
   "utf8",
 );
+const provisioningPolicy = await readFile(new URL("../supabase/functions/_shared/accountProvisioningPolicy.js", import.meta.url), "utf8");
 const profileSchema = await readFile(
   new URL("../docs/IDENTITY_AND_ACCOUNT_PROVISIONING_RECONCILIATION.md", import.meta.url),
   "utf8",
@@ -17,12 +19,12 @@ const adminDashboard = await readFile(
 
 test("account provisioning verifies the bearer token and canonical administrator profile", () => {
   assert.match(edgeFunction, /admin\.auth\.getUser\(token\)/);
-  assert.match(edgeFunction, /requesterProfile\?\.role !== "administrator"/);
+  assert.match(edgeFunction, /isAdministratorProfile\(requesterProfile\)/);
   assert.match(edgeFunction, /\.from\("profiles"\)/);
 });
 
 test("provisioning roles remain aligned with the canonical profile role constraint", () => {
-  assert.match(edgeFunction, /new Set\(\["administrator", "phc_staff", "receiving_staff"\]\)/);
+  assert.deepEqual(PROVISIONING_ROLES, ["administrator", "phc_staff", "receiving_staff"]);
   assert.match(profileSchema, /exactly `phc_staff`, `receiving_staff`, and `administrator`/);
   assert.match(profileSchema, /phc_staff/);
   assert.match(profileSchema, /receiving_staff/);
@@ -31,7 +33,10 @@ test("provisioning roles remain aligned with the canonical profile role constrai
 });
 
 test("staff provisioning requires an existing active facility", () => {
-  assert.match(edgeFunction, /role !== "administrator" && !facilityId/);
+  assert.match(edgeFunction, /normalizeProvisioningInput\(await req.json\(\)\)/);
+  assert.equal(requiresFacility("phc_staff"), true);
+  assert.equal(requiresFacility("receiving_staff"), true);
+  assert.equal(requiresFacility("administrator"), false);
   assert.match(edgeFunction, /\.from\("facilities"\)/);
   assert.match(edgeFunction, /facility\.is_active !== true/);
 });
@@ -57,7 +62,8 @@ test("administrator dashboard provisions accounts through the Edge Function", ()
 
 
 test("temporary-password requirement is persisted atomically with the new profile", () => {
-  assert.match(edgeFunction, /must_change_password: true/);
+  assert.match(edgeFunction, /buildInitialProfile\(/);
+  assert.match(provisioningPolicy, /must_change_password: true/);
   assert.doesNotMatch(adminDashboard, /TEMPORARY PASSWORD FLAG UPDATE SKIPPED/);
   assert.doesNotMatch(adminDashboard, /must_change_password:\s*true/);
 });
@@ -71,13 +77,37 @@ test("provisioning CORS uses the verified application origin and explicit config
   assert.doesNotMatch(edgeFunction, /"Access-Control-Allow-Origin": "\*"/);
 });
 
-test("email validation regex accepts normal addresses and rejects malformed input", () => {
-  const pattern = edgeFunction.match(/!\/(.*?)\/\.test\(email\)/)?.[1];
-  assert.ok(pattern, "email validation regex must be present");
-  const emailRegex = new RegExp(pattern);
-  assert.equal(emailRegex.test("nurse@example.org"), true);
-  assert.equal(emailRegex.test("staff.member+test@example.org"), true);
-  assert.equal(emailRegex.test("bad email@example.org"), false);
-  assert.equal(emailRegex.test("missing-at-example.org"), false);
-  assert.equal(emailRegex.test("staff@invalid"), false);
+test("shared policy normalizes valid email and rejects malformed addresses", () => {
+  const valid = normalizeProvisioningInput({ email: " Nurse+Test@Example.org ", password: "temporary-password", full_name: " Nurse Example ", role: "phc_staff", facility_id: "facility-1" });
+  assert.equal(valid.ok, true);
+  assert.equal(valid.value.email, "nurse+test@example.org");
+  assert.equal(valid.value.fullName, "Nurse Example");
+  for (const email of ["bad email@example.org", "missing-at-example.org", "staff@invalid"]) {
+    const result = normalizeProvisioningInput({ email, password: "temporary-password", full_name: "Nurse Example", role: "phc_staff", facility_id: "facility-1" });
+    assert.equal(result.ok, false, email);
+  }
+});
+
+test("shared policy rejects legacy role aliases and missing staff facilities", () => {
+  for (const role of ["receiver", "facility_manager", "referring_staff", "facility_admin", "unknown"]) {
+    const result = normalizeProvisioningInput({ email: "nurse@example.org", password: "temporary-password", full_name: "Nurse Example", role, facility_id: "facility-1" });
+    assert.equal(result.ok, false, role);
+  }
+  for (const role of ["phc_staff", "receiving_staff"]) {
+    const result = normalizeProvisioningInput({ email: "nurse@example.org", password: "temporary-password", full_name: "Nurse Example", role });
+    assert.equal(result.ok, false, role);
+  }
+});
+
+test("administrator authorization reads the canonical profile role, not editable metadata", () => {
+  assert.equal(isAdministratorProfile({ role: "administrator" }), true);
+  assert.equal(isAdministratorProfile({ role: "phc_staff" }), false);
+  assert.equal(isAdministratorProfile({ user_metadata: { role: "administrator" } }), false);
+});
+
+test("initial profile builder binds the Auth UUID and enforces password-change requirement", () => {
+  assert.deepEqual(buildInitialProfile({ id: "auth-user-123", fullName: "Nurse Example", phone: "", role: "receiving_staff", facilityId: "facility-2" }), {
+    id: "auth-user-123", full_name: "Nurse Example", phone: null, role: "receiving_staff", facility_id: "facility-2", must_change_password: true,
+  });
+  assert.throws(() => buildInitialProfile({ id: "auth-user-124", fullName: "Nurse Example", phone: "", role: "phc_staff", facilityId: null }), /facility assignment/);
 });
