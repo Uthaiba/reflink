@@ -74,3 +74,10 @@ This finding does **not** mean REFLINK has no account-provisioning workflow. The
 ## Decision
 
 **NO-GO for attaching the current `handle_new_user()` function to `auth.users`.** The current function would grant the wrong default role and has an unsafe search-path configuration for a privileged function. No database changes were made. Implement a new, explicitly authorized provisioning design only after staging baseline reconstruction and role-matrix tests.
+
+
+## Additional source defect found during provisioning review
+
+The repository's hardened `create-user` candidate initially contained a double-escaped email-validation regex. That pattern did not express the intended whitespace and literal-dot checks and would reject ordinary valid email addresses. The source has been corrected to use the intended regex escapes, and `tests/accountProvisioningContract.test.js` now extracts and exercises the actual pattern against valid and malformed examples.
+
+This is a repository candidate correction only. The deployed production Edge Function was not changed. Exact-head CI must pass before the candidate is treated as releasable.
