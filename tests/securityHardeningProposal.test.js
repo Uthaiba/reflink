@@ -14,6 +14,10 @@ const defaultPrivilegeVerifier = await readFile(
   new URL("../supabase/verification/default_privilege_effective_access.sql", import.meta.url),
   "utf8",
 );
+const auditMinimizationDesign = await readFile(
+  new URL("../docs/AUDIT_LOG_PHI_MINIMIZATION_DESIGN.md", import.meta.url),
+  "utf8",
+);
 
 test("database hardening remains a proposal and cannot be mistaken for an applied migration", () => {
   assert.match(proposal, /source-level proposal only — NOT an executable migration and NOT applied/i);
@@ -95,4 +99,14 @@ test("default privilege verifier is read-only and distinguishes current ACLs fro
   assert.match(defaultPrivilegeVerifier, /per-schema REVOKE cannot cancel/i);
   assert.match(defaultPrivilegeVerifier, /does NOT prove future-object behavior/i);
   assert.doesNotMatch(executableSql, /\b(CREATE|ALTER|GRANT|REVOKE|INSERT|UPDATE|DELETE|DROP|TRUNCATE)\b/i);
+});
+
+test("audit minimization design excludes patient and clinical payloads from future audit snapshots", () => {
+  assert.match(auditMinimizationDesign, /Design proposal only — NOT an executable migration and NOT applied/);
+  assert.match(auditMinimizationDesign, /replace full-row serialization with a deliberately small, table-specific allowlist/i);
+  assert.match(auditMinimizationDesign, /patient identifier, age, sex, phone, address/i);
+  assert.match(auditMinimizationDesign, /final diagnosis, treatment, outcome, follow-up instructions/i);
+  assert.match(auditMinimizationDesign, /Do not store free-text values, raw JSON payloads, or hashes/i);
+  assert.match(auditMinimizationDesign, /Historical audit rows are not made safe by changing future trigger writes/i);
+  assert.match(auditMinimizationDesign, /Production remains read-only/i);
 });
