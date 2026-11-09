@@ -33,7 +33,7 @@ test("provisioning roles remain aligned with the canonical profile role constrai
 });
 
 test("staff provisioning requires an existing active facility", () => {
-  assert.match(edgeFunction, /normalizeProvisioningInput\(await req.json\(\)\)/);
+  assert.match(edgeFunction, /body: await req.json\(\)/);
   assert.equal(requiresFacility("phc_staff"), true);
   assert.equal(requiresFacility("receiving_staff"), true);
   assert.equal(requiresFacility("administrator"), false);
