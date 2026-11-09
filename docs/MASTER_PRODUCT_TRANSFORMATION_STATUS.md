@@ -617,3 +617,10 @@ A significant refinement: broad default privileges apply to future public object
 - Conclusion: a dashboard-only role restriction is bypassable through direct Supabase Data API calls by an administrator. A database-side enforcement layer is a mandatory release gate.
 - Added `supabase/verification/profile_role_delegation_review.sql`, a read-only verifier for the trigger, policy and column-grant boundary.
 - No production or staging objects, grants, policies, triggers, profiles, Auth users or Edge Function deployments were modified.
+
+
+### Database-level administrator escalation design (9 November 2026)
+- Added `supabase/verification/profile_role_delegation_trigger_design.sql` as a non-executable design artifact. It proposes a separate `BEFORE INSERT OR UPDATE` trigger to block authenticated inserts/promotions into the administrator role while allowing trusted database contexts. It deliberately leaves the existing `guard_profile_security_fields` trigger intact and does not introduce new `auth.role()` usage.
+- Added `tests/profileRoleDelegationBoundary.test.js` to enforce source-contract invariants and keep the SQL artifact explicitly marked as design-only. These are not database integration tests.
+- Queried the synthetic staging project's public schema read-only; it currently contains no application tables. Consequently, SQL trigger integration testing is not yet possible.
+- No migration was created or applied, and no production or staging objects, grants, policies, triggers, profiles or Auth users were changed.
