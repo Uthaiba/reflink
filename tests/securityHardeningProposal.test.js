@@ -10,6 +10,10 @@ const functionReview = await readFile(
   new URL("../docs/BASELINE_FUNCTION_SECURITY_REVIEW.md", import.meta.url),
   "utf8",
 );
+const defaultPrivilegeVerifier = await readFile(
+  new URL("../supabase/verification/default_privilege_effective_access.sql", import.meta.url),
+  "utf8",
+);
 
 test("database hardening remains a proposal and cannot be mistaken for an applied migration", () => {
   assert.match(proposal, /source-level proposal only — NOT an executable migration and NOT applied/i);
@@ -76,4 +80,19 @@ test("live function execute grants are documented without broadening authenticat
   assert.match(functionReview, /`anon` \| None recorded/);
   assert.match(functionReview, /`PUBLIC` \| None recorded in the captured per-function ACLs/);
   assert.match(functionReview, /Preserve the five authenticated grants/);
+});
+
+test("default privilege verifier is read-only and distinguishes current ACLs from future defaults", () => {
+  const executableSql = defaultPrivilegeVerifier
+    .replace(/^\\s*--.*$/gm, "")
+    .trim();
+  assert.match(executableSql, /^(SELECT|WITH)\\b/i);
+  assert.match(executableSql, /pg_default_acl/i);
+  assert.match(executableSql, /aclexplode/i);
+  assert.match(executableSql, /has_function_privilege/i);
+  assert.match(executableSql, /COALESCE\\(p\\.proacl, acldefault\\('f', p\\.proowner\\)\\)/i);
+  assert.match(defaultPrivilegeVerifier, /<global>/);
+  assert.match(defaultPrivilegeVerifier, /per-schema REVOKE cannot cancel/i);
+  assert.match(defaultPrivilegeVerifier, /does NOT prove future-object behavior/i);
+  assert.doesNotMatch(executableSql, /\\b(CREATE|ALTER|GRANT|REVOKE|INSERT|UPDATE|DELETE|DROP|TRUNCATE)\\b/i);
 });
