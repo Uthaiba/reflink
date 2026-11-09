@@ -43,22 +43,36 @@ FROM anon, authenticated;
 
 Do not revoke authenticated SELECT until the current administrator-only RLS policy and every legitimate audit reader have been verified. Do not revoke write privileges from the trigger execution identity until a synthetic referral insert/update/delete proves the audit trigger still succeeds. The owner retains inherent owner privileges; service-role access must be evaluated from the actual function execution context, not assumed.
 
-### 3.2 Default privileges — creator-specific
+### 3.2 Default privileges — creator-specific and PUBLIC-safe
 
-For the `postgres` creator, after verifying the restored baseline and intended defaults, the candidate direction is:
+The target is **deny by default for all Data API roles** on newly created objects in `public`. Grant `anon`, `authenticated`, or `service_role` only the exact privileges required for each object after its RLS, authorization and workflow tests are ready. This deliberately removes blanket default grants to `service_role` too; trusted backend access is restored through explicit per-object grants.
+
+For the `postgres` creator, the candidate direction is:
 
 ```sql
+-- Tables: no automatic browser or service-role access.
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  REVOKE ALL ON TABLES FROM anon, authenticated;
+  REVOKE ALL ON TABLES FROM anon, authenticated, service_role;
+
+-- Sequences: no automatic browser or service-role access.
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  REVOKE ALL ON SEQUENCES FROM anon, authenticated;
+  REVOKE ALL ON SEQUENCES FROM anon, authenticated, service_role;
+
+-- Remove Supabase's creator-specific direct function grants.
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated;
+  REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated, service_role;
+
+-- IMPORTANT: revoke PostgreSQL's built-in PUBLIC EXECUTE globally
+-- for functions created by this owner, not just in schema public.
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres
+  REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 ```
 
-This is deliberately not a blanket revoke from `service_role`. Trusted backend access must be granted per object where required. Existing object ACLs are not retroactively changed by ALTER DEFAULT PRIVILEGES.
+**Why the global function statement is separate:** PostgreSQL documents that per-schema default privileges are additive to global defaults. A per-schema `REVOKE EXECUTE ... FROM PUBLIC` cannot cancel the built-in global PUBLIC grant. `anon` and `authenticated` inherit privileges granted to PUBLIC, so a schema-only revoke can leave a newly created function executable. Do not substitute `IN SCHEMA public` on the final statement. Verify the result by creating a disposable test function as the target creator and checking `has_function_privilege` for `anon`, `authenticated`, and `service_role`; the test function must be removed in the same disposable test transaction/environment.
 
-For `supabase_admin`, **do not put an ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin statement into a migration run as postgres**. The live role-membership catalog did not show postgres as a member of supabase_admin. A separately authorised owner-level operation or a reviewed platform-supported method is required. If that authority cannot be obtained, document the residual default-ACL exposure and block release of any new public objects created by that role.
+These changes affect future objects only. Existing function ACLs are not retroactively changed; preserve their individually reviewed grants and test all existing RPC dependencies. Do not blanket-revoke authenticated EXECUTE on existing functions.
+
+For `supabase_admin`, **do not put an ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin statement into a migration run as postgres**. The live role-membership catalog did not show postgres as a member of supabase_admin. A separately authorised owner-level operation or reviewed platform-supported method is required to apply the same table, sequence, direct-function and global-PUBLIC function restrictions for that creator. If that authority cannot be obtained, document the residual exposure and block release of any new public objects created by that role.
 
 ### 3.3 Explicit per-object access pattern
 
@@ -76,7 +90,7 @@ For every new RPC:
 1. Choose SECURITY INVOKER by default; justify SECURITY DEFINER as an exception.
 2. Pin `search_path` (prefer an empty path with fully qualified references).
 3. Validate `auth.uid()`, role and facility inside the function where needed.
-4. Revoke default PUBLIC/anon/authenticated EXECUTE, then grant the exact signature to the intended role.
+4. Ensure the creator's global default PUBLIC EXECUTE is revoked and its public-schema direct EXECUTE defaults are restricted; then grant the exact signature to the intended role.
 5. Test both allowed and denied calls through PostgREST.
 
 ## 4. Required staging regression matrix
@@ -87,7 +101,7 @@ For every new RPC:
 | Audit writes | referral and counter-referral insert/update/delete retain required audit behavior | browser role cannot directly forge/delete audit history |
 | Existing policies | current referral workflows still work for referring/receiving users | cross-facility and unauthenticated reads/writes remain denied |
 | Table defaults | new table receives only owner/trusted grants until explicit grants are added | anon/authenticated receive no implicit table/sequence privileges |
-| Function defaults | new function is not executable by anon/authenticated unless explicitly granted | direct PostgREST invocation is denied without an explicit grant |
+| Function defaults | disposable function created by each approved creator is not executable by PUBLIC, anon, authenticated or service_role by default | direct PostgREST invocation is denied without an explicit per-object grant |
 | postgres creator | defaults match the approved ACL manifest | no unexpected browser grants |
 | supabase_admin creator | owner-authorised verification proves defaults are restrictive | if unavailable, no release of objects created by this role |
 | Existing RPCs | authenticated calls to approved helpers still pass authorization tests | unauthorised, cross-facility and null-identity calls fail |
