@@ -107,3 +107,8 @@ No deployment if any of the following applies:
 At the time of writing, exact-HEAD GitHub Actions for candidate commit `4d8f84dd876d80a227d781bb72e23f07a97993e7` passed on both push and pull-request events, including unit tests, lint, production build and Chromium offline-queue browser tests. These runs do not constitute a live Edge Function integration test.
 
 Production `create-user` remains ACTIVE version 2. No Edge Function deployment, production secret change, Auth user creation, schema change or production data mutation has been performed. The staging project still lacks the reconstructed application schema. Therefore this runbook remains a gated release plan, not evidence of production readiness.
+
+
+### Administrator delegation safeguard — 9 November 2026
+
+The repository candidate now blocks routine administrator-role assignment in the shared provisioning workflow and dashboard. New accounts can only be created as `phc_staff` or `receiving_staff`. Existing administrator profiles remain visible/editable for non-role fields, but their role selector is disabled. This does not yet prevent direct authenticated API updates to `profiles.role`; a database-side authorization boundary must be designed and verified against the reconstructed staging schema before release. Do not treat the UI guard as a security boundary. A separate administrator-delegation workflow requires an explicit governance decision and independent approval.
