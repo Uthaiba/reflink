@@ -609,3 +609,11 @@ A significant refinement: broad default privileges apply to future public object
 - Updated AdminDashboard to remove administrator from normal role options, freeze the role of existing administrator profiles during routine edits, and reject attempts to submit administrator as a newly assigned role.
 - Added behavioral tests for rejection before Auth/profile writes and source-contract checks for the dashboard safeguard.
 - This is deliberately a conservative interim restriction; it does not remove or modify existing administrator accounts. It also does not constitute database authorization: direct Supabase profile updates may still bypass the UI. The current RLS/column-grant path for `profiles.role` must be inspected in the reconstructed staging baseline, then guarded at the database/API boundary. No database changes were made.
+
+
+### Production profile-role database boundary inspection (9 November 2026)
+- Executed read-only catalog queries against production for profile triggers/function definitions, `pg_policies`, and `information_schema.role_column_grants`.
+- Confirmed the `guard_profile_security_fields` trigger protects profile security fields from non-administrators, but its administrator branch permits administrators to change role fields. The `Administrators can update profiles` policy also permits authenticated administrator updates, and `authenticated` has direct UPDATE privilege on `profiles.role`.
+- Conclusion: a dashboard-only role restriction is bypassable through direct Supabase Data API calls by an administrator. A database-side enforcement layer is a mandatory release gate.
+- Added `supabase/verification/profile_role_delegation_review.sql`, a read-only verifier for the trigger, policy and column-grant boundary.
+- No production or staging objects, grants, policies, triggers, profiles, Auth users or Edge Function deployments were modified.
