@@ -14,7 +14,8 @@
 | Public views | 2 |
 | Explicit indexes | 10 |
 | Foreign keys | 23 |
-| Triggers | 9 |
+| `CREATE TRIGGER` statements in schema export | 0 |
+| Live public trigger attachments in supplemental catalog snapshot | 9 |
 | RLS policies | 30 |
 | Grant/revoke statements | 73 |
 | Default privilege statements | 9 |
@@ -33,7 +34,7 @@ All 14 exported public tables have RLS enabled in the export. There are no stand
 | `pgcrypto` 1.3 | UUID default function dependency | Installed 1.3 in `extensions` | Confirm resolution |
 | `uuid-ossp` 1.1 | Installed in production; no clear direct use identified in inspected excerpt | Installed 1.1 in `extensions` | Do not assume needed |
 | `plpgsql` 1.0 | PL/pgSQL functions | Installed 1.0 | Available |
-| Auth signup trigger | `handle_new_user()` SECURITY DEFINER function | No non-internal trigger on staging `auth.users` | Retrieve/review production trigger definition; do not invent or duplicate |
+| Auth signup trigger | `handle_new_user()` SECURITY DEFINER function; no Auth trigger DDL in export | No non-internal trigger on staging `auth.users` | Do not attach without a separately approved Auth provisioning design |
 | Views | Analytics view includes patient identifier and diagnosis data | Export is service-role-only | Preserve narrow grants; review security mode |
 | Default ACLs | Dump includes only `postgres`; live production catalog showed `postgres` and `supabase_admin` | Staging also has broad defaults for both roles on tables, sequences, functions | Reconcile to least privilege; do not blindly replay |
 
@@ -81,7 +82,13 @@ Static inspection of the 16 function definitions found 10 declared `SECURITY DEF
 - `profiles` and `users` both exist; authoritative identity model needs explicit documentation.
 - `referral_events` and `referral_feedback` have RLS enabled but no policies in the export; expected behavior is fail-closed.
 
-## Read-only verifier execution, 2026-11-08\n\nThe committed SELECT-only script `supabase/verification/staging_baseline_catalog_verification.sql` was executed against staging. It returned zero public tables, functions, views, indexes, foreign keys, triggers, and policies, as expected for the empty baseline target. It also confirmed no RLS-enabled public tables (because no tables exist), no non-internal Auth user triggers, and six broad default ACL entries covering tables, sequences, and functions for both `postgres` and `supabase_admin`. The zero-object comparison flags are expected pre-restore and are not acceptance passes.\n\n## Staging observation, 2026-11-08
+## Trigger provenance
+
+The supplied schema export contains zero `CREATE TRIGGER` statements. The nine live public trigger attachments were recovered separately from the production catalog and recorded in `docs/catalog_exports/20261109_live_public_trigger_snapshot.sql`. Treat that snapshot as supplemental evidence requiring its own review; do not attribute those trigger definitions to the supplied schema export. It does not establish or authorize an Auth trigger on `auth.users`.
+
+## Read-only verifier execution, 2026-11-08
+
+The committed SELECT-only script `supabase/verification/staging_baseline_catalog_verification.sql` was executed against staging. It returned zero public tables, functions, views, indexes, foreign keys, triggers, and policies, as expected for the empty baseline target. It also confirmed no RLS-enabled public tables (because no tables exist), no non-internal Auth user triggers, and six broad default ACL entries covering tables, sequences, and functions for both `postgres` and `supabase_admin`. The zero-object comparison flags are expected pre-restore and are not acceptance passes.\n\n## Staging observation, 2026-11-08
 
 - Project status: `ACTIVE_HEALTHY`.
 - PostgreSQL: `17.11.0.018`.
