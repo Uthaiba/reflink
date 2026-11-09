@@ -4,6 +4,11 @@ export const PROVISIONING_ROLES = Object.freeze([
   "receiving_staff",
 ]);
 
+export const STAFF_PROVISIONING_ROLES = Object.freeze([
+  "phc_staff",
+  "receiving_staff",
+]);
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function isAdministratorProfile(profile) {
@@ -43,6 +48,12 @@ export function normalizeProvisioningInput(body) {
   }
   if (!PROVISIONING_ROLES.includes(role)) {
     return { ok: false, error: "Unsupported REFLINK role." };
+  }
+  if (!STAFF_PROVISIONING_ROLES.includes(role)) {
+    return {
+      ok: false,
+      error: "Administrator accounts require the separately approved administrator-delegation process.",
+    };
   }
   if (requiresFacility(role) && !facilityId) {
     return {
