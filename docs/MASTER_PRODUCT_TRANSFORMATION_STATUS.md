@@ -588,3 +588,10 @@ A significant refinement: broad default privileges apply to future public object
 - These tests exercise the same orchestration function used by the Edge Function, but they are still mocked integration tests—not calls to Supabase Auth/PostgREST and not proof of PostgreSQL constraints, network failure timing, or live Edge Runtime behavior.
 - Active facility lookup remains an adapter boundary; synthetic tests cover its positive/negative outcomes. A future staging test must verify actual active/inactive facility rows and actual Auth/profile side effects.
 - Administrator-to-administrator delegation and facilityless administrator policy remain unresolved and unchanged. No Auth identities, database objects, production function versions, secrets, or staging settings were changed.
+
+
+### Provisioning failure-path hardening (9 November 2026)
+- Extended the shared provisioning orchestration to catch rejected/throwing facility lookup, Auth creation, profile insertion and Auth cleanup adapters. Facility lookup failures fail closed before Auth creation; Auth creation failures return a generic failure; profile insertion failures always attempt Auth cleanup; cleanup exceptions are surfaced as requiring administrator review.
+- Added synthetic tests for thrown profile-adapter and cleanup-adapter failures in addition to returned error cases. These tests verify cleanup is attempted even when profile persistence rejects rather than returning a normal Supabase error object.
+- This reduces orphan-identity risk under transport exceptions but does not make Auth and Postgres operations transactional. A cleanup request can still fail or be ambiguous after a network timeout; production-grade reconciliation/idempotency and an operational orphan-account review process remain required.
+- Latest source commit for this set: `320f38ec4aa8af1cd7c5056a5ebdddecd2963c9b`; exact-HEAD CI is pending.
