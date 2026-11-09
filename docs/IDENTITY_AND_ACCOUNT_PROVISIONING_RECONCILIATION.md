@@ -217,3 +217,16 @@ A read-only production catalog inspection was performed after the UI restriction
 The delegation restriction must be enforced in Postgres, not only in React or the Edge Function. Candidate approaches include a narrowly scoped trigger or a dedicated privileged role-management RPC/Edge Function combined with direct column/table privilege restrictions. The design must preserve legitimate profile maintenance, self-service password-change flag updates, existing admin recovery, service-role provisioning and RLS protections. Do not use `auth.role()` in new policy/function logic; current Supabase guidance deprecates it. Do not deploy a guessed trigger change against production.
 
 The production findings are evidence from catalog inspection only. No policies, grants, triggers, functions, profiles or Auth identities were changed. The exact fix must be validated against the reconstructed synthetic staging baseline, including INSERT and UPDATE attempts by ordinary authenticated users, authenticated administrators, service_role, and legitimate self-service profile changes.
+
+
+## Continuation addendum — database trigger design prepared, staging remains unavailable for integration (9 November 2026)
+
+A narrow database-side guard has been designed as a separate, explicitly non-executable verification artifact: `supabase/verification/profile_role_delegation_trigger_design.sql`.
+
+The proposed `BEFORE INSERT OR UPDATE` trigger blocks authenticated callers from inserting a profile with role `administrator` or changing a profile into that role. It allows trusted database contexts (`postgres`, `supabase_admin`, `service_role`) to proceed, while the current `create-user` Edge Function independently blocks administrator account provisioning. The design is intentionally separate from the existing `guard_profile_security_fields` trigger so its current behavior is not overwritten. It also avoids adding new `auth.role()` calls.
+
+A Node contract test file `tests/profileRoleDelegationBoundary.test.js` checks the proposal's key invariants and verifies it remains design-only. These tests do not execute SQL or prove Postgres trigger behavior.
+
+The connected synthetic staging project `reflink-synthetic-staging` was queried read-only; its `public` schema currently contains no application tables. Therefore the trigger cannot yet be integration-tested. Do not turn this design into a migration or apply it until the complete staging baseline is reconstructed and verified, and the trigger is tested against authenticated admin, non-admin, service_role, profile self-service and maintenance cases.
+
+No production or staging database changes were made.
