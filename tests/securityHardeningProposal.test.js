@@ -84,15 +84,15 @@ test("live function execute grants are documented without broadening authenticat
 
 test("default privilege verifier is read-only and distinguishes current ACLs from future defaults", () => {
   const executableSql = defaultPrivilegeVerifier
-    .replace(/^\\s*--.*$/gm, "")
+    .replace(/^\s*--.*$/gm, "")
     .trim();
-  assert.match(executableSql, /^(SELECT|WITH)\\b/i);
+  assert.match(executableSql, /^(SELECT|WITH)\b/i);
   assert.match(executableSql, /pg_default_acl/i);
   assert.match(executableSql, /aclexplode/i);
   assert.match(executableSql, /has_function_privilege/i);
-  assert.match(executableSql, /COALESCE\\(p\\.proacl, acldefault\\('f', p\\.proowner\\)\\)/i);
+  assert.match(executableSql, /COALESCE\(p\.proacl, acldefault\('f', p\.proowner\)\)/i);
   assert.match(defaultPrivilegeVerifier, /<global>/);
   assert.match(defaultPrivilegeVerifier, /per-schema REVOKE cannot cancel/i);
   assert.match(defaultPrivilegeVerifier, /does NOT prove future-object behavior/i);
-  assert.doesNotMatch(executableSql, /\\b(CREATE|ALTER|GRANT|REVOKE|INSERT|UPDATE|DELETE|DROP|TRUNCATE)\\b/i);
+  assert.doesNotMatch(executableSql, /\b(CREATE|ALTER|GRANT|REVOKE|INSERT|UPDATE|DELETE|DROP|TRUNCATE)\b/i);
 });
