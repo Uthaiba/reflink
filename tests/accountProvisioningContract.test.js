@@ -38,7 +38,7 @@ test("staff provisioning requires an existing active facility", () => {
   assert.equal(requiresFacility("receiving_staff"), true);
   assert.equal(requiresFacility("administrator"), false);
   assert.match(edgeFunction, /\.from\("facilities"\)/);
-  assert.match(edgeFunction, /facility\.is_active !== true/);
+  assert.match(edgeFunction, /facility\?\.is_active === true/);
 });
 
 test("untrusted Auth metadata cannot assign an application role or facility", () => {
@@ -62,7 +62,7 @@ test("administrator dashboard provisions accounts through the Edge Function", ()
 
 
 test("temporary-password requirement is persisted atomically with the new profile", () => {
-  assert.match(edgeFunction, /buildInitialProfile\(/);
+  assert.match(edgeFunction, /provisionAccount\(/);
   assert.match(provisioningPolicy, /must_change_password: true/);
   assert.doesNotMatch(adminDashboard, /TEMPORARY PASSWORD FLAG UPDATE SKIPPED/);
   assert.doesNotMatch(adminDashboard, /must_change_password:\s*true/);
