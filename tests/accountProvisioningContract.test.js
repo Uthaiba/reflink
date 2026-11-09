@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { PROVISIONING_ROLES, buildInitialProfile, isAdministratorProfile, normalizeProvisioningInput, requiresFacility } from "../supabase/functions/_shared/accountProvisioningPolicy.js";
+import { PROVISIONING_ROLES, buildInitialProfile, isAdministratorProfile, normalizeProvisioningInput, provisionAccount, requiresFacility } from "../supabase/functions/_shared/accountProvisioningPolicy.js";
 
 const edgeFunction = await readFile(
   new URL("../supabase/functions/create-user/index.ts", import.meta.url),
@@ -19,7 +19,7 @@ const adminDashboard = await readFile(
 
 test("account provisioning verifies the bearer token and canonical administrator profile", () => {
   assert.match(edgeFunction, /admin\.auth\.getUser\(token\)/);
-  assert.match(edgeFunction, /isAdministratorProfile\(requesterProfile\)/);
+  assert.match(edgeFunction, /provisionAccount\(/);
   assert.match(edgeFunction, /\.from\("profiles"\)/);
 });
 
@@ -47,11 +47,11 @@ test("untrusted Auth metadata cannot assign an application role or facility", ()
 });
 
 test("profile creation failure attempts to compensate by deleting the Auth identity", () => {
-  assert.match(edgeFunction, /if \(profileError \|\| !profile\)/);
-  assert.match(edgeFunction, /admin\.auth\.admin\.deleteUser\(created\.user\.id\)/);
-  assert.match(edgeFunction, /if \(rollbackError\)/);
-  assert.match(edgeFunction, /cleanup requires administrator review/);
-  assert.match(edgeFunction, /account creation was rolled back/);
+  assert.match(provisioningPolicy, /if \(profileError \|\| !profile\)/);
+  assert.match(edgeFunction, /admin\.auth\.admin\.deleteUser\(userId\)/);
+  assert.match(provisioningPolicy, /if \(rollbackError\)/);
+  assert.match(provisioningPolicy, /cleanup requires administrator review/);
+  assert.match(provisioningPolicy, /account creation was rolled back/);
 });
 
 test("administrator dashboard provisions accounts through the Edge Function", () => {
@@ -110,4 +110,79 @@ test("initial profile builder binds the Auth UUID and enforces password-change r
     id: "auth-user-123", full_name: "Nurse Example", phone: null, role: "receiving_staff", facility_id: "facility-2", must_change_password: true,
   });
   assert.throws(() => buildInitialProfile({ id: "auth-user-124", fullName: "Nurse Example", phone: "", role: "phc_staff", facilityId: null }), /facility assignment/);
+});
+
+
+function fakeProvisioningDependencies(overrides = {}) {
+  const calls = { facility: [], authCreate: [], profileCreate: [], authDelete: [] };
+  const dependencies = {
+    requesterProfile: { role: "administrator" },
+    body: { email: "nurse@example.org", password: "temporary-password", full_name: "Nurse Example", role: "phc_staff", facility_id: "facility-1" },
+    findActiveFacility: async (id) => { calls.facility.push(id); return true; },
+    createAuthUser: async (input) => { calls.authCreate.push(input); return { user: { id: "auth-user-1", email: input.email }, error: null }; },
+    createProfile: async (input) => { calls.profileCreate.push(input); return { profile: { id: input.id, ...input }, error: null }; },
+    deleteAuthUser: async (id) => { calls.authDelete.push(id); return { error: null }; },
+    ...overrides,
+  };
+  return { dependencies, calls };
+}
+
+test("provisioning workflow rejects non-administrators before external writes", async () => {
+  const { dependencies, calls } = fakeProvisioningDependencies({ requesterProfile: { role: "phc_staff" } });
+  const result = await provisionAccount(dependencies);
+  assert.equal(result.status, 403);
+  assert.equal(calls.authCreate.length, 0);
+  assert.equal(calls.profileCreate.length, 0);
+});
+
+test("provisioning workflow rejects inactive facilities before creating an Auth identity", async () => {
+  const { dependencies, calls } = fakeProvisioningDependencies({ findActiveFacility: async () => false });
+  const result = await provisionAccount(dependencies);
+  assert.equal(result.status, 400);
+  assert.equal(calls.authCreate.length, 0);
+});
+
+test("provisioning workflow creates one Auth identity and one matching profile", async () => {
+  const { dependencies, calls } = fakeProvisioningDependencies();
+  const result = await provisionAccount(dependencies);
+  assert.equal(result.status, 201);
+  assert.equal(calls.authCreate.length, 1);
+  assert.equal(calls.profileCreate.length, 1);
+  assert.equal(calls.profileCreate[0].id, "auth-user-1");
+  assert.equal(calls.profileCreate[0].facility_id, "facility-1");
+  assert.equal(calls.profileCreate[0].must_change_password, true);
+  assert.equal(calls.authDelete.length, 0);
+});
+
+test("provisioning workflow compensates an Auth identity when profile creation fails", async () => {
+  const { dependencies, calls } = fakeProvisioningDependencies({
+    createProfile: async () => ({ profile: null, error: new Error("synthetic profile failure") }),
+  });
+  const result = await provisionAccount(dependencies);
+  assert.equal(result.status, 500);
+  assert.equal(calls.authDelete.length, 1);
+  assert.equal(calls.authDelete[0], "auth-user-1");
+  assert.match(result.body.error, /rolled back/);
+});
+
+test("provisioning workflow reports cleanup failure for administrator recovery", async () => {
+  const { dependencies, calls } = fakeProvisioningDependencies({
+    createProfile: async () => ({ profile: null, error: new Error("synthetic profile failure") }),
+    deleteAuthUser: async (id) => { calls.authDelete.push(id); return { error: new Error("synthetic cleanup failure") }; },
+  });
+  const result = await provisionAccount(dependencies);
+  assert.equal(result.status, 500);
+  assert.equal(calls.authDelete.length, 1);
+  assert.match(result.body.error, /administrator review/);
+});
+
+test("provisioning workflow treats duplicate-email Auth errors as a safe client failure", async () => {
+  const { dependencies, calls } = fakeProvisioningDependencies({
+    createAuthUser: async () => ({ user: null, error: new Error("duplicate email") }),
+  });
+  const result = await provisionAccount(dependencies);
+  assert.equal(result.status, 400);
+  assert.equal(calls.profileCreate.length, 0);
+  assert.equal(calls.authDelete.length, 0);
+  assert.doesNotMatch(result.body.error, /duplicate email/);
 });
