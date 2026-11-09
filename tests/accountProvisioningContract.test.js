@@ -70,3 +70,8 @@ test("provisioning CORS uses the verified application origin and explicit config
   assert.match(edgeFunction, /headers\["Access-Control-Allow-Origin"\] = origin/);
   assert.doesNotMatch(edgeFunction, /"Access-Control-Allow-Origin": "\*"/);
 });
+
+test("email validation uses whitespace and literal-dot regex escapes", () => {
+  assert.ok(edgeFunction.includes(String.raw`/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/`));
+  assert.doesNotMatch(edgeFunction, /\\\\s|\\\\\\./);
+});
