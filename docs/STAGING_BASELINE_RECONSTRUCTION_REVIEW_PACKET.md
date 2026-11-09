@@ -23,7 +23,8 @@ The export contains:
 | Public views | 2 |
 | Explicit indexes | 10 |
 | Foreign keys | 23 |
-| Triggers | 9 |
+| `CREATE TRIGGER` statements in schema export | 0 |
+| Supplemental live public trigger attachments | 9 |
 | RLS policies | 30 |
 | Grant/revoke statements | 73 |
 | Default-privilege statements | 9 |
@@ -143,9 +144,9 @@ The two tables `referral_events` and `referral_feedback` have RLS enabled but no
 
 Test administrator, referring-user, receiving-facility, unrelated authenticated, anonymous and service-role contexts. Confirm that RLS is not being bypassed unintentionally by SECURITY DEFINER functions or view ownership.
 
-### Phase 7 — Create triggers
+### Phase 7 — Reconcile and create public triggers
 
-Create all nine exported triggers after their functions and tables exist. Preserve timing, event list, column list, row-level semantics and names.
+The schema export contains no trigger DDL. The supplemental live catalog snapshot contains nine public trigger attachments. Review each attachment against its function definition, timing, event list, column list, row-level semantics and name; then include the reviewed attachments in the staging candidate. Do not claim they were exported from the SQL snapshot.
 
 Do not create a trigger on `auth.users` based solely on the existence of `handle_new_user()`. The current staging catalog has no non-internal Auth trigger. Retrieve and verify the exact production trigger definition and expected signup lifecycle separately before any Auth trigger work.
 
@@ -166,7 +167,7 @@ Do not replay grant statements before the object-specific decisions are resolved
 Run the read-only verifier and compare expected object inventory. A zero-object count is a pre-restore observation, not a pass.
 
 Acceptance:
-- 14 tables, 16 functions, 2 views, 10 explicit indexes, 23 foreign keys, 9 triggers, 30 policies.
+- 14 tables, 16 functions, 2 views, 10 explicit indexes, 23 foreign keys and 30 policies from the schema export, plus nine public trigger attachments from the separate live catalog snapshot.
 - All 14 tables have RLS enabled.
 - Every function owner, security mode, search path and EXECUTE grant matches the approved manifest.
 - All intended table, sequence, view and schema grants match least-privilege decisions.
