@@ -110,3 +110,38 @@ test("creation rejects malformed core clinical and nested values", () => {
   assert.throws(() => buildReferralCreatePayload(intake({ urgency: "critical" }), context), /urgency/);
   assert.throws(() => buildReferralCreatePayload(intake({ diagnosis_records: [{ status: { injected: true } }] }), context), /invalid "status"/);
 });
+
+
+test("legacy diagnosis status matches the schema's scalar CHECK constraint", () => {
+  const oneStatus = buildReferralCreatePayload(intake({
+    diagnosis_status: "suspected",
+    diagnosis_records: [{ status: "SUSPECTED", category: "infectious_disease", diagnosis: "Malaria" }],
+  }), context);
+  assert.equal(oneStatus.diagnosis_status, "suspected");
+
+  const mixedStatuses = buildReferralCreatePayload(intake({
+    diagnosis_status: "suspected, confirmed",
+    diagnosis_records: [
+      { status: "suspected", category: "infectious_disease", diagnosis: "Malaria" },
+      { status: "confirmed", category: "infectious_disease", diagnosis: "Typhoid" },
+    ],
+  }), context);
+  assert.equal(mixedStatuses.diagnosis_status, null);
+  assert.equal(mixedStatuses.diagnosis_records.length, 2);
+
+  const blankStatus = buildReferralCreatePayload(intake({
+    diagnosis_status: "",
+    diagnosis_records: [],
+  }), context);
+  assert.equal(blankStatus.diagnosis_status, null);
+});
+
+test("creation rejects diagnosis statuses outside the database constraint", () => {
+  assert.throws(() => buildReferralCreatePayload(intake({
+    diagnosis_status: "unconfirmed",
+    diagnosis_records: [],
+  }), context), /Diagnosis status is invalid/);
+  assert.throws(() => buildReferralCreatePayload(intake({
+    diagnosis_records: [{ status: "unconfirmed", category: "other", diagnosis: "Example" }],
+  }), context), /Diagnosis status is invalid/);
+});
