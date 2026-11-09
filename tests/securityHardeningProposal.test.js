@@ -47,3 +47,13 @@ test("staging matrix includes positive and negative access-control tests", () =>
     assert.ok(proposal.includes(phrase), `Missing staging acceptance criterion: ${phrase}`);
   }
 });
+
+test("function default hardening revokes global PUBLIC execution, not only schema defaults", () => {
+  assert.match(proposal, /ALTER DEFAULT PRIVILEGES FOR ROLE postgres\\s+REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC/i);
+  assert.match(proposal, /Do not substitute `IN SCHEMA public` on the final statement/i);
+  assert.match(proposal, /per-schema default privileges are additive to global defaults/i);
+  assert.match(proposal, /has_function_privilege/i);
+  assert.match(proposal, /REVOKE ALL ON TABLES FROM anon, authenticated, service_role/i);
+  assert.match(proposal, /REVOKE ALL ON SEQUENCES FROM anon, authenticated, service_role/i);
+  assert.match(proposal, /REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated, service_role/i);
+});
