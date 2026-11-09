@@ -536,3 +536,16 @@ A significant refinement: broad default privileges apply to future public object
 - Production inspection was limited to schema/catalog metadata. No application rows were queried or modified. No production schema, grants, RLS policies, functions, triggers, Auth users, Storage objects or deployments were changed.
 - **Staging restore remains blocked:** the export is incomplete without trigger attachments and creator-specific ACL reconciliation. The trigger snapshot closes the missing trigger evidence gap, but staging target ACL strategy and managed-service dependencies still need approval. No migration was applied to staging.
 - **Next:** assemble a reviewed staging-only baseline, choose whether to reproduce the existing broad ACLs for controlled regression testing or use a least-privilege staging baseline, then restore only synthetic users/facilities/referrals and run the role-specific authorization suite. Do not apply the referral-create trigger candidate until this baseline is verified.
+
+
+## Continuation update — CI recovery and Auth provisioning review (9 November 2026)
+
+- Corrected a branch synchronization defect: the live trigger snapshot had been committed outside the PR head, causing the schema-manifest regression test to fail with ENOENT. Re-added the snapshot explicitly to `reflink/phase-1-security-remediation` at commit `315174e7bd794766f6579dddaeff4ae3d1228c10`.
+- Both push and pull-request CI workflows passed on that exact commit, including automated tests, lint, production build, Chromium installation and real-browser offline queue tests.
+- Performed read-only Auth catalog inspection on both linked projects. Production has `public.handle_new_user()`; staging does not. Neither project has a non-internal trigger attached to `auth.users`.
+- Production `handle_new_user()` is SECURITY DEFINER, owned by postgres, uses `search_path=public`, and inserts profiles with a hard-coded `phc_staff` role based on Auth metadata for name/phone. It does not assign a facility. Its observed EXECUTE ACL lists only postgres and service_role, not anon/authenticated/PUBLIC.
+- The function must not be attached to `auth.users` in its current form: it would assign an operational PHC role by default and uses a privileged function search path that needs hardening.
+- Source review: `src/App.jsx` uses password sign-in and profile lookup; no visible sign-up flow was found in the reviewed authentication section. `src/UserManagement.jsx` inserts into `public.users`, which is not equivalent to creating an Auth identity or an authorization profile. The `users` / `profiles` / Auth identity synchronization contract needs an explicit design.
+- Added `docs/AUTH_PROVISIONING_SECURITY_REVIEW.md` and read-only verifier `supabase/verification/auth_provisioning_security_review.sql`. Executed the verifier against both production and staging; it confirmed the above findings.
+- No production or staging DDL, DML, grants, policies, functions, triggers, Auth configuration or user records were changed.
+- **Next:** reconcile the user-directory/profile/Auth identity model and define a trusted administrator-controlled provisioning workflow. Do not add an Auth trigger until role assignment, facility validation, safe search_path, grants, idempotency and audit behavior pass synthetic staging tests.
