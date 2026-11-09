@@ -1,8 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  buildInitialProfile,
-  isAdministratorProfile,
-  normalizeProvisioningInput,
+  provisionAccount,
 } from "../_shared/accountProvisioningPolicy.js";
 
 const canonicalOrigin = "https://reflink-yobe.vercel.app";
@@ -68,72 +66,43 @@ Deno.serve(async (req) => {
       .eq("id", requester.id)
       .maybeSingle();
 
-    if (requesterProfileError || !isAdministratorProfile(requesterProfile)) {
+    if (requesterProfileError) {
       return json({ success: false, error: "Administrator access required." }, 403, origin);
     }
 
-    const parsedInput = normalizeProvisioningInput(await req.json());
-    if (!parsedInput.ok) {
-      return json({ success: false, error: parsedInput.error }, 400, origin);
-    }
-
-    const { email, password, fullName, phone, role, facilityId } = parsedInput.value;
-
-    if (facilityId) {
-      const { data: facility, error: facilityError } = await admin
-        .from("facilities")
-        .select("id, is_active")
-        .eq("id", facilityId)
-        .maybeSingle();
-
-      if (facilityError || !facility || facility.is_active !== true) {
-        return json({ success: false, error: "Select an active facility." }, 400, origin);
-      }
-    }
-
-    const { data: created, error: createError } = await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: fullName },
+    const outcome = await provisionAccount({
+      requesterProfile,
+      body: await req.json(),
+      findActiveFacility: async (facilityId: string) => {
+        const { data: facility, error } = await admin
+          .from("facilities")
+          .select("id, is_active")
+          .eq("id", facilityId)
+          .maybeSingle();
+        return !error && facility?.is_active === true;
+      },
+      createAuthUser: async ({ email, password, fullName }) => {
+        const { data, error } = await admin.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { full_name: fullName },
+        });
+        return { user: data?.user ?? null, error };
+      },
+      createProfile: async (profileInput) => {
+        const { data, error } = await admin
+          .from("profiles")
+          .insert(profileInput)
+          .select("id, full_name, phone, role, facility_id")
+          .single();
+        return { profile: data, error };
+      },
+      deleteAuthUser: async (userId: string) =>
+        await admin.auth.admin.deleteUser(userId),
     });
 
-    if (createError || !created.user) {
-      return json({ success: false, error: "The account could not be created. Check the details or contact the system administrator." }, 400, origin);
-    }
-
-    const { data: profile, error: profileError } = await admin
-      .from("profiles")
-      .insert(buildInitialProfile({
-        id: created.user.id,
-        fullName,
-        phone,
-        role,
-        facilityId,
-      }))
-      .select("id, full_name, phone, role, facility_id")
-      .single();
-
-    if (profileError || !profile) {
-      // Compensate for the Auth identity created before the profile insert failed.
-      const { error: rollbackError } = await admin.auth.admin.deleteUser(created.user.id);
-      if (rollbackError) {
-        return json({
-          success: false,
-          error: "The profile could not be created and account cleanup requires administrator review.",
-        }, 500, origin);
-      }
-      return json({
-        success: false,
-        error: "The profile could not be created; the account creation was rolled back.",
-      }, 500, origin);
-    }
-
-    return json({
-      success: true,
-      message: "User created successfully.",
-      user: { id: profile.id, email: created.user.email, ...profile },
-    }, 201, origin);
+    return json(outcome.body, outcome.status, origin);
   } catch {
     // Never log request bodies, credentials, tokens or patient information.
     return json({ success: false, error: "Unexpected account-provisioning error." }, 500, origin);
