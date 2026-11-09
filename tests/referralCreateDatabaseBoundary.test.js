@@ -51,3 +51,8 @@ test("proposal does not change table grants, RLS policies or execute production 
   assert.doesNotMatch(migration, /CREATE POLICY|ALTER POLICY|DROP POLICY/i);
   assert.doesNotMatch(migration, /INSERT INTO public\.referrals/i);
 });
+
+test("trigger guard does not rely on deprecated auth.role()", () => {
+  assert.doesNotMatch(migration, /auth\.role\s*\(/i);
+  assert.match(migration, /current_user IN \('postgres', 'supabase_admin', 'service_role'\)/i);
+});
