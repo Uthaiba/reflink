@@ -1,4 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  buildInitialProfile,
+  isAdministratorProfile,
+  normalizeProvisioningInput,
+} from "../_shared/accountProvisioningPolicy.js";
 
 const canonicalOrigin = "https://reflink-yobe.vercel.app";
 const configuredOrigins = (Deno.env.get("REFLINK_ALLOWED_ORIGINS") ?? "")
@@ -63,34 +68,16 @@ Deno.serve(async (req) => {
       .eq("id", requester.id)
       .maybeSingle();
 
-    if (requesterProfileError || requesterProfile?.role !== "administrator") {
+    if (requesterProfileError || !isAdministratorProfile(requesterProfile)) {
       return json({ success: false, error: "Administrator access required." }, 403, origin);
     }
 
-    const body = await req.json();
-    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-    const password = typeof body.password === "string" ? body.password : "";
-    const fullName = typeof body.full_name === "string" ? body.full_name.trim() : "";
-    const phone = typeof body.phone === "string" ? body.phone.trim() : "";
-    const role = typeof body.role === "string" ? body.role.trim() : "";
-    const facilityId = typeof body.facility_id === "string" ? body.facility_id : null;
+    const parsedInput = normalizeProvisioningInput(await req.json());
+    if (!parsedInput.ok) {
+      return json({ success: false, error: parsedInput.error }, 400, origin);
+    }
 
-    const allowedRoles = new Set(["administrator", "phc_staff", "receiving_staff"]);
-    if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return json({ success: false, error: "A valid email address is required." }, 400, origin);
-    }
-    if (!password || !fullName || fullName.length > 160) {
-      return json({ success: false, error: "Password and a valid full name are required." }, 400, origin);
-    }
-    if (phone.length > 30) {
-      return json({ success: false, error: "Phone number is too long." }, 400, origin);
-    }
-    if (!allowedRoles.has(role)) {
-      return json({ success: false, error: "Unsupported REFLINK role." }, 400, origin);
-    }
-    if (role !== "administrator" && !facilityId) {
-      return json({ success: false, error: "A facility assignment is required for this role." }, 400, origin);
-    }
+    const { email, password, fullName, phone, role, facilityId } = parsedInput.value;
 
     if (facilityId) {
       const { data: facility, error: facilityError } = await admin
@@ -117,14 +104,13 @@ Deno.serve(async (req) => {
 
     const { data: profile, error: profileError } = await admin
       .from("profiles")
-      .insert({
+      .insert(buildInitialProfile({
         id: created.user.id,
-        full_name: fullName,
-        phone: phone || null,
+        fullName,
+        phone,
         role,
-        facility_id: facilityId,
-        must_change_password: true,
-      })
+        facilityId,
+      }))
       .select("id, full_name, phone, role, facility_id")
       .single();
 
