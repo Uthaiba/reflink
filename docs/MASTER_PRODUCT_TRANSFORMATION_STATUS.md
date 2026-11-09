@@ -601,3 +601,11 @@ A significant refinement: broad default privileges apply to future public object
 - The first workflow run for the injectable orchestration correctly exposed one stale source-contract assertion after the input-validation logic moved from the Edge Function entry point into the shared workflow. The failing test expected the old inline parser call; the implementation itself was not the cause.
 - Updated the test to assert the new handler-to-workflow request-body hand-off. The failure was isolated to one test assertion; 191 of 192 tests passed on the run that exposed it.
 - Added a follow-up exact-HEAD workflow run for commit `a612c5b34b0191eb5ab7404668c821130ee6aef9`; its result must be checked before treating the harness as CI-verified.
+
+
+### Administrator delegation least-privilege safeguard (9 November 2026)
+- Source review confirmed the candidate previously allowed any administrator to create another administrator through `create-user`, and the active dashboard role selector also exposed administrator assignment during routine user creation/editing.
+- Added `STAFF_PROVISIONING_ROLES` (`phc_staff`, `receiving_staff`) and made the shared provisioning workflow reject administrator as a target role before any external writes. The initial-profile builder now accepts only these staff roles.
+- Updated AdminDashboard to remove administrator from normal role options, freeze the role of existing administrator profiles during routine edits, and reject attempts to submit administrator as a newly assigned role.
+- Added behavioral tests for rejection before Auth/profile writes and source-contract checks for the dashboard safeguard.
+- This is deliberately a conservative interim restriction; it does not remove or modify existing administrator accounts. It also does not constitute database authorization: direct Supabase profile updates may still bypass the UI. The current RLS/column-grant path for `profiles.role` must be inspected in the reconstructed staging baseline, then guarded at the database/API boundary. No database changes were made.
