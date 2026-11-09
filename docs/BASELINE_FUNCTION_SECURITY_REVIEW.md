@@ -31,6 +31,19 @@ The staging catalog currently reports zero public tables and zero public functio
 | `validate_referral_entry()` | Invoker | `public` | Validates required referral fields and emergency findings. Test NULL status, NULL/empty structured findings, and all supported urgency values. |
 | `validate_referral_status_transition()` | Invoker | empty | Enforces explicit workflow transitions. Test every allowed edge, every rejected edge, and terminal-state immutability against the authoritative status model. |
 
+## Live function EXECUTE grant matrix
+
+The separate live routine metadata snapshot records these explicit grants (all 16 functions are owned by `postgres` and explicitly executable by `service_role`):
+
+| Caller | Functions with explicit EXECUTE grant |
+|---|---|
+| `service_role` | All 16 functions in the inventory above |
+| `authenticated` | `get_facility_user_count(uuid)`, `get_facility_user_counts()`, `is_administrator()`, `log_referral_print(uuid,text)`, `log_referral_read(uuid)` |
+| `anon` | None recorded |
+| `PUBLIC` | None recorded in the captured per-function ACLs |
+
+This is a point-in-time ACL inventory, not proof of effective privileges after role inheritance or a replacement for `has_function_privilege` checks. Preserve the five authenticated grants until policy, trigger, frontend and RPC dependencies are traced and tested. Do not grant authenticated execution to the remaining definer functions merely because they exist. When reconstructing new functions, prevent default PUBLIC/direct-role execution first, then apply explicit grants according to this matrix only where the function contract still requires them.
+
 ## Priority findings
 
 ### P0 — Protect audit records from unnecessary PHI duplication
