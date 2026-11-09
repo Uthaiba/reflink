@@ -107,7 +107,12 @@ export async function provisionAccount({
   const { email, password, fullName, phone, role, facilityId } = parsed.value;
 
   if (facilityId) {
-    const facilityIsActive = await findActiveFacility(facilityId);
+    let facilityIsActive = false;
+    try {
+      facilityIsActive = await findActiveFacility(facilityId);
+    } catch {
+      facilityIsActive = false;
+    }
     if (!facilityIsActive) {
       return {
         status: 400,
@@ -116,11 +121,13 @@ export async function provisionAccount({
     }
   }
 
-  const { user, error: createError } = await createAuthUser({
-    email,
-    password,
-    fullName,
-  });
+  let authResult;
+  try {
+    authResult = await createAuthUser({ email, password, fullName });
+  } catch {
+    authResult = { user: null, error: new Error("Auth creation failed") };
+  }
+  const { user, error: createError } = authResult ?? {};
   if (createError || !user) {
     return {
       status: 400,
@@ -138,10 +145,22 @@ export async function provisionAccount({
     role,
     facilityId,
   });
-  const { profile, error: profileError } = await createProfile(profileInput);
+  let profileResult;
+  try {
+    profileResult = await createProfile(profileInput);
+  } catch {
+    profileResult = { profile: null, error: new Error("Profile creation failed") };
+  }
+  const { profile, error: profileError } = profileResult ?? {};
 
   if (profileError || !profile) {
-    const { error: rollbackError } = await deleteAuthUser(user.id);
+    let rollbackError = null;
+    try {
+      const rollbackResult = await deleteAuthUser(user.id);
+      rollbackError = rollbackResult?.error ?? null;
+    } catch {
+      rollbackError = new Error("Auth cleanup failed");
+    }
     if (rollbackError) {
       return {
         status: 500,
