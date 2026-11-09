@@ -50,17 +50,15 @@ The `handle_new_user()` function is a SECURITY DEFINER function intended for Aut
 The schema export contains 16 public functions, 14 public tables, 2 views, 10 explicit indexes, 23 foreign keys, and 30 RLS policies, but **zero `CREATE TRIGGER` statements**. A separate read-only live-catalog snapshot, `docs/catalog_exports/20261109_live_public_trigger_snapshot.sql`, records nine public trigger attachments. Those nine triggers are supplemental reconstruction evidence, not objects defined by the schema export. A reviewed restore candidate should be applied in this order:
 
 1. Preflight managed roles, schemas, Auth functions, extension versions/schemas, ownership capabilities, and clean target state.
-2. Create/confirm the public schema and required functions whose dependencies are available.
-3. Create tables and identity sequences.
-4. Add primary/unique/check constraints and foreign keys after all referenced tables exist.
-5. Create indexes.
-6. Create views only after their base tables exist; review view security semantics before granting access.
-7. Apply table and sequence ownership/ACLs only where the staging role model permits them.
-8. Enable RLS on every exposed public table, then create and verify each policy.
-9. Reconcile and, after separate review, create the nine public trigger attachments from the supplemental live-catalog snapshot after their functions and tables exist. Do not treat the schema export as their source.
-10. Apply function EXECUTE grants and narrowly scoped schema/table/sequence grants.
-11. Apply reviewed default privileges only after resolving the production-vs-snapshot discrepancy below.
-12. Run catalog assertions, Supabase security/performance advisors, and application-level smoke tests.
+2. Create the public application tables and identity sequences; include table-local defaults, primary keys, unique constraints, and check constraints where their referenced objects are already available.
+3. Add foreign keys only after every referenced application table exists, then create and validate explicit indexes.
+4. Create the 16 public functions after their referenced tables and managed Auth functions are available. Preserve reviewed signatures and SECURITY INVOKER/DEFINER semantics; do not mechanically harden function bodies during baseline assembly.
+5. Create the two views after their base relations exist; review view ownership, security mode, and privacy grants separately.
+6. Enable RLS on all 14 application tables, then create and verify the 30 exported policies after their helper functions exist.
+7. Reconcile and, after separate review, create the nine public trigger attachments from the supplemental live-catalog snapshot after their functions and tables exist. Do not treat the schema export as their source.
+8. Apply table, sequence, view, and function ownership/ACLs only after the least-privilege decisions and execution-role capabilities are approved.
+9. Apply reviewed default privileges only after resolving the production-vs-snapshot discrepancy below.
+10. Run catalog assertions, Supabase security/performance advisors, role-specific database tests, and application-level smoke tests.
 
 This is a dependency order, not executable SQL.
 
