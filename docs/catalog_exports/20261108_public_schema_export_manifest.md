@@ -8,7 +8,7 @@
 
 ## 1. Static inventory
 
-The artifact contains:
+The artifact contains the following static objects and statements:
 
 | Object / statement | Count |
 |---|---:|
@@ -16,7 +16,7 @@ The artifact contains:
 | Public functions | 16 |
 | Public views | 2 |
 | RLS policies | 30 |
-| Triggers | 9 |
+| Trigger DDL statements in this artifact | 0 |
 | Explicit indexes | 10 |
 | Foreign keys | 23 |
 | Tables with RLS enabled | 14 |
@@ -28,6 +28,8 @@ The 14 tables are: `audit_log`, `counter_referrals`, `diagnosis_categories`, `fa
 The two views are `referral_analytics` and `referral_analytics_summary`.
 
 The index count is **10**, correcting the earlier inventory's count of 9. The complete index names are present in the SQL artifact and must be compared against the live catalog before restore.
+
+**Trigger correction:** the SQL artifact contains no `CREATE TRIGGER` statements. The live production catalog separately confirms nine public triggers. The previous manifest incorrectly reported those live triggers as if they were present in the export. Their exact definitions are captured separately in `20261109_live_public_trigger_snapshot.sql`.
 
 ## 2. Data and managed-object scan
 
@@ -53,7 +55,7 @@ The dump's default grants to `anon` and `authenticated` are not endorsed as a de
 
 Before restore:
 1. Verify the SHA-256 against the supplied original artifact.
-2. Compare all 14 tables, 16 functions, 2 views, 30 policies, 9 triggers, 23 FKs and 10 indexes with current read-only catalog snapshots.
+2. Compare all 14 tables, 16 functions, 2 views, 30 policies, 23 FKs and 10 indexes with current read-only catalog snapshots; restore the nine live triggers from the separate trigger snapshot only after review.
 3. Resolve Auth and extension dependencies and confirm Supabase-managed roles/schemas exist in the staging project.
 4. Reconcile ownership and ACLs, including the missing `supabase_admin` default-privilege state.
 5. Inspect all SECURITY DEFINER functions, view security semantics, function search paths and RLS policies.
