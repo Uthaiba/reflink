@@ -163,6 +163,27 @@ export function buildReferralCreatePayload(intake, {
       intake.diagnosis_records, DIAGNOSIS_FIELDS, "diagnosis_records"
     );
   }
+
+  // The production schema constrains this legacy scalar to one of three
+  // values. diagnosis_records is the canonical multi-diagnosis representation.
+  const allowedDiagnosisStatuses = new Set(["suspected", "provisional", "confirmed"]);
+  if (Array.isArray(payload.diagnosis_records)) {
+    const statuses = payload.diagnosis_records
+      .map((record) => String(record.status || "").trim().toLowerCase())
+      .filter(Boolean);
+    if (statuses.some((status) => !allowedDiagnosisStatuses.has(status))) {
+      throw new Error("Diagnosis status is invalid.");
+    }
+    const distinctStatuses = [...new Set(statuses)];
+    payload.diagnosis_status = distinctStatuses.length === 1 ? distinctStatuses[0] : null;
+  } else {
+    const legacyStatus = String(payload.diagnosis_status || "").trim().toLowerCase();
+    if (legacyStatus && !allowedDiagnosisStatuses.has(legacyStatus)) {
+      throw new Error("Diagnosis status is invalid.");
+    }
+    payload.diagnosis_status = legacyStatus || null;
+  }
+
   if (Object.prototype.hasOwnProperty.call(intake, "investigation_records")
     && intake.investigation_records !== undefined) {
     payload.investigation_records = sanitizeRecordArray(
