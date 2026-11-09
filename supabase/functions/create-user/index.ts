@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
     const facilityId = typeof body.facility_id === "string" ? body.facility_id : null;
 
     const allowedRoles = new Set(["administrator", "phc_staff", "receiving_staff"]);
-    if (!email || email.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return json({ success: false, error: "A valid email address is required." }, 400, origin);
     }
     if (!password || !fullName || fullName.length > 160) {
