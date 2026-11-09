@@ -199,3 +199,21 @@ A conservative source-level safeguard has now been added while the administrator
 - The save handler also rejects attempts to submit administrator as a new/changed role.
 
 **Important residual database/API boundary:** this is not a complete privilege-delegation control. The dashboard's ordinary profile update path still writes `profiles` directly, and a sufficiently privileged authenticated client may call Supabase APIs outside this UI. The current production profile RLS/column-grant model must be reviewed in a reconstructed staging baseline and hardened so ordinary administrator sessions cannot change another profile's role to `administrator`. Until database enforcement or a separately approved privileged workflow exists, administrator-role updates remain a release blocker. Existing administrator profiles and their current roles are not changed by this source patch.
+
+
+## Continuation addendum — production database role-delegation boundary inspected (9 November 2026)
+
+A read-only production catalog inspection was performed after the UI restriction was added. It confirms the restriction is not yet enforced at the database boundary:
+
+- `public.profiles` has a `BEFORE UPDATE` trigger named `guard_profile_security_fields`.
+- Its function bypasses checks for `postgres`, `supabase_admin` and `service_role`; for other callers it rejects protected-field changes only when `public.is_administrator()` is false. Therefore an authenticated administrator can still change `profiles.role` on other profile rows.
+- The RLS policy `Administrators can update profiles` applies to `authenticated` for UPDATE with `USING (is_administrator())` and `WITH CHECK (is_administrator())`.
+- `information_schema.role_column_grants` confirms `authenticated` has direct UPDATE privilege on the `profiles.role` column (alongside other profile columns).
+- This means a caller with an administrator session can bypass the React dashboard and directly update `profiles.role` through the Supabase Data API. The UI guard and `create-user` staff-only role restriction do not close that path.
+- A read-only verifier was added at `supabase/verification/profile_role_delegation_review.sql` to repeat the trigger, policy and column-grant inspection.
+
+### Required database remediation design
+
+The delegation restriction must be enforced in Postgres, not only in React or the Edge Function. Candidate approaches include a narrowly scoped trigger or a dedicated privileged role-management RPC/Edge Function combined with direct column/table privilege restrictions. The design must preserve legitimate profile maintenance, self-service password-change flag updates, existing admin recovery, service-role provisioning and RLS protections. Do not use `auth.role()` in new policy/function logic; current Supabase guidance deprecates it. Do not deploy a guessed trigger change against production.
+
+The production findings are evidence from catalog inspection only. No policies, grants, triggers, functions, profiles or Auth identities were changed. The exact fix must be validated against the reconstructed synthetic staging baseline, including INSERT and UPDATE attempts by ordinary authenticated users, authenticated administrators, service_role, and legitimate self-service profile changes.
