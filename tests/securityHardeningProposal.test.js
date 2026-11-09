@@ -18,6 +18,10 @@ const auditMinimizationDesign = await readFile(
   new URL("../docs/AUDIT_LOG_PHI_MINIMIZATION_DESIGN.md", import.meta.url),
   "utf8",
 );
+const printConcurrencyDesign = await readFile(
+  new URL("../docs/REFERRAL_PRINT_SEQUENCE_CONCURRENCY_DESIGN.md", import.meta.url),
+  "utf8",
+);
 
 test("database hardening remains a proposal and cannot be mistaken for an applied migration", () => {
   assert.match(proposal, /source-level proposal only — NOT an executable migration and NOT applied/i);
@@ -109,4 +113,14 @@ test("audit minimization design excludes patient and clinical payloads from futu
   assert.match(auditMinimizationDesign, /Do not store free-text values, raw JSON payloads, or hashes/i);
   assert.match(auditMinimizationDesign, /Historical audit rows are not made safe by changing future trigger writes/i);
   assert.match(auditMinimizationDesign, /Production remains read-only/i);
+});
+
+test("referral print numbering design requires serialization and database uniqueness", () => {
+  assert.match(printConcurrencyDesign, /Design proposal only — NOT an executable migration and NOT applied/);
+  assert.match(printConcurrencyDesign, /MAX\\(print_number\\)/);
+  assert.match(printConcurrencyDesign, /FOR UPDATE/);
+  assert.match(printConcurrencyDesign, /unique constraint on \\(referral_id, print_number\\)/);
+  assert.match(printConcurrencyDesign, /genuinely concurrent database sessions/);
+  assert.match(printConcurrencyDesign, /does not explicitly require the caller's profile role/i);
+  assert.match(printConcurrencyDesign, /Production remains read-only/);
 });
