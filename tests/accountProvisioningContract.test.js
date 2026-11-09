@@ -72,7 +72,7 @@ test("provisioning CORS uses the verified application origin and explicit config
 });
 
 test("email validation regex accepts normal addresses and rejects malformed input", () => {
-  const pattern = edgeFunction.match(/!\\/(.*?)\\/\\.test\\(email\\)/)?.[1];
+  const pattern = edgeFunction.match(/!\/(.*?)\/\.test\(email\)/)?.[1];
   assert.ok(pattern, "email validation regex must be present");
   const emailRegex = new RegExp(pattern);
   assert.equal(emailRegex.test("nurse@example.org"), true);
