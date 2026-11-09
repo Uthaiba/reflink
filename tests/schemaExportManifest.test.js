@@ -30,7 +30,7 @@ test("public schema inventory distinguishes exported objects from live trigger e
 });
 
 test("manifest records missing creator-specific defaults and staging-only restore boundary", () => {
-  assert.match(manifest, /does **not** contain statements for creator `supabase_admin`/i);
+  assert.ok(manifest.includes("does **not** contain statements for creator `supabase_admin`"));
   assert.match(manifest, /broad public-schema default ACLs for both/i);
   assert.match(manifest, /not yet approved as a restore script/i);
   assert.match(manifest, /Production remains read-only/i);
