@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { PROVISIONING_ROLES, buildInitialProfile, isAdministratorProfile, normalizeProvisioningInput, provisionAccount, requiresFacility } from "../supabase/functions/_shared/accountProvisioningPolicy.js";
+import { PROVISIONING_ROLES, STAFF_PROVISIONING_ROLES, buildInitialProfile, isAdministratorProfile, normalizeProvisioningInput, provisionAccount, requiresFacility } from "../supabase/functions/_shared/accountProvisioningPolicy.js";
 
 const edgeFunction = await readFile(
   new URL("../supabase/functions/create-user/index.ts", import.meta.url),
@@ -88,6 +88,40 @@ test("shared policy normalizes valid email and rejects malformed addresses", () 
   }
 });
 
+test("administrator provisioning is blocked pending a separately approved delegation process", async () => {
+  assert.deepEqual(STAFF_PROVISIONING_ROLES, ["phc_staff", "receiving_staff"]);
+  const result = normalizeProvisioningInput({
+    email: "newadmin@example.org",
+    password: "temporary-password",
+    full_name: "New Administrator",
+    role: "administrator",
+    facility_id: "facility-1",
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /administrator-delegation process/);
+
+  const { dependencies, calls } = fakeProvisioningDependencies({
+    body: {
+      email: "newadmin@example.org",
+      password: "temporary-password",
+      full_name: "New Administrator",
+      role: "administrator",
+      facility_id: "facility-1",
+    },
+  });
+  const outcome = await provisionAccount(dependencies);
+  assert.equal(outcome.status, 400);
+  assert.equal(calls.authCreate.length, 0);
+  assert.equal(calls.profileCreate.length, 0);
+});
+
+test("administrator dashboard cannot assign administrator role through routine editing", () => {
+  assert.match(adminDashboard, /Administrator privileges require the separately approved administrator-delegation process/);
+  assert.match(adminDashboard, /editingUser\?\.role === "administrator"/);
+  assert.match(adminDashboard, /disabled=\{editingUser\?\.role === "administrator"\}/);
+  assert.match(adminDashboard, /editingUser\?\.role === "administrator" && \(/);
+});
+
 test("shared policy rejects legacy role aliases and missing staff facilities", () => {
   for (const role of ["receiver", "facility_manager", "referring_staff", "facility_admin", "unknown"]) {
     const result = normalizeProvisioningInput({ email: "nurse@example.org", password: "temporary-password", full_name: "Nurse Example", role, facility_id: "facility-1" });
@@ -109,7 +143,7 @@ test("initial profile builder binds the Auth UUID and enforces password-change r
   assert.deepEqual(buildInitialProfile({ id: "auth-user-123", fullName: "Nurse Example", phone: "", role: "receiving_staff", facilityId: "facility-2" }), {
     id: "auth-user-123", full_name: "Nurse Example", phone: null, role: "receiving_staff", facility_id: "facility-2", must_change_password: true,
   });
-  assert.throws(() => buildInitialProfile({ id: "auth-user-124", fullName: "Nurse Example", phone: "", role: "phc_staff", facilityId: null }), /facility assignment/);
+  assert.throws(() => buildInitialProfile({ id: "auth-user-124", fullName: "Nurse Example", phone: "", role: "phc_staff", facilityId: null }), /facility assignment/);\n  assert.throws(() => buildInitialProfile({ id: "auth-user-125", fullName: "New Administrator", phone: "", role: "administrator", facilityId: null }), /supported role/);
 });
 
 
