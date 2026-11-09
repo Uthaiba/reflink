@@ -112,3 +112,8 @@ Production `create-user` remains ACTIVE version 2. No Edge Function deployment, 
 ### Administrator delegation safeguard — 9 November 2026
 
 The repository candidate now blocks routine administrator-role assignment in the shared provisioning workflow and dashboard. New accounts can only be created as `phc_staff` or `receiving_staff`. Existing administrator profiles remain visible/editable for non-role fields, but their role selector is disabled. This does not yet prevent direct authenticated API updates to `profiles.role`; a database-side authorization boundary must be designed and verified against the reconstructed staging schema before release. Do not treat the UI guard as a security boundary. A separate administrator-delegation workflow requires an explicit governance decision and independent approval.
+
+
+### Database enforcement gate for administrator delegation — 9 November 2026
+
+A production read-only catalog check found that authenticated administrators can still update `profiles.role` directly: the `Administrators can update profiles` policy permits administrator updates, authenticated has UPDATE privilege on the role column, and `guard_profile_security_fields` only blocks protected-field changes for non-administrators. Therefore the new dashboard guard is an interim usability restriction, not a security boundary. Before release, enforce the approved delegation policy in Postgres and remove or constrain direct browser role-update authority. Verify INSERT, UPDATE, RLS, grants, service-role behavior and self-service password-change behavior in synthetic staging. Read-only verifier: `supabase/verification/profile_role_delegation_review.sql`. No production changes were made.
