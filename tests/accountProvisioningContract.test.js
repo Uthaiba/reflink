@@ -186,3 +186,25 @@ test("provisioning workflow treats duplicate-email Auth errors as a safe client 
   assert.equal(calls.authDelete.length, 0);
   assert.doesNotMatch(result.body.error, /duplicate email/);
 });
+
+
+test("provisioning workflow compensates when profile adapter throws", async () => {
+  const { dependencies, calls } = fakeProvisioningDependencies({
+    createProfile: async () => { throw new Error("synthetic transport failure"); },
+  });
+  const result = await provisionAccount(dependencies);
+  assert.equal(result.status, 500);
+  assert.equal(calls.authDelete.length, 1);
+  assert.match(result.body.error, /rolled back/);
+});
+
+test("provisioning workflow reports cleanup adapter exceptions for manual recovery", async () => {
+  const { dependencies, calls } = fakeProvisioningDependencies({
+    createProfile: async () => ({ profile: null, error: new Error("synthetic profile failure") }),
+    deleteAuthUser: async (id) => { calls.authDelete.push(id); throw new Error("synthetic network failure"); },
+  });
+  const result = await provisionAccount(dependencies);
+  assert.equal(result.status, 500);
+  assert.equal(calls.authDelete.length, 1);
+  assert.match(result.body.error, /administrator review/);
+});
