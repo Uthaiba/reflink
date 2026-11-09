@@ -167,7 +167,7 @@ export function buildReferralCreatePayload(intake, {
   // The production schema constrains this legacy scalar to one of three
   // values. diagnosis_records is the canonical multi-diagnosis representation.
   const allowedDiagnosisStatuses = new Set(["suspected", "provisional", "confirmed"]);
-  if (Array.isArray(payload.diagnosis_records)) {
+  if (Array.isArray(payload.diagnosis_records) && payload.diagnosis_records.length > 0) {
     const statuses = payload.diagnosis_records
       .map((record) => String(record.status || "").trim().toLowerCase())
       .filter(Boolean);
