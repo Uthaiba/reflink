@@ -14,6 +14,10 @@ const defaultPrivilegeVerifier = await readFile(
   new URL("../supabase/verification/default_privilege_effective_access.sql", import.meta.url),
   "utf8",
 );
+const auditPrivilegeCandidate = await readFile(
+  new URL("../docs/AUDIT_LOG_PRIVILEGE_RESTRICTION_CANDIDATE.md", import.meta.url),
+  "utf8",
+);
 const auditMinimizationDesign = await readFile(
   new URL("../docs/AUDIT_LOG_PHI_MINIMIZATION_DESIGN.md", import.meta.url),
   "utf8",
@@ -123,4 +127,14 @@ test("referral print numbering design requires serialization and database unique
   assert.match(printConcurrencyDesign, /genuinely concurrent database sessions/);
   assert.match(printConcurrencyDesign, /does not explicitly require the caller's profile role/i);
   assert.match(printConcurrencyDesign, /Production remains read-only/);
+});
+
+
+test("live audit-log privilege evidence preserves admin-only SELECT while removing structural and sequence access", () => {
+  assert.match(auditPrivilegeCandidate, /Live production revalidation and selected access model — 10 November 2026/);
+  assert.match(auditPrivilegeCandidate, /authenticated \| Yes \| Yes \| Yes \| Yes \| Yes \| Yes \/ Yes \/ Yes/);
+  assert.match(auditPrivilegeCandidate, /REVOKE TRUNCATE, REFERENCES, TRIGGER, MAINTAIN/);
+  assert.match(auditPrivilegeCandidate, /REVOKE ALL PRIVILEGES\s+ON SEQUENCE public\.audit_log_id_seq\s+FROM anon, authenticated/i);
+  assert.match(auditPrivilegeCandidate, /preserves the existing administrator-only SELECT grant and policy/i);
+  assert.match(auditPrivilegeCandidate, /no production or staging DDL was executed/i);
 });
