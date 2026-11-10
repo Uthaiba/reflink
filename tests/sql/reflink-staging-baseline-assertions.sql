@@ -20,6 +20,8 @@ BEGIN
   IF has_table_privilege('authenticated','public.referral_feedback','SELECT') THEN RAISE EXCEPTION 'Authenticated role can read internal referral_feedback'; END IF;
   IF has_table_privilege('anon','public.referrals','SELECT') THEN RAISE EXCEPTION 'Anonymous role can read referrals'; END IF;
   IF NOT has_table_privilege('service_role','public.referral_analytics','SELECT') THEN RAISE EXCEPTION 'Service role cannot read analytics'; END IF;
+  IF to_regclass('public.referral_print_events_referral_print_number_uidx') IS NULL THEN RAISE EXCEPTION 'Referral print numbering unique index is missing'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE oid='public.log_referral_print(uuid,text)'::regprocedure AND prosecdef AND proconfig @> ARRAY['search_path=""']) THEN RAISE EXCEPTION 'Referral print function lost SECURITY DEFINER or empty search_path'; END IF;
   IF NOT EXISTS (SELECT 1 FROM storage.buckets WHERE id='referral-investigation-results' AND public=false AND file_size_limit=10485760) THEN RAISE EXCEPTION 'Private attachment bucket missing or misconfigured'; END IF;
   SELECT count(*) INTO v_count FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname ILIKE '%investigation%';
   IF v_count <> 5 THEN RAISE EXCEPTION 'Expected 5 storage policies, got %',v_count; END IF;
