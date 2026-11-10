@@ -3099,10 +3099,13 @@ provisional_diagnosis: "",
 
       if (existingReferralError) throw existingReferralError;
       if (existingReferral && selectedInvestigations.some((item) => Boolean(item.result_file))) {
-        throw new Error("This referral was already created by an earlier submission attempt. To prevent duplicate investigation uploads, locate the saved referral and verify its attachments before retrying.");
+        throw new Error(`This draft was already submitted as ${existingReferral.referral_number}. To prevent duplicate investigation uploads, locate the saved referral and verify its attachments before retrying.`);
+      }
+      if (existingReferral) {
+        throw new Error(`This draft was already submitted as ${existingReferral.referral_number}. No duplicate was created. Locate the existing referral and verify its status before taking further action.`);
       }
 
-      const referralNumber = existingReferral?.referral_number || generateReferralNumber();
+      const referralNumber = generateReferralNumber();
 
       const referralPayload = {
         offline_client_id: offlineClientId,
@@ -3241,7 +3244,7 @@ provisional_diagnosis: "",
               .eq("referring_user_id", user.id)
               .maybeSingle();
             if (retryLookupError || !retryMatch) throw referralError;
-            insertedReferral = retryMatch;
+            throw new Error(`This draft was already submitted as ${retryMatch.referral_number}. No duplicate was created. Locate the existing referral and verify its status before taking further action.`);
           } else {
             console.error("REFERRAL INSERT ERROR:", referralError);
             throw referralError;
