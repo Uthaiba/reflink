@@ -83,7 +83,7 @@ export default function NotificationCenter({ userId }) {
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "INSERT",
           schema: "public",
           table: "referral_notifications",
           filter: "channel=eq.dashboard",
