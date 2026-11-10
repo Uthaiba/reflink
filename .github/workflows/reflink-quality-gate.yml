@@ -84,14 +84,20 @@ jobs:
             supabase/migrations/20261110135058_restrict_notification_trigger_function.sql
             supabase/migrations/20261110135145_add_privacy_preserving_public_health_aggregate.sql
             supabase/migrations/20261110135512_exclude_referral_identifiers_from_audit.sql
+            supabase/migrations/20261110140000_publish_referral_notifications_to_realtime.sql
           )
           for file in "${files[@]}"; do
             test -s "$file"
           done
           test -s supabase/functions/create-user/index.ts
           test -s supabase/functions/change-password/index.ts
+          test -s src/components/notifications/NotificationCenter.jsx
+          test -s src/components/notifications/NotificationCenter.css
           grep -Fq 'supabase.functions.invoke(' src/App.jsx
           grep -Fq '"change-password"' src/App.jsx
+          grep -Fq 'NotificationCenter' src/App.jsx
+          grep -Fq 'referral_notifications' src/components/notifications/NotificationCenter.jsx
+          grep -Fq 'postgres_changes' src/components/notifications/NotificationCenter.jsx
 
           # Ignore INSERT statements inside PL/pgSQL function bodies. These are
           # application runtime operations, not migration-time production data imports.
