@@ -4,7 +4,7 @@
 This branch advances the existing REFLINK product in an isolated synthetic staging project. It does not copy production rows or apply migrations to production.
 
 ## Applied staging migrations
-All fifteen repository migration filenames match the exact versions recorded in the staging migration history:
+All sixteen repository migration filenames match the exact versions recorded in the staging migration history:
 1. `20261110063521_reconstruct_production_schema_in_staging`
 2. `20261110063620_configure_private_referral_storage_and_realtime`
 3. `20261110063704_add_staging_foreign_key_indexes_and_secure_views`
@@ -20,6 +20,7 @@ All fifteen repository migration filenames match the exact versions recorded in 
 13. `20261110135145_add_privacy_preserving_public_health_aggregate`
 14. `20261110135512_exclude_referral_identifiers_from_audit`
 15. `20261110142053_publish_referral_notifications_to_realtime`
+16. `20261110181053_restore_admin_reporting_and_counter_referral_workflows`
 
 ## Verified staging state
 - 14 public tables, 17 functions, 3 views, 10 application triggers and 28 public RLS policies.
@@ -48,6 +49,16 @@ All fifteen repository migration filenames match the exact versions recorded in 
 - Reviewed each live staging definition and ACL. All five pin an empty `search_path`; execution is granted to `authenticated` and `service_role` (plus owner), not PUBLIC/anon. The two facility-count functions enforce caller role/facility scope; print/read audit functions verify referral participation before writing; `is_administrator()` only evaluates the authenticated profile. These grants were intentionally retained because the application depends on the RPCs. This is a documented, reviewed risk—not a clean security-advisor result or a formal security sign-off.
 - Performance advisor reports 11 indexes as unused in the current staging workload, including referral, audit, notification and foreign-key indexes. This low-volume staging observation is not evidence that they are unnecessary. Do not drop them until representative workload/query-plan analysis and dependency review are completed.
 - No migration or grant change was made as part of this advisor review.
+
+
+
+## Reconciled Phase 1 reporting and counter-referral capabilities — 10 November 2026
+- Reviewed the deployed Phase 1 administrator dashboard and identified five missing RPC dependencies in the reconstructed staging database: `get_admin_referral_volume`, `get_admin_facility_referral_summary`, `get_admin_lga_referral_summary`, `get_admin_facility_reporting_coverage`, `get_admin_referral_pathway_summary` and `get_admin_acknowledgement_delay_alerts` (six reporting RPCs, including the aggregate volume RPC).
+- Confirmed the staging schema contains the required referral lifecycle timestamps, `ack_due_at`, facility geography/type fields and `counter_referrals` table before applying the reconciliation.
+- Added staging migration `20261110181053_restore_admin_reporting_and_counter_referral_workflows`, porting the reviewed Phase 1 SQL for six administrator aggregate reporting RPCs and the transactional `submit_counter_referral` RPC. It enforces administrator checks, complete Africa/Lagos calendar-month windows where applicable, primary and complementary small-cell suppression, no patient-level administrator SELECT grant, authenticated-only execution and pinned empty search paths.
+- Applied the migration to staging only. Migration history now records version `20261110181053`; repository migration filename was aligned to that exact version after the migration runner assigned its timestamp.
+- Post-apply catalog verification found all seven RPCs, SECURITY DEFINER enabled, `search_path=""`, EXECUTE granted to `authenticated`, and no EXECUTE grant to `anon` or PUBLIC.
+- This restores the missing database-side dependencies. Auth-issued administrator browser/API tests and UI integration on the current staging branch remain outstanding; the older Phase 1 deployment and current staging branch still have different frontend commits and must be reconciled without discarding either branch's valid work.
 
 ## Staging Edge Functions
 ### `create-user`
@@ -85,4 +96,4 @@ Neither production Edge Function was modified. The staging functions have not ye
 - Validate unused indexes after representative synthetic workload; do not drop them solely because empty staging reports no usage.
 
 ## Safety
-All fifteen migrations and both Edge Functions target staging only. Production database migrations, policies, Auth settings, secrets, Edge Functions, patient records and production deployment were not modified. Production migration history remains at the original single baseline migration, and its existing `create-user` Edge Function remains active with JWT verification. Keep PR #2 in draft until all release gates have evidence and explicit production approval is recorded.
+All sixteen migrations and both Edge Functions target staging only. Production database migrations, policies, Auth settings, secrets, Edge Functions, patient records and production deployment were not modified. Production migration history remains at the original single baseline migration, and its existing `create-user` Edge Function remains active with JWT verification. Keep PR #2 in draft until all release gates have evidence and explicit production approval is recorded.
