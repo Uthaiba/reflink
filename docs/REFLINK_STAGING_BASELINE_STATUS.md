@@ -4,7 +4,7 @@
 This branch reconstructs the existing production schema into the isolated synthetic staging project. It does not copy production rows and does not apply migrations to production.
 
 ## Applied staging migrations
-The eight repository migration filenames now match the exact versions recorded in the staging migration history:
+The nine repository migration filenames now match the exact versions recorded in the staging migration history:
 1. `20261110063521_reconstruct_production_schema_in_staging`
 2. `20261110063620_configure_private_referral_storage_and_realtime`
 3. `20261110063704_add_staging_foreign_key_indexes_and_secure_views`
@@ -30,15 +30,24 @@ The eight repository migration filenames now match the exact versions recorded i
 - Equivalent permissive policy warnings and auth.uid() initialization-plan warnings were eliminated in the staging advisor scan.
 - Rollback-only SQL assertions passed for schema counts, least-privilege grants, private storage, Realtime, view security and non-admin RPC denial.
 
-## Staging Edge Function
-A hardened `create-user` Edge Function is deployed to staging (JWT verification enabled). It:
+## Staging Edge Functions
+
+Two staging-only Edge Functions are deployed with JWT verification enabled.
+
+### `create-user`
 - rejects unknown browser origins and avoids wildcard CORS;
 - verifies the caller JWT and administrator profile;
 - restricts roles to the database's three permitted profile roles;
 - validates email, required fields and optional facility UUID;
-- the password-change endpoint validates the signed-in user and password policy, updates Auth through the service role, then clears the protected profile flag;
 - compensates by deleting the Auth user if profile insertion fails;
 - avoids returning internal database error details.
+
+### `change-password`
+- validates the caller's signed-in session and an existing REFLINK profile;
+- validates the password policy server-side;
+- changes the authenticated user's password through the Supabase Auth Admin API;
+- clears `must_change_password` using the service role after the password update;
+- keeps direct client updates to that protected flag blocked by the profile trigger.
 
 Neither production Edge Function was modified. The staging functions have not yet been exercised end-to-end with real synthetic authenticated sessions.
 
@@ -50,7 +59,7 @@ Neither production Edge Function was modified. The staging functions have not ye
 - Enable leaked-password protection through the Supabase Auth dashboard once configuration access is available.
 - The advisor reports unused indexes because the staging database has no workload data; validate their usage after synthetic workflow load. Do not drop these indexes solely from an empty-staging advisor scan.
 - The referral print concurrency migration was applied successfully to staging and its index/function definition were verified from PostgreSQL catalogs.
-- The first GitHub Actions run completed: frontend lint and production build passed; the migration-integrity job exposed a false positive because it treated legitimate INSERT statements inside PL/pgSQL function bodies as migration-time data imports. The workflow was corrected to strip dollar-quoted function bodies before checking top-level data-import statements. The non-admin all-facility RPC assertion was also corrected so its own failure cannot be swallowed by a broad exception handler. A fresh CI run is required to verify these corrections; until then, CI is not green.
+- GitHub Actions run #17 passed both frontend-quality and migration-integrity jobs after the migration-check false positive and non-admin assertion were corrected. That run predates the latest password-change integration and final migration filename alignment. The workflow now also includes Deno type-checking for both Edge Functions and static checks for password-endpoint wiring; exact-HEAD execution of these newest additions is not yet confirmed.
 - Do not promote staging migrations to production until all integration gates pass and a production change window is approved.
 
 ## Safety
