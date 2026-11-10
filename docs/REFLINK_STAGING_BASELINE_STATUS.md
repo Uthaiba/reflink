@@ -4,7 +4,7 @@
 This branch reconstructs the existing production schema into the isolated synthetic staging project. It does not copy production rows and does not apply migrations to production.
 
 ## Applied staging migrations
-The twelve repository migration filenames now match the exact versions recorded in the staging migration history:
+The thirteen repository migration filenames now match the exact versions recorded in the staging migration history:
 1. `20261110063521_reconstruct_production_schema_in_staging`
 2. `20261110063620_configure_private_referral_storage_and_realtime`
 3. `20261110063704_add_staging_foreign_key_indexes_and_secure_views`
@@ -16,16 +16,18 @@ The twelve repository migration filenames now match the exact versions recorded 
 9. `20261110065634_guard_forced_password_change_flag`
 10. `20261110134607_minimize_phi_in_audit_ledger`
 11. `20261110134826_add_idempotent_referral_notification_queue`
-12. `20261110135500_restrict_notification_trigger_function`
+12. `20261110135058_restrict_notification_trigger_function`
+13. `20261110135145_add_privacy_preserving_public_health_aggregate`
 
 ## Verified state
-- 14 public tables, 17 functions, 2 views and 10 application triggers.
+- 14 public tables, 17 functions, 3 views and 10 application triggers.
 - 28 public RLS policies after merging equivalent permissive policies and adding explicit deny-all authenticated policies to internal ledgers.
 - 16 indexes added for previously uncovered foreign keys.
 - Private `referral-investigation-results` bucket configured with a 10 MB limit and PDF/JPEG/PNG/WebP/TXT/CSV MIME allowlist.
 - Five referral-scoped Storage policies present.
 - `public.referrals` included in `supabase_realtime`.
-- Both analytics views use `security_invoker=true`.
+- All three analytics views use `security_invoker=true`.
+- Added a service-role-only monthly public-health aggregate by month, state, LGA, facility type, urgency and status. It excludes patient identifiers and free-text clinical content and suppresses groups smaller than five. Authenticated clients and anon cannot query it directly; external publication still requires governance approval.
 - All 11 SECURITY DEFINER functions pin `search_path` to empty.
 - Referral print numbering is serialized per referral using a transaction-scoped advisory lock, with a unique `(referral_id, print_number)` index as the integrity backstop. The staging catalog confirms the index and hardened function are present.
 - The profile security trigger now prevents authenticated users from clearing `must_change_password` directly. Password changes use the staging-only authenticated `change-password` Edge Function, which validates the session, changes the Auth password and clears the profile flag using the service role.
