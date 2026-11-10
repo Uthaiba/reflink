@@ -14,6 +14,7 @@ The nine repository migration filenames now match the exact versions recorded in
 7. `20261110063935_explicitly_deny_client_access_to_internal_ledgers`
 8. `20261110065403_harden_concurrent_referral_print_auditing`
 9. `20261110065634_guard_forced_password_change_flag`
+10. `20261110134607_minimize_phi_in_audit_ledger`
 
 ## Verified state
 - 14 public tables, 16 functions, 2 views and 9 application triggers.
@@ -29,7 +30,7 @@ The nine repository migration filenames now match the exact versions recorded in
 - Authenticated users cannot TRUNCATE `audit_log` or read internal referral event/feedback ledgers; anon cannot read referrals.
 - Equivalent permissive policy warnings and auth.uid() initialization-plan warnings were eliminated in the staging advisor scan.
 - Rollback-only SQL assertions passed for schema counts, least-privilege grants, private storage, Realtime, view security, non-admin RPC denial, referral print uniqueness and protection of the forced-password-change flag.
-- Privacy review finding: the existing audit mutation trigger serializes full OLD/NEW row values into audit_log. For referrals and other clinical records this can duplicate patient identifiers and clinical details into the audit ledger. Retention, access monitoring and field-level minimization must be approved before production release; this was documented, not changed.
+- The referral/counter-referral audit mutation trigger now removes patient identifiers, contact details and clinical narrative fields from OLD/NEW JSON snapshots before writing audit_log. It retains actor, action, record ID and non-clinical workflow metadata. Source clinical records remain unchanged. Retention, audit access monitoring and legal/privacy acceptance remain release gates.
 
 ## Staging Edge Functions
 
