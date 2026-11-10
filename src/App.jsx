@@ -5684,6 +5684,10 @@ function ReceivingDashboard() {
       }
 
       setError("");
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
+        }
+
       setMessage("");
 
       setActionLoading(
@@ -5746,8 +5750,9 @@ function ReceivingDashboard() {
             "id",
             selectedInpatientReferral.id
           )
+          .eq("status", "admitted")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
@@ -5798,6 +5803,10 @@ function ReceivingDashboard() {
       }
 
       setError("");
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
+        }
+
       setMessage("");
 
       setActionLoading(
@@ -5863,8 +5872,9 @@ function ReceivingDashboard() {
             "id",
             selectedInpatientReferral.id
           )
+          .eq("status", "admitted")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
@@ -5907,6 +5917,10 @@ function ReceivingDashboard() {
     async (referralId) => {
 
       setError("");
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
+        }
+
       setMessage("");
       setActionLoading(
         referralId
@@ -5932,8 +5946,9 @@ function ReceivingDashboard() {
             "id",
             referralId
           )
+          .eq("status", "sent")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
@@ -5973,6 +5988,10 @@ function ReceivingDashboard() {
     async (referralId) => {
 
       setError("");
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
+        }
+
       setMessage("");
       setActionLoading(
         referralId
@@ -5998,8 +6017,9 @@ function ReceivingDashboard() {
             "id",
             referralId
           )
+          .eq("status", "acknowledged")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
@@ -6037,6 +6057,10 @@ function ReceivingDashboard() {
 
 const handleStartAssessment = async (referralId) => {
   setError("");
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
+        }
+
   setMessage("");
   setActionLoading(referralId);
 
@@ -6050,8 +6074,9 @@ const handleStartAssessment = async (referralId) => {
         status: "under_assessment",
       })
       .eq("id", referralId)
+      .eq("status", "patient_arrived")
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error("START ASSESSMENT ERROR:", error);
@@ -6091,6 +6116,10 @@ const handleStartAssessment = async (referralId) => {
       }
 
       setError("");
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
+        }
+
       setMessage("");
 
       setActionLoading(
@@ -6218,8 +6247,9 @@ const handleStartAssessment = async (referralId) => {
             "id",
             selectedReferral.id
           )
+          .eq("status", "under_assessment")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
