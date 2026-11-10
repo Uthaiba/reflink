@@ -15,6 +15,7 @@ The nine repository migration filenames now match the exact versions recorded in
 8. `20261110065403_harden_concurrent_referral_print_auditing`
 9. `20261110065634_guard_forced_password_change_flag`
 10. `20261110134607_minimize_phi_in_audit_ledger`
+11. `20261110134826_add_idempotent_referral_notification_queue`
 
 ## Verified state
 - 14 public tables, 16 functions, 2 views and 9 application triggers.
@@ -31,6 +32,7 @@ The nine repository migration filenames now match the exact versions recorded in
 - Equivalent permissive policy warnings and auth.uid() initialization-plan warnings were eliminated in the staging advisor scan.
 - Rollback-only SQL assertions passed for schema counts, least-privilege grants, private storage, Realtime, view security, non-admin RPC denial, referral print uniqueness and protection of the forced-password-change flag.
 - The referral/counter-referral audit mutation trigger now removes patient identifiers, contact details and clinical narrative fields from OLD/NEW JSON snapshots before writing audit_log. It retains actor, action, record ID and non-clinical workflow metadata. Source clinical records remain unchanged. Retention, audit access monitoring and legal/privacy acceptance remain release gates.
+- Added an idempotent dashboard notification queue for referral-sent and referral-acknowledged events. Database trigger inserts one queued dashboard event per referral/status, guarded by a unique idempotency key. This does not send SMS; an approved provider integration, consent rules, retry worker and delivery monitoring remain outstanding.
 
 ## Staging Edge Functions
 
