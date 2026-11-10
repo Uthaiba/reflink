@@ -124,3 +124,36 @@ All twenty migrations and both Edge Functions target staging only. Production da
 - Both branches modify core application entry points, dashboards, offline, notification, migration and test areas. A wholesale merge or file replacement is unsafe.
 - Added `docs/REFLINK_BRANCH_RECONCILIATION_REVIEW_20261110.md` with the bounded integration sequence, domain-contract risks and recommended feature order.
 - Next integration target: review Phase 1 receiving lifecycle compare-and-set protections against current staging handlers and database transition enforcement. No branch merge or production change is authorised.
+
+
+## Referral column-level UPDATE boundary — 10 November 2026
+
+A live staging catalog review found that `authenticated` had table-level UPDATE on `public.referrals`. The receiving-facility UPDATE RLS policy correctly constrained rows to the user's assigned receiving facility and role, but RLS alone did not limit which columns the user could modify.
+
+### Applied to synthetic staging
+
+Migration: `20261110202141_restrict_referral_update_columns`
+
+- Revoked table-level UPDATE on `public.referrals` from `authenticated`.
+- Granted column-level UPDATE only for fields used by the current receiving-facility workflow:
+  `status`, `acknowledged_at`, `patient_arrived_at`, assessment fields, diagnosis/treatment feedback, disposition and assessment timestamp, admission/discharge fields, follow-up plan, and `investigation_records` (used for investigation-result metadata).
+- Preserved authenticated SELECT.
+- Preserved `service_role` UPDATE and did not modify production.
+- Added `supabase/tests/referral_update_column_privileges.sql` with read-only privilege assertions.
+
+### Verification evidence
+
+The SQL privilege assertions executed successfully in staging (DO block returned no exception). Direct privilege checks confirmed:
+- `authenticated` table-level UPDATE: false.
+- Allowed: status and investigation_records column UPDATE.
+- Denied: referring_facility_id, receiving_facility_id, referring_user_id, patient_identifier and offline_client_id column UPDATE.
+- Authenticated SELECT remains true.
+- Service-role UPDATE remains true.
+
+Security advisor re-run still reports 12 authenticated-callable SECURITY DEFINER warnings; the column-grant migration did not add to or resolve those existing findings. Review each function individually before changing grants.
+
+GitHub Actions quality-gate run #280 passed all three jobs on commit `c4e4d36a2403f1f0c5e9afc885dabea9cfa48f91`: frontend lint/build, Edge Function type check and migration integrity.
+
+### Remaining acceptance boundary
+
+The grant test verifies PostgreSQL privileges, not the complete PostgREST request path. Auth-issued receiving-staff browser/API acceptance must still prove all legitimate referral update operations succeed and protected-column attempts fail. In particular, validate investigation upload/result metadata updates, assessment, admission, discharge and the transactional counter-referral RPC.
