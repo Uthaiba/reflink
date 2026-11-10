@@ -42,10 +42,14 @@ All fifteen repository migration filenames match the exact versions recorded in 
 - Removed patient-bearing debug console output from referral creation, PHC referral loading and Realtime event handling. The unnecessary pre-authentication facilities debug query was also removed.
 - Referral submission re-reads the authenticated user and current profile on every attempt, rejects non-`phc_staff` roles in the client flow (matching the staging INSERT RLS policy), and uses the current assigned facility rather than trusting the restored draft's original facility context. This is defence-in-depth; the database RLS policy remains authoritative.
 - Both staging Edge Functions are ACTIVE with JWT verification enabled.
-- Latest Supabase health advisor returned no findings. Five authenticated-callable SECURITY DEFINER warnings remain for least-privilege review.
+
+## Latest Supabase advisor review — 10 November 2026
+- Security advisor reports five WARN findings for authenticated-callable SECURITY DEFINER functions: `get_facility_user_count(uuid)`, `get_facility_user_counts()`, `is_administrator()`, `log_referral_print(uuid,text)` and `log_referral_read(uuid)`.
+- Reviewed each live staging definition and ACL. All five pin an empty `search_path`; execution is granted to `authenticated` and `service_role` (plus owner), not PUBLIC/anon. The two facility-count functions enforce caller role/facility scope; print/read audit functions verify referral participation before writing; `is_administrator()` only evaluates the authenticated profile. These grants were intentionally retained because the application depends on the RPCs. This is a documented, reviewed risk—not a clean security-advisor result or a formal security sign-off.
+- Performance advisor reports 11 indexes as unused in the current staging workload, including referral, audit, notification and foreign-key indexes. This low-volume staging observation is not evidence that they are unnecessary. Do not drop them until representative workload/query-plan analysis and dependency review are completed.
+- No migration or grant change was made as part of this advisor review.
 
 ## Staging Edge Functions
-
 ### `create-user`
 - Verifies caller JWT and administrator profile.
 - Restricts roles to the database's permitted profile roles.
@@ -64,16 +68,16 @@ All fifteen repository migration filenames match the exact versions recorded in 
 Neither production Edge Function was modified. The staging functions have not yet been exercised end-to-end with synthetic authenticated sessions.
 
 ## CI and deployment
-- GitHub Actions run #168 passed all three jobs on commit `78ff145eaffc7d19a0a90de42dd939858c984e3d`. The later manual-retry changes add static CI assertions for stable client IDs, unique-index race handling and sync-source marking; a new GitHub Actions result for those commits is not yet confirmed.
-- Vercel reported a READY Preview build for the latest branch commit `bfa7e2e0adb0a86fc9aff75daca24e595fd18343`. Preview URL: `https://reflink-git-reflink-staging-baseline-r-7d07c2-uthaibas-projects.vercel.app`. This confirms deployment/build readiness, not authenticated browser acceptance.
-- A successful build or deployment does not replace authenticated browser/API acceptance.
+- GitHub Actions run #168 passed all three jobs on commit `78ff145eaffc7d19a0a90de42dd939858c984e3d`. It is not the latest commit. No workflow run is currently recorded for latest branch commit `2aef76325a17562949affcc7deaacd8d8175bfa3`; therefore latest CI is unverified.
+- The Vercel check for the current PR head failed because the account reached its deployment/build rate limit. The previously READY Preview is older and does not contain the latest role-check/manual-retry changes. Do not use it as validation of the current branch.
+- PR #2 is open, draft and unmerged. GitHub currently reports it mergeable; that is not equivalent to passing checks or release approval.
 
 ## Remaining validation gates
 - Provision disposable synthetic administrator, PHC, receiving-staff and unrelated-facility accounts, then run authenticated integration tests.
 - Test role/facility isolation, notification visibility, Realtime delivery, full referral lifecycle, counter-referral, attachments and account-provisioning rollback.
-- Verify the Preview points to staging and test browser CORS/JWT behaviour.
+- Verify a current Preview points to staging and test browser CORS/JWT behaviour.
 - Enable leaked-password protection through Supabase Auth configuration.
-- Review the five authenticated-callable SECURITY DEFINER RPCs. Existing grants were retained pending dependency tests; do not revoke them blindly.
+- Obtain least-privilege/security-owner sign-off for the five authenticated-callable SECURITY DEFINER RPCs; do not revoke their existing grants blindly.
 - SMS provider, recipient consent, retry worker and delivery monitoring remain unconfigured.
 - Complete authenticated browser/API acceptance for the stable-ID manual retry flow, including lost-response and unique-index race tests. Background synchronization, clinical conflict resolution and attachment synchronization remain future work; the current workflow deliberately requires the user to restore, review and explicitly submit online.
 - Validate clinical/public-health indicators, complete privacy impact assessment, accessibility testing and operational acceptance.
@@ -81,4 +85,4 @@ Neither production Edge Function was modified. The staging functions have not ye
 - Validate unused indexes after representative synthetic workload; do not drop them solely because empty staging reports no usage.
 
 ## Safety
-All fifteen migrations and both Edge Functions target staging only. Production database migrations, policies, Auth settings, secrets, Edge Functions, patient records and production deployment were not modified. Keep PR #2 in draft until all release gates have evidence and explicit production approval is recorded.
+All fifteen migrations and both Edge Functions target staging only. Production database migrations, policies, Auth settings, secrets, Edge Functions, patient records and production deployment were not modified. Production migration history remains at the original single baseline migration, and its existing `create-user` Edge Function remains active with JWT verification. Keep PR #2 in draft until all release gates have evidence and explicit production approval is recorded.
