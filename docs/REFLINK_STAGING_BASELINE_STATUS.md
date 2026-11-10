@@ -25,7 +25,7 @@ The eleven repository migration filenames now match the exact versions recorded 
 - Five referral-scoped Storage policies present.
 - `public.referrals` included in `supabase_realtime`.
 - Both analytics views use `security_invoker=true`.
-- All 10 SECURITY DEFINER functions pin `search_path` to empty.
+- All 11 SECURITY DEFINER functions pin `search_path` to empty.
 - Referral print numbering is serialized per referral using a transaction-scoped advisory lock, with a unique `(referral_id, print_number)` index as the integrity backstop. The staging catalog confirms the index and hardened function are present.
 - The profile security trigger now prevents authenticated users from clearing `must_change_password` directly. Password changes use the staging-only authenticated `change-password` Edge Function, which validates the session, changes the Auth password and clears the profile flag using the service role.
 - Authenticated users cannot TRUNCATE `audit_log` or read internal referral event/feedback ledgers; anon cannot read referrals.
@@ -34,6 +34,7 @@ The eleven repository migration filenames now match the exact versions recorded 
 - The referral/counter-referral audit mutation trigger now removes patient identifiers, contact details and clinical narrative fields from OLD/NEW JSON snapshots before writing audit_log. It retains actor, action, record ID and non-clinical workflow metadata. Source clinical records remain unchanged. Retention, audit access monitoring and legal/privacy acceptance remain release gates.
 - The PHI minimization assertion checks the exclusion operation and verifies both audit triggers remain attached. Synthetic JSON test values are used; no patient records are created.
 - Added an idempotent dashboard notification queue for referral-sent and referral-acknowledged events. Database trigger inserts one queued dashboard event per referral/status, guarded by a unique idempotency key. This does not send SMS; an approved provider integration, consent rules, retry worker and delivery monitoring remain outstanding.
+- Notification queue index, trigger and idempotent insert behaviour verified against staging; rollback-only SQL assertions passed after updating expected counts to 17 functions and 10 application triggers.
 
 ## Staging Edge Functions
 
