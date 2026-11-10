@@ -2831,6 +2831,7 @@ provisional_diagnosis: "",
   const [selectedInvestigations, setSelectedInvestigations] = useState([]);
   const [printDraft, setPrintDraft] = useState(null);
   const [savedReferralInfo, setSavedReferralInfo] = useState(null);
+  const [offlineClientId, setOfflineClientId] = useState(() => globalThis.crypto.randomUUID());
 
   useEffect(() => {
     loadFacilities();
@@ -3086,10 +3087,22 @@ provisional_diagnosis: "",
         );
       }
 
-      const referralNumber =
-        generateReferralNumber();
+      // A stable client ID survives retries and is stored inside encrypted offline drafts.
+      // The database's unique partial index on offline_client_id is the final duplicate guard.
+      const { data: existingReferral, error: existingReferralError } = await supabase
+        .from("referrals")
+        .select("id, referral_number")
+        .eq("offline_client_id", offlineClientId)
+        .eq("referring_user_id", user.id)
+        .maybeSingle();
+
+      if (existingReferralError) throw existingReferralError;
+
+      const referralNumber = existingReferral?.referral_number || generateReferralNumber();
 
       const referralPayload = {
+        offline_client_id: offlineClientId,
+        sync_source: "offline",
   referral_number:
     referralNumber,
 
@@ -3204,22 +3217,34 @@ provisional_diagnosis: "",
       };
 
 
-      const {
-        data: insertedReferral,
-        error: referralError,
-      } = await supabase
-        .from("referrals")
-        .insert(referralPayload)
-        .select("id")
-        .single();
+      let insertedReferral = existingReferral;
 
-      if (referralError) {
-        console.error(
-          "REFERRAL INSERT ERROR:",
-          referralError
-        );
+      if (!insertedReferral) {
+        const { data, error: referralError } = await supabase
+          .from("referrals")
+          .insert(referralPayload)
+          .select("id, referral_number")
+          .single();
 
-        throw referralError;
+        if (referralError) {
+          // A concurrent retry may win the unique-index race. Re-read only
+          // this user's matching client ID; never update an existing referral.
+          if (referralError.code === "23505") {
+            const { data: retryMatch, error: retryLookupError } = await supabase
+              .from("referrals")
+              .select("id, referral_number")
+              .eq("offline_client_id", offlineClientId)
+              .eq("referring_user_id", user.id)
+              .maybeSingle();
+            if (retryLookupError || !retryMatch) throw referralError;
+            insertedReferral = retryMatch;
+          } else {
+            console.error("REFERRAL INSERT ERROR:", referralError);
+            throw referralError;
+          }
+        } else {
+          insertedReferral = data;
+        }
       }
 
       let savedInvestigationRecords = selectedInvestigations.map(({ result_file, ...item }) => item);
@@ -3269,6 +3294,7 @@ provisional_diagnosis: "",
         `Referral saved successfully. Patient: ${form.patient_identifier || "Not recorded"} • REFLINK ID: ${referralNumber}`
       );
 
+      setOfflineClientId(globalThis.crypto.randomUUID());
       setForm({
   patient_identifier: "",
   patient_age_months: "",
@@ -3408,10 +3434,12 @@ provisional_diagnosis: "",
           diagnosisEntries,
           selectedInvestigationCategories,
           selectedInvestigations: selectedInvestigations.map(({ result_file, ...item }) => item),
+          offlineClientId,
         }}
         hasAttachments={selectedInvestigations.some((item) => Boolean(item.result_file))}
         onRestore={(savedDraft) => {
           if (savedDraft?.form) setForm(savedDraft.form);
+          if (typeof savedDraft?.offlineClientId === "string" && savedDraft.offlineClientId) setOfflineClientId(savedDraft.offlineClientId);
           if (Array.isArray(savedDraft?.diagnosisEntries)) setDiagnosisEntries(savedDraft.diagnosisEntries);
           if (Array.isArray(savedDraft?.selectedInvestigationCategories)) setSelectedInvestigationCategories(savedDraft.selectedInvestigationCategories);
           if (Array.isArray(savedDraft?.selectedInvestigations)) setSelectedInvestigations(savedDraft.selectedInvestigations);
