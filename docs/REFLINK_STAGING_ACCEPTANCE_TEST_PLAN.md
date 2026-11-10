@@ -120,7 +120,7 @@ Keep the PR draft and production unchanged until every applicable test has evide
 - Deployed code commit: `ef44cae23b6704957d850f402a72d405a6e67dec`
 - Deployment: `dpl_2MG8JADu7xvoUqRHVjpKGfXqPVSo`
 - Root response: HTTP 200
-- CI for deployed commit: quality-gate run #259 passed all three jobs.
+- CI evidence: quality-gate run #261 passed all three jobs on application-code commit `80728d0f8c2d6553b31c6378fa5eb7d037675af6`. The deployed application-code commit `ef44cae23b6704957d850f402a72d405a6e67dec` is later than that CI-tested commit; subsequent changes on the branch after the deployed code are documentation-only. Do not describe run #261 as having tested the deployed commit.
 - Important: use only the staging Preview and staging Supabase project. Confirm the browser's network requests point to the staging project before entering any test data.
 
 ### Staging Edge Function CORS preflight gate
