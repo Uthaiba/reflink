@@ -24,8 +24,11 @@ test("referral creation derives identity and sender facility from auth and profi
   assert.match(migration, /NEW\.referring_facility_id := v_sender_facility_id/i);
 });
 
-test("referral creation rejects inactive or missing destination facilities", () => {
-  assert.match(migration, /FROM public\.facilities AS f/i);
+test("referral creation rejects missing or inactive sender and destination facilities", () => {
+  assert.match(migration, /v_sender_facility_active boolean/i);
+  assert.match(migration, /FROM public\.facilities AS f[\s\S]*?WHERE f\.id = v_sender_facility_id/i);
+  assert.match(migration, /v_sender_facility_active IS DISTINCT FROM TRUE/i);
+  assert.match(migration, /FROM public\.facilities AS f[\s\S]*?WHERE f\.id = NEW\.receiving_facility_id/i);
   assert.match(migration, /v_destination_active IS DISTINCT FROM TRUE/i);
 });
 
