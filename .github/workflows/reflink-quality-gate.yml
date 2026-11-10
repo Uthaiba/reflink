@@ -59,8 +59,8 @@ jobs:
             supabase/migrations/20261110063844_merge_equivalent_permissive_rls_policies.sql
             supabase/migrations/20261110063912_pin_security_definer_search_paths.sql
             supabase/migrations/20261110063935_explicitly_deny_client_access_to_internal_ledgers.sql
-            supabase/migrations/20261110064010_harden_concurrent_referral_print_auditing.sql
-            supabase/migrations/20261110064100_guard_forced_password_change_flag.sql
+            supabase/migrations/20261110065403_harden_concurrent_referral_print_auditing.sql
+            supabase/migrations/20261110065634_guard_forced_password_change_flag.sql
           )
           for file in "${files[@]}"; do
             test -s "$file"
