@@ -12,6 +12,7 @@ The seven repository migration filenames now match the exact versions recorded i
 5. `20261110063844_merge_equivalent_permissive_rls_policies`
 6. `20261110063912_pin_security_definer_search_paths`
 7. `20261110063935_explicitly_deny_client_access_to_internal_ledgers`
+8. `20261110064010_harden_concurrent_referral_print_auditing`
 
 ## Verified state
 - 14 public tables, 16 functions, 2 views and 9 application triggers.
@@ -22,6 +23,7 @@ The seven repository migration filenames now match the exact versions recorded i
 - `public.referrals` included in `supabase_realtime`.
 - Both analytics views use `security_invoker=true`.
 - All 10 SECURITY DEFINER functions pin `search_path` to empty.
+- Referral print numbering is serialized per referral using a transaction-scoped advisory lock, with a unique `(referral_id, print_number)` index as the integrity backstop. The staging catalog confirms the index and hardened function are present.
 - Authenticated users cannot TRUNCATE `audit_log` or read internal referral event/feedback ledgers; anon cannot read referrals.
 - Equivalent permissive policy warnings and auth.uid() initialization-plan warnings were eliminated in the staging advisor scan.
 - Rollback-only SQL assertions passed for schema counts, least-privilege grants, private storage, Realtime, view security and non-admin RPC denial.
@@ -44,6 +46,7 @@ The production Edge Function was not modified. The staging function has not yet 
 - Review the five intentionally exposed SECURITY DEFINER RPCs individually; each has authorization logic and an empty `search_path`, but the Supabase advisor still flags them because authenticated execution is intentionally granted.
 - Enable leaked-password protection through the Supabase Auth dashboard once configuration access is available.
 - The advisor reports unused indexes because the staging database has no workload data; validate their usage after synthetic workflow load. Do not drop these indexes solely from an empty-staging advisor scan.
+- The referral print concurrency migration was applied successfully to staging and its index/function definition were verified from PostgreSQL catalogs.
 - The first GitHub Actions run completed: frontend lint and production build passed; the migration-integrity job exposed a false positive because it treated legitimate INSERT statements inside PL/pgSQL function bodies as migration-time data imports. The workflow was corrected to strip dollar-quoted function bodies before checking top-level data-import statements. The non-admin all-facility RPC assertion was also corrected so its own failure cannot be swallowed by a broad exception handler. A fresh CI run is required to verify these corrections; until then, CI is not green.
 - Do not promote staging migrations to production until all integration gates pass and a production change window is approved.
 
