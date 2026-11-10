@@ -49,6 +49,17 @@ Use synthetic names and test-only patient identifiers. Never use real phone numb
 - Direct client attempts to clear the forced-change flag fail.
 - Verify session revocation and token refresh behaviour after password change.
 
+## Encrypted offline draft tests
+- Create a local vault with a 16-character passphrase and reject shorter passphrases.
+- Verify PBKDF2/AES-GCM encryption and that plaintext patient/clinical fields do not appear in IndexedDB records.
+- Verify an incorrect passphrase cannot unlock or alter existing drafts.
+- Verify drafts are scoped to the authenticated REFLINK user after decryption.
+- Verify restore repopulates the form and requires a fresh review before submission.
+- Verify the vault locks after five minutes of inactivity, when the tab is hidden and when the referral form unmounts.
+- Verify investigation attachments prevent offline saving.
+- Verify offline submission is blocked with a clear message; saving locally must never be represented as a sent referral.
+- Verify local drafts are not automatically synchronized; a separately tested idempotent sync flow is required before enabling offline referral submission.
+
 ## Notification tests
 - A referral entering sent queues one dashboard notification.
 - A referral entering acknowledged queues one dashboard notification.
@@ -76,7 +87,7 @@ Use synthetic names and test-only patient identifiers. Never use real phone numb
 - A Vercel Preview deployment for commit `628bd89a333e82d56095650b3e9bbf68620826fb` reached READY. The latest documentation-only commit still needs deployment confirmation, and authenticated browser acceptance remains outstanding.
 - Supabase leaked-password protection still needs Auth configuration access.
 - No SMS provider or consent workflow is configured.
-- No offline browser queue exists in the current frontend; offline draft schema and referral deduplication fields exist, but encryption/key management and sync conflict handling must be implemented and tested before claiming offline readiness.
+- Encrypted local draft save/restore is implemented, but automatic synchronization, retry-safe submission, conflict handling and attachment synchronization are not implemented. Do not claim full offline referral submission until those are tested.
 - No clinical or privacy sign-off is implied by technical tests.
 
 ## Release rule
