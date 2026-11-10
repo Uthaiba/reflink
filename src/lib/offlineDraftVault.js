@@ -1,6 +1,6 @@
 const DATABASE_NAME = "reflink-encrypted-offline-drafts";
 const DATABASE_VERSION = 1;
-const KEY_STORE = "vault";
+const KEY_STORE = "vaults";
 const DRAFT_STORE = "drafts";
 const KDF_ITERATIONS = 310000;
 const VAULT_MARKER = "REFLINK_OFFLINE_DRAFT_VAULT_V1";
@@ -20,7 +20,7 @@ function openDatabase() {
     request.onupgradeneeded = () => {
       const database = request.result;
       if (!database.objectStoreNames.contains(KEY_STORE)) {
-        database.createObjectStore(KEY_STORE, { keyPath: "id" });
+        database.createObjectStore(KEY_STORE, { keyPath: "ownerHash" });
       }
       if (!database.objectStoreNames.contains(DRAFT_STORE)) {
         database.createObjectStore(DRAFT_STORE, { keyPath: "id" });
@@ -56,6 +56,12 @@ function toBase64(bytes) {
 function fromBase64(value) {
   const binary = globalThis.atob(value);
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+async function getOwnerHash(ownerUserId) {
+  assertBrowserCrypto();
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", encoder.encode(ownerUserId));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 async function deriveEncryptionKey(passphrase, salt, iterations = KDF_ITERATIONS) {
@@ -103,11 +109,13 @@ async function decryptJson(key, id, record) {
   return JSON.parse(decoder.decode(plaintext));
 }
 
-export async function offlineVaultExists() {
+export async function offlineVaultExists(ownerUserId) {
+  if (!ownerUserId) return false;
+  const ownerHash = await getOwnerHash(ownerUserId);
   const database = await openDatabase();
   try {
     const transaction = database.transaction(KEY_STORE, "readonly");
-    const result = await requestValue(transaction.objectStore(KEY_STORE).get("vault"));
+    const result = await requestValue(transaction.objectStore(KEY_STORE).get(ownerHash));
     await transactionComplete(transaction);
     return Boolean(result);
   } finally {
@@ -115,25 +123,29 @@ export async function offlineVaultExists() {
   }
 }
 
-export async function createOrUnlockOfflineVault(passphrase) {
+export async function createOrUnlockOfflineVault(passphrase, ownerUserId) {
   assertBrowserCrypto();
-  if (typeof passphrase !== "string" || passphrase.length < 12) {
-    throw new Error("Use a local vault passphrase of at least 12 characters.");
+  if (typeof passphrase !== "string" || passphrase.length < 16) {
+    throw new Error("Use a local vault passphrase of at least 16 characters.");
   }
+  if (!ownerUserId) throw new Error("A signed-in REFLINK account is required.");
 
+  const ownerHash = await getOwnerHash(ownerUserId);
   const database = await openDatabase();
   try {
     const readTransaction = database.transaction(KEY_STORE, "readonly");
-    const metadata = await requestValue(readTransaction.objectStore(KEY_STORE).get("vault"));
+    const metadata = await requestValue(readTransaction.objectStore(KEY_STORE).get(ownerHash));
     await transactionComplete(readTransaction);
 
     if (!metadata) {
       const salt = globalThis.crypto.getRandomValues(new Uint8Array(16));
       const key = await deriveEncryptionKey(passphrase, salt);
-      const verifier = await encryptJson(key, "vault-verifier", { marker: VAULT_MARKER });
+      const vaultId = globalThis.crypto.randomUUID();
+      const verifier = await encryptJson(key, "vault-verifier", { marker: VAULT_MARKER, vaultId });
       const writeTransaction = database.transaction(KEY_STORE, "readwrite");
       writeTransaction.objectStore(KEY_STORE).put({
-        id: "vault",
+        ownerHash,
+        vaultId,
         version: 1,
         salt: toBase64(salt),
         iterations: KDF_ITERATIONS,
@@ -142,10 +154,10 @@ export async function createOrUnlockOfflineVault(passphrase) {
         createdAt: new Date().toISOString(),
       });
       await transactionComplete(writeTransaction);
-      return { key, created: true };
+      return { key, vaultId, created: true };
     }
 
-    if (metadata.version !== 1 || !metadata.salt || !metadata.verifierIv || !metadata.verifierCiphertext) {
+    if (metadata.version !== 1 || !metadata.salt || !metadata.verifierIv || !metadata.verifierCiphertext || !metadata.vaultId) {
       throw new Error("This local vault version is not supported by this REFLINK build.");
     }
 
@@ -160,19 +172,23 @@ export async function createOrUnlockOfflineVault(passphrase) {
         iv: metadata.verifierIv,
         ciphertext: metadata.verifierCiphertext,
       });
-      if (verifier?.marker !== VAULT_MARKER) throw new Error("Invalid vault marker.");
+      if (verifier?.marker !== VAULT_MARKER || verifier?.vaultId !== metadata.vaultId) {
+        throw new Error("Invalid vault marker.");
+      }
     } catch {
       throw new Error("The local vault passphrase is incorrect. Your encrypted drafts have not been changed.");
     }
 
-    return { key, created: false };
+    return { key, vaultId: metadata.vaultId, created: false };
   } finally {
     database.close();
   }
 }
 
-export async function saveEncryptedOfflineDraft(key, ownerUserId, draft) {
-  if (!key || !ownerUserId || !draft) throw new Error("Unlock the local vault and sign in before saving a draft.");
+export async function saveEncryptedOfflineDraft(key, ownerUserId, vaultId, draft) {
+  if (!key || !ownerUserId || !vaultId || !draft) {
+    throw new Error("Unlock the local vault and sign in before saving a draft.");
+  }
   const database = await openDatabase();
   try {
     const id = globalThis.crypto.randomUUID();
@@ -180,12 +196,14 @@ export async function saveEncryptedOfflineDraft(key, ownerUserId, draft) {
     const encrypted = await encryptJson(key, id, {
       version: 1,
       ownerUserId,
+      vaultId,
       createdAt,
       draft,
     });
     const transaction = database.transaction(DRAFT_STORE, "readwrite");
     transaction.objectStore(DRAFT_STORE).add({
       id,
+      vaultId,
       createdAt,
       iv: encrypted.iv,
       ciphertext: encrypted.ciphertext,
@@ -197,8 +215,8 @@ export async function saveEncryptedOfflineDraft(key, ownerUserId, draft) {
   }
 }
 
-export async function listEncryptedOfflineDrafts(key, ownerUserId) {
-  if (!key || !ownerUserId) return [];
+export async function listEncryptedOfflineDrafts(key, ownerUserId, vaultId) {
+  if (!key || !ownerUserId || !vaultId) return [];
   const database = await openDatabase();
   try {
     const transaction = database.transaction(DRAFT_STORE, "readonly");
@@ -207,8 +225,9 @@ export async function listEncryptedOfflineDrafts(key, ownerUserId) {
 
     const drafts = [];
     for (const record of records) {
+      if (record.vaultId !== vaultId) continue;
       const payload = await decryptJson(key, record.id, record);
-      if (payload?.ownerUserId !== ownerUserId || payload?.version !== 1) continue;
+      if (payload?.ownerUserId !== ownerUserId || payload?.vaultId !== vaultId || payload?.version !== 1) continue;
       drafts.push({
         id: record.id,
         createdAt: record.createdAt,
@@ -221,12 +240,14 @@ export async function listEncryptedOfflineDrafts(key, ownerUserId) {
   }
 }
 
-export async function deleteEncryptedOfflineDraft(id) {
-  if (!id) return;
+export async function deleteEncryptedOfflineDraft(id, vaultId) {
+  if (!id || !vaultId) return;
   const database = await openDatabase();
   try {
     const transaction = database.transaction(DRAFT_STORE, "readwrite");
-    transaction.objectStore(DRAFT_STORE).delete(id);
+    const store = transaction.objectStore(DRAFT_STORE);
+    const record = await requestValue(store.get(id));
+    if (record?.vaultId === vaultId) store.delete(id);
     await transactionComplete(transaction);
   } finally {
     database.close();
