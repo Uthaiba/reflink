@@ -18,6 +18,7 @@ export default function OfflineDraftVault({ userId, draft, onRestore, hasAttachm
   const [passphrase, setPassphrase] = useState("");
   const [confirmPassphrase, setConfirmPassphrase] = useState("");
   const [vaultKey, setVaultKey] = useState(null);
+  const [vaultId, setVaultId] = useState(null);
   const [drafts, setDrafts] = useState([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -25,7 +26,7 @@ export default function OfflineDraftVault({ userId, draft, onRestore, hasAttachm
 
   useEffect(() => {
     let active = true;
-    offlineVaultExists()
+    offlineVaultExists(userId)
       .then((exists) => {
         if (active) setVaultExists(exists);
       })
@@ -37,11 +38,11 @@ export default function OfflineDraftVault({ userId, draft, onRestore, hasAttachm
     };
   }, []);
 
-  const refreshDrafts = useCallback(async (key = vaultKey) => {
-    if (!key || !userId) return;
-    const records = await listEncryptedOfflineDrafts(key, userId);
+  const refreshDrafts = useCallback(async (key = vaultKey, currentVaultId = vaultId) => {
+    if (!key || !userId || !currentVaultId) return;
+    const records = await listEncryptedOfflineDrafts(key, userId, currentVaultId);
     setDrafts(records);
-  }, [userId, vaultKey]);
+  }, [userId, vaultKey, vaultId]);
 
   useEffect(() => {
     if (!vaultKey) return undefined;
@@ -49,6 +50,7 @@ export default function OfflineDraftVault({ userId, draft, onRestore, hasAttachm
     let idleTimer;
     const lockVault = () => {
       setVaultKey(null);
+      setVaultId(null);
       setDrafts([]);
       setMessage("Local vault locked.");
     };
@@ -94,9 +96,10 @@ export default function OfflineDraftVault({ userId, draft, onRestore, hasAttachm
 
     setBusy(true);
     try {
-      const result = await createOrUnlockOfflineVault(passphrase);
+      const result = await createOrUnlockOfflineVault(passphrase, userId);
       setVaultKey(result.key);
-      const records = await listEncryptedOfflineDrafts(result.key, userId);
+      setVaultId(result.vaultId);
+      const records = await listEncryptedOfflineDrafts(result.key, userId, result.vaultId);
       setDrafts(records);
       setVaultExists(true);
       setMessage(result.created
@@ -125,8 +128,8 @@ export default function OfflineDraftVault({ userId, draft, onRestore, hasAttachm
 
     setBusy(true);
     try {
-      await saveEncryptedOfflineDraft(vaultKey, userId, draft);
-      await refreshDrafts(vaultKey);
+      await saveEncryptedOfflineDraft(vaultKey, userId, vaultId, draft);
+      await refreshDrafts(vaultKey, vaultId);
       setMessage("Draft encrypted and saved on this device. It has not been submitted or sent to a facility.");
     } catch (saveError) {
       setError(saveError?.message || "Unable to save the encrypted draft.");
@@ -139,7 +142,7 @@ export default function OfflineDraftVault({ userId, draft, onRestore, hasAttachm
     setError("");
     setBusy(true);
     try {
-      await deleteEncryptedOfflineDraft(id);
+      await deleteEncryptedOfflineDraft(id, vaultId);
       await refreshDrafts();
       setMessage("Encrypted local draft deleted.");
     } catch (deleteError) {
@@ -157,6 +160,7 @@ export default function OfflineDraftVault({ userId, draft, onRestore, hasAttachm
 
   const handleLock = () => {
     setVaultKey(null);
+    setVaultId(null);
     setDrafts([]);
     setMessage("Local vault locked.");
     setPassphrase("");
