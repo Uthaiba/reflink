@@ -1,10 +1,10 @@
 # REFLINK staging reconstruction — 10 November 2026
 
 ## Scope
-This branch reconstructs the existing production schema into the isolated synthetic staging project. It does not copy production rows and does not apply migrations to production.
+This branch advances the existing REFLINK product in an isolated synthetic staging project. It does not copy production rows or apply migrations to production.
 
 ## Applied staging migrations
-The fifteen repository migration filenames now match the exact versions recorded in the staging migration history:
+All fifteen repository migration filenames match the exact versions recorded in the staging migration history:
 1. `20261110063521_reconstruct_production_schema_in_staging`
 2. `20261110063620_configure_private_referral_storage_and_realtime`
 3. `20261110063704_add_staging_foreign_key_indexes_and_secure_views`
@@ -20,62 +20,62 @@ The fifteen repository migration filenames now match the exact versions recorded
 13. `20261110135145_add_privacy_preserving_public_health_aggregate`
 14. `20261110135512_exclude_referral_identifiers_from_audit`
 15. `20261110142053_publish_referral_notifications_to_realtime`
-15. `20261110140000_publish_referral_notifications_to_realtime`
 
-## Verified state
-- 14 public tables, 17 functions, 3 views and 10 application triggers.
-- 28 public RLS policies after merging equivalent permissive policies and adding explicit deny-all authenticated policies to internal ledgers.
+## Verified staging state
+- 14 public tables, 17 functions, 3 views, 10 application triggers and 28 public RLS policies.
 - 16 indexes added for previously uncovered foreign keys.
-- Private `referral-investigation-results` bucket configured with a 10 MB limit and PDF/JPEG/PNG/WebP/TXT/CSV MIME allowlist.
-- Five referral-scoped Storage policies present.
-- `public.referrals` and `public.referral_notifications` included in `supabase_realtime`.
-- All three analytics views use `security_invoker=true`. The pre-existing detailed `referral_analytics` view still contains patient-linked operational fields and remains subject to referral RLS; it is not the policy-export view.
-
-- Added a service-role-only monthly public-health aggregate by month, state, LGA, facility type, urgency and status. It excludes patient identifiers and free-text clinical content and suppresses groups smaller than five. Authenticated clients and anon cannot query it directly; external publication still requires governance approval.
+- Private `referral-investigation-results` bucket with a 10 MB limit, PDF/JPEG/PNG/WebP/TXT/CSV MIME allowlist and five referral-scoped Storage policies.
+- `public.referrals` and `public.referral_notifications` are included in `supabase_realtime`.
+- All three analytics views use `security_invoker=true`. The detailed operational `referral_analytics` view contains patient-linked operational fields and remains subject to referral RLS; it is not the policy-export view.
+- The service-role-only monthly public-health aggregate groups by month, state, LGA, facility type, urgency and status. It excludes direct identifiers and free-text clinical content and suppresses groups smaller than five. External publication requires governance approval.
 - All 11 SECURITY DEFINER functions pin `search_path` to empty.
-- Referral print numbering is serialized per referral using a transaction-scoped advisory lock, with a unique `(referral_id, print_number)` index as the integrity backstop. The staging catalog confirms the index and hardened function are present.
-- The profile security trigger now prevents authenticated users from clearing `must_change_password` directly. Password changes use the staging-only authenticated `change-password` Edge Function, which validates the session, changes the Auth password and clears the profile flag using the service role.
+- Referral print numbering is serialized per referral using a transaction-scoped advisory lock, with a unique `(referral_id, print_number)` index.
+- The profile security trigger prevents authenticated users from clearing `must_change_password` directly. Password changes use the staging-only authenticated `change-password` Edge Function.
 - Authenticated users cannot TRUNCATE `audit_log` or read internal referral event/feedback ledgers; anon cannot read referrals.
-- Equivalent permissive policy warnings and auth.uid() initialization-plan warnings were eliminated in the staging advisor scan.
-- Rollback-only SQL assertions passed for schema counts, least-privilege grants, private storage, Realtime, view security, non-admin RPC denial, referral print uniqueness and protection of the forced-password-change flag.
-- The referral/counter-referral audit mutation trigger now removes patient identifiers, referral numbers, offline client IDs, contact details and clinical narrative fields from OLD/NEW JSON snapshots before writing audit_log. It retains actor, action, record ID and non-clinical workflow metadata. Source clinical records remain unchanged. Retention, audit access monitoring and legal/privacy acceptance remain release gates.
-- The PHI minimization assertion checks the exclusion operation and verifies both audit triggers remain attached. Synthetic JSON test values are used; no patient records are created.
-- Added an idempotent dashboard notification queue for referral-sent and referral-acknowledged events. Database trigger inserts one queued dashboard event per referral/status, guarded by a unique idempotency key. Direct EXECUTE privileges on the trigger-only function are revoked from PUBLIC, anon and authenticated clients. This does not send SMS; an approved provider integration, consent rules, retry worker and delivery monitoring remain outstanding.
-- Notification queue index, trigger, idempotent insert behaviour and client-role execution denial verified against staging; rollback-only SQL assertions passed after updating expected counts to 17 functions and 10 application triggers.
-- Added a live dashboard notification centre to all three authenticated workspace roles. It reads only dashboard-channel events allowed by the existing referral-participant RLS policy and refreshes on Realtime inserts. It displays no patient identifiers, referral numbers, phone numbers or clinical details. This is an in-app event feed, not a delivered/read receipt system.
-- Added an authenticated dashboard notification centre to all three workspace roles. It loads only dashboard-channel events allowed by the existing referral-participant RLS policy and refreshes on Realtime inserts. It intentionally displays no patient identifiers, referral numbers, phone numbers or clinical details. This is an in-app event feed, not a delivered/read receipt system.
+- Equivalent permissive policy and auth.uid() initialization-plan warnings were eliminated in staging.
+- Rollback-only SQL assertions passed for schema counts, least-privilege grants, private storage, Realtime publication, view security, non-admin RPC denial, referral print uniqueness, forced-password-change protection, audit minimization, notification idempotency and aggregate-view access.
+- The audit mutation trigger excludes patient identifiers, referral numbers, offline client IDs, contact details and clinical narrative fields from OLD/NEW audit snapshots. Actor, action, record reference and non-clinical workflow metadata remain.
+- The idempotent dashboard notification queue creates events for referral-sent and referral-acknowledged transitions. The trigger-only function is not directly executable by PUBLIC, anon or authenticated clients. SMS delivery is not configured.
+- The notification centre is integrated into PHC, receiving-facility and administrator dashboards. It selects only non-clinical dashboard notification fields, relies on the existing referral-participant SELECT policy, and refreshes on Realtime INSERT events. It does not expose patient identifiers, referral numbers, phone numbers or clinical details. It is an event feed, not a delivered/read receipt system.
+- Both staging Edge Functions are ACTIVE with JWT verification enabled.
+- Latest Supabase health advisor returned no findings. Five authenticated-callable SECURITY DEFINER warnings remain for least-privilege review.
 
 ## Staging Edge Functions
 
-Two staging-only Edge Functions are deployed with JWT verification enabled.
-
 ### `create-user`
-- rejects unknown browser origins and avoids wildcard CORS;
-- verifies the caller JWT and administrator profile;
-- restricts roles to the database's three permitted profile roles;
-- validates email, required fields and optional facility UUID;
-- compensates by deleting the Auth user if profile insertion fails;
-- avoids returning internal database error details.
+- Verifies caller JWT and administrator profile.
+- Restricts roles to the database's permitted profile roles.
+- Validates email, required fields and optional facility UUID.
+- Deletes the newly created Auth user if profile insertion fails.
+- Avoids returning internal database error details.
+- Uses a restricted CORS allowlist.
 
 ### `change-password`
-- validates the caller's signed-in session and an existing REFLINK profile;
-- validates the password policy server-side;
-- changes the authenticated user's password through the Supabase Auth Admin API;
-- clears `must_change_password` using the service role after the password update;
-- keeps direct client updates to that protected flag blocked by the profile trigger.
+- Validates the signed-in session and existing REFLINK profile.
+- Validates password policy server-side.
+- Changes the authenticated user's Auth password.
+- Clears `must_change_password` using service-role privileges after the password update.
+- Direct client updates to the protected flag remain blocked.
 
-Neither production Edge Function was modified. The staging functions have not yet been exercised end-to-end with real synthetic authenticated sessions.
+Neither production Edge Function was modified. The staging functions have not yet been exercised end-to-end with synthetic authenticated sessions.
+
+## CI and deployment
+- GitHub Actions run #103 passed all three jobs on commit `8395978a06e2ddff77b68bd70989ec6c89240106`: npm ci, Oxlint, Vite production build, Deno type-checks for both Edge Functions and migration-integrity checks.
+- The notification centre and Realtime publication were added after run #103. A fresh exact-HEAD CI run is required before considering the newest changes verified.
+- Vercel has reached its free deployment-rate limit for some recent commits. The previously verified READY Preview is at `https://reflink-git-reflink-staging-baseline-r-7d07c2-uthaibas-projects.vercel.app`; it may not contain the latest notification-centre changes.
+- A successful build or deployment does not replace authenticated browser/API acceptance.
 
 ## Remaining validation gates
-- Provision synthetic PHC, receiving-staff and administrator accounts, then run full authenticated integration tests.
-- Exercise the full referral lifecycle, counter-referral, offline duplicate prevention, attachment upload/download and account-provisioning rollback through the application/API.
-- Verify the Vercel preview points to staging and test the full browser CORS/JWT flow.
-- Review the five authenticated-callable SECURITY DEFINER RPCs individually; each has an empty `search_path`, and the inspected function bodies enforce identity/facility/administrator checks. Their authenticated EXECUTE grants are required by existing app/RLS flows and were retained rather than revoked blindly. Supabase advisor warnings remain visible for this deliberate exposure.
-- Enable leaked-password protection through the Supabase Auth dashboard once configuration access is available.
-- The advisor reports unused indexes because the staging database has no workload data; validate their usage after synthetic workflow load. Do not drop these indexes solely from an empty-staging advisor scan.
-- The referral print concurrency migration was applied successfully to staging and its index/function definition were verified from PostgreSQL catalogs.
-- GitHub Actions run #103 passed all three jobs on commit `8395978a06e2ddff77b68bd70989ec6c89240106`: npm ci, Oxlint, Vite production build, Deno type-checks for both Edge Functions, and migration-integrity/security assertions. Vercel deployment for that latest commit is rate-limited; the immediately preceding app commit `628bd89a333e82d56095650b3e9bbf68620826fb` has a READY preview at `https://reflink-git-reflink-staging-baseline-r-7d07c2-uthaibas-projects.vercel.app`. This does not replace authenticated browser acceptance testing.
-- Do not promote staging migrations to production until all integration gates pass and a production change window is approved.
+- Provision disposable synthetic administrator, PHC, receiving-staff and unrelated-facility accounts, then run authenticated integration tests.
+- Test role/facility isolation, notification visibility, Realtime delivery, full referral lifecycle, counter-referral, attachments and account-provisioning rollback.
+- Verify the Preview points to staging and test browser CORS/JWT behaviour.
+- Enable leaked-password protection through Supabase Auth configuration.
+- Review the five authenticated-callable SECURITY DEFINER RPCs. Existing grants were retained pending dependency tests; do not revoke them blindly.
+- SMS provider, recipient consent, retry worker and delivery monitoring remain unconfigured.
+- Implement an encrypted offline browser queue, key management and synchronization conflict resolution. The current frontend does not yet have an offline queue.
+- Validate clinical/public-health indicators, complete privacy impact assessment, accessibility testing and operational acceptance.
+- Approve audit retention, access monitoring, backup/restore and breach-response procedures.
+- Validate unused indexes after representative synthetic workload; do not drop them solely because empty staging reports no usage.
 
 ## Safety
-Production database migrations and production Edge Functions were left unchanged. All database changes in this branch target synthetic staging only.
+All fifteen migrations and both Edge Functions target staging only. Production database migrations, policies, Auth settings, secrets, Edge Functions, patient records and production deployment were not modified. Keep PR #2 in draft until all release gates have evidence and explicit production approval is recorded.
