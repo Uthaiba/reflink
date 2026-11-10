@@ -79,6 +79,7 @@ jobs:
             supabase/migrations/20261110063935_explicitly_deny_client_access_to_internal_ledgers.sql
             supabase/migrations/20261110065403_harden_concurrent_referral_print_auditing.sql
             supabase/migrations/20261110065634_guard_forced_password_change_flag.sql
+            supabase/migrations/20261110134607_minimize_phi_in_audit_ledger.sql
           )
           for file in "${files[@]}"; do
             test -s "$file"
@@ -118,4 +119,6 @@ jobs:
           grep -Fq "pg_advisory_xact_lock" "${files[7]}"
           grep -Fq "CREATE UNIQUE INDEX IF NOT EXISTS referral_print_events_referral_print_number_uidx" "${files[7]}"
           grep -Fq "NEW.must_change_password IS DISTINCT FROM OLD.must_change_password" "${files[8]}"
+          grep -Fq "to_jsonb(NEW) - sensitive_fields" "${files[9]}"
+          grep -Fq "patient_identifier" "${files[9]}"
           echo "Migration integrity checks passed."
