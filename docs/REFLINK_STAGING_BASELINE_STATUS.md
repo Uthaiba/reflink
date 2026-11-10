@@ -88,7 +88,7 @@ All nineteen repository migration filenames match the exact versions recorded in
 Neither production Edge Function was modified. The staging functions have not yet been exercised end-to-end with synthetic authenticated sessions.
 
 ## CI and deployment
-- GitHub Actions run #230 completed successfully on commit `5e3a136690705b404c67b1c053d3b27c9bbf090b`. All three jobs passed: frontend dependency installation/Oxlint/Vite production build, Deno type checks for both Edge Functions, and migration-integrity assertions. This validates the administrator reporting workspace, counter-referral form integration, 19 migration filenames and both Edge Functions.
+- GitHub Actions run #241 completed successfully on commit `4f62728d6514b819ac96dc6c20f673f8dbb5a1e9`. All three jobs passed: frontend dependency installation/Oxlint/Vite production build, Deno type checks for both Edge Functions, and migration-integrity assertions. This validates the administrator reporting workspace, counter-referral form integration, 19 migration filenames and both Edge Functions.
 - Vercel deployment `dpl_FDetLZvmjSaoWEdE4er9haDAMJ5i` for commit `98a95022e774ace46a59b5c1fad07b9d5b3a9db9` reached READY and its root returned HTTP 200. It contains the reporting/counter-referral database migration but predates the new reporting UI component. Vercel rate-limited subsequent staging preview builds, so the current UI commit has passed CI but does not yet have its own READY Preview deployment. This is deployment/shell verification only, not authenticated browser acceptance or proof of runtime clinical workflows.
 - PR #2 is open, draft and unmerged. GitHub currently reports it mergeable; that is not equivalent to release approval.
 
