@@ -126,3 +126,15 @@ The missing-schema-export blocker is therefore **resolved**. The staging reconst
 6. Verify the reconstructed catalog and run synthetic role/facility authorization and referral-lifecycle tests.
 
 No Supabase migration has been applied by this session. Production and staging database state have not been changed. PR #1 remains open, draft and unmerged.
+
+## 10. Production schema reconciliation correction — 10 November 2026
+
+The owner-supplied export was rechecked directly after the next session upload. The earlier statement in section 9 that it contains zero trigger statements was incorrect. The complete 64,434-byte, 1,612-line export contains nine `CREATE OR REPLACE TRIGGER` statements. Their names and definitions match both the separate 9 November trigger evidence snapshot and a fresh read-only query of the live production `pg_trigger` catalog. Do not apply the separate snapshot as a second trigger migration; retain it as corroborating evidence.
+
+A fresh read-only `pg_default_acl` inspection also found default ACL entries for both `postgres` and `supabase_admin`. The supplied export includes only the nine `postgres` default-privilege statements and omits the live `supabase_admin` defaults. Both sets include broad browser-role grants in production. The staging baseline must use an explicit least-privilege design rather than copying these defaults.
+
+A fresh live `audit_log` ACL inspection confirmed that `authenticated` has SELECT, REFERENCES, TRIGGER, TRUNCATE and MAINTAIN. RLS does not mitigate TRUNCATE or these structural privileges. This is a staging baseline restriction and a documented production security finding; no production revoke was performed.
+
+Detailed evidence and controlled next steps: `docs/PRODUCTION_SCHEMA_RECONCILIATION_20261110.md`.
+
+**Updated task state:** schema export located; all nine triggers reconciled; default-ACL omission and unsafe grants identified; staging baseline design remains in progress. No production or staging database changes were made.
