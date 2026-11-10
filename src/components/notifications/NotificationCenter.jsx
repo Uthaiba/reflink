@@ -117,7 +117,7 @@ export default function NotificationCenter({ userId }) {
         <div className="reflink-notification-tools">
           <span className={`reflink-live-state ${realtimeState === "live" ? "is-live" : ""}`}>
             <span aria-hidden="true" />
-            {realtimeState === "live" ? "Live updates" : "Live updates reconnecting"}
+            {realtimeState === "live" ? "Live updates" : realtimeState === "connecting" ? "Connecting…" : "Live updates reconnecting"}
           </span>
           <button
             type="button"
