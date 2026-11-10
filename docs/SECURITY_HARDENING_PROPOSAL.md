@@ -135,3 +135,28 @@ Also run the full repository test suite, migration source-contract tests, SQL pa
 ## 6. Current decision
 
 **Not ready to convert into an executable migration.** The audit-log excess privileges are directly evidenced and the least-privilege direction is clear. The default-ACL issue is confirmed for two creators, but the current connection lacks demonstrated membership/authority to change the `supabase_admin` defaults. The exact audit trigger writer privilege contract also needs staging proof. The safe next action is baseline reconstruction and synthetic staging validation, not production DDL.
+
+## Live audit-log ACL revalidation — 10 November 2026
+
+Read-only effective privilege checks against production confirmed:
+
+| Effective privilege | anon | authenticated | service_role |
+|---|---:|---:|---:|
+| audit_log SELECT | No | Yes | Yes |
+| audit_log TRUNCATE | No | Yes | Yes |
+| audit_log REFERENCES | No | Yes | Yes |
+| audit_log TRIGGER | No | Yes | Yes |
+| audit_log MAINTAIN | No | Yes | Yes |
+| audit_log_id_seq USAGE | No | Yes | Yes |
+| audit_log_id_seq SELECT | No | Yes | Yes |
+| audit_log_id_seq UPDATE | No | Yes | Yes |
+
+Authenticated has no direct INSERT, UPDATE or DELETE on audit_log. The sole RLS policy is administrator-only SELECT using public.is_administrator(). All 14 public tables have RLS enabled; none has FORCE RLS. The public schema grants no CREATE to anon, authenticated or PUBLIC.
+
+Live function metadata confirms audit_referral_mutation() and log_referral_read(uuid) are SECURITY DEFINER, owned by postgres, with search_path=public. The trigger function is not executable by authenticated; log_referral_read(uuid) is. App.jsx calls log_referral_read from two detail-opening paths. No direct audit_log table query was found in App.jsx or the inspected AdminDashboard; no audit viewer is currently implemented.
+
+The selected audit-table proposal now preserves authenticated SELECT under the existing administrator-only RLS policy to retain the master-plan system activity/security-event capability, while revoking TRUNCATE, REFERENCES, TRIGGER and MAINTAIN from anon/authenticated and all direct sequence privileges from those browser roles. This is a proposal only; it has not been executed.
+
+Default ACLs remain broad for both postgres and supabase_admin. They grant future public tables and sequences to anon/authenticated/service_role; supabase_admin-created functions also receive direct EXECUTE. This remains a separate release gate. The live role-membership catalog confirms postgres is not a member of supabase_admin, so a postgres-run migration cannot assume authority to change supabase_admin defaults.
+
+No production or staging schema, grants, defaults, RLS, functions, Auth settings or data were changed.
