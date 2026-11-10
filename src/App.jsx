@@ -5,6 +5,7 @@ import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
 import AnalyticsDashboard from "./components/dashboards/AnalyticsDashboard.jsx";
 import AnalysisHub from "./components/dashboards/AnalysisHub.jsx";
 import NotificationCenter from "./components/notifications/NotificationCenter.jsx";
+import OfflineDraftVault from "./components/offline/OfflineDraftVault.jsx";
 import "./App.css";
 import "./reflink-theme-professional.css";
 import "./admin-dashboard-modern.css";
@@ -2788,7 +2789,7 @@ function InvestigationResultEditor({ item, onChange, onFileChange }) {
   );
 }
 
-function NewReferralForm({ onBack }) {
+function NewReferralForm({ onBack, profile }) {
 
   const [form, setForm] = useState({
   patient_identifier: "",
@@ -3059,6 +3060,11 @@ provisional_diagnosis: "",
   const handleSubmit = async (e) => {
 
     e.preventDefault();
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setError("You are offline. This referral has not been submitted. Save it in Encrypted offline drafts below, then restore and submit when you are connected.");
+      return;
+    }
 
     setError("");
     setSavedReferralInfo(null);
@@ -3434,6 +3440,27 @@ provisional_diagnosis: "",
           {error}
         </div>
       )}
+
+      <OfflineDraftVault
+        userId={profile?.auth_user_id || profile?.id}
+        draft={{
+          form,
+          diagnosisEntries,
+          selectedInvestigationCategories,
+          selectedInvestigations: selectedInvestigations.map(({ result_file, ...item }) => item),
+        }}
+        hasAttachments={selectedInvestigations.some((item) => Boolean(item.result_file))}
+        onRestore={(savedDraft) => {
+          if (savedDraft?.form) setForm(savedDraft.form);
+          if (Array.isArray(savedDraft?.diagnosisEntries)) setDiagnosisEntries(savedDraft.diagnosisEntries);
+          if (Array.isArray(savedDraft?.selectedInvestigationCategories)) setSelectedInvestigationCategories(savedDraft.selectedInvestigationCategories);
+          if (Array.isArray(savedDraft?.selectedInvestigations)) setSelectedInvestigations(savedDraft.selectedInvestigations);
+          setSavedReferralInfo(null);
+          setPrintDraft(null);
+          setError("");
+          setMessage("");
+        }}
+      />
 
       <form onSubmit={handleSubmit}>
 
