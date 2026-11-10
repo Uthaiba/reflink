@@ -4,7 +4,7 @@
 This branch reconstructs the existing production schema into the isolated synthetic staging project. It does not copy production rows and does not apply migrations to production.
 
 ## Applied staging migrations
-The nine repository migration filenames now match the exact versions recorded in the staging migration history:
+The eleven repository migration filenames now match the exact versions recorded in the staging migration history:
 1. `20261110063521_reconstruct_production_schema_in_staging`
 2. `20261110063620_configure_private_referral_storage_and_realtime`
 3. `20261110063704_add_staging_foreign_key_indexes_and_secure_views`
@@ -18,7 +18,7 @@ The nine repository migration filenames now match the exact versions recorded in
 11. `20261110134826_add_idempotent_referral_notification_queue`
 
 ## Verified state
-- 14 public tables, 16 functions, 2 views and 9 application triggers.
+- 14 public tables, 17 functions, 2 views and 10 application triggers.
 - 28 public RLS policies after merging equivalent permissive policies and adding explicit deny-all authenticated policies to internal ledgers.
 - 16 indexes added for previously uncovered foreign keys.
 - Private `referral-investigation-results` bucket configured with a 10 MB limit and PDF/JPEG/PNG/WebP/TXT/CSV MIME allowlist.
@@ -32,6 +32,7 @@ The nine repository migration filenames now match the exact versions recorded in
 - Equivalent permissive policy warnings and auth.uid() initialization-plan warnings were eliminated in the staging advisor scan.
 - Rollback-only SQL assertions passed for schema counts, least-privilege grants, private storage, Realtime, view security, non-admin RPC denial, referral print uniqueness and protection of the forced-password-change flag.
 - The referral/counter-referral audit mutation trigger now removes patient identifiers, contact details and clinical narrative fields from OLD/NEW JSON snapshots before writing audit_log. It retains actor, action, record ID and non-clinical workflow metadata. Source clinical records remain unchanged. Retention, audit access monitoring and legal/privacy acceptance remain release gates.
+- The PHI minimization assertion checks the exclusion operation and verifies both audit triggers remain attached. Synthetic JSON test values are used; no patient records are created.
 - Added an idempotent dashboard notification queue for referral-sent and referral-acknowledged events. Database trigger inserts one queued dashboard event per referral/status, guarded by a unique idempotency key. This does not send SMS; an approved provider integration, consent rules, retry worker and delivery monitoring remain outstanding.
 
 ## Staging Edge Functions
@@ -59,7 +60,7 @@ Neither production Edge Function was modified. The staging functions have not ye
 - Provision synthetic PHC, receiving-staff and administrator accounts, then run full authenticated integration tests.
 - Exercise the full referral lifecycle, counter-referral, offline duplicate prevention, attachment upload/download and account-provisioning rollback through the application/API.
 - Verify the Vercel preview points to staging and test the full browser CORS/JWT flow.
-- Review the five intentionally exposed SECURITY DEFINER RPCs individually; each has authorization logic and an empty `search_path`, but the Supabase advisor still flags them because authenticated execution is intentionally granted.
+- Review the five authenticated-callable SECURITY DEFINER RPCs individually; each has an empty `search_path`, and the inspected function bodies enforce identity/facility/administrator checks. Their authenticated EXECUTE grants are required by existing app/RLS flows and were retained rather than revoked blindly. Supabase advisor warnings remain visible for this deliberate exposure.
 - Enable leaked-password protection through the Supabase Auth dashboard once configuration access is available.
 - The advisor reports unused indexes because the staging database has no workload data; validate their usage after synthetic workflow load. Do not drop these indexes solely from an empty-staging advisor scan.
 - The referral print concurrency migration was applied successfully to staging and its index/function definition were verified from PostgreSQL catalogs.
