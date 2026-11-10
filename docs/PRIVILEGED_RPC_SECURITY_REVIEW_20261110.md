@@ -61,7 +61,7 @@ The routine:
 Findings:
 - Receiving-facility access is not explicitly constrained to `receiving_staff` or an active facility assignment.
 - `p_copy_label` is not length-limited or allowlisted in the routine.
-- The number allocation uses `coalesce(max(print_number),0)+1` without a row lock, advisory lock or unique constraint on `(referral_id, print_number)`. Concurrent calls can allocate the same number.
+- The number allocation uses `coalesce(MAX(print_number), 0) + 1` without a row lock, advisory lock or unique constraint on `(referral_id, print_number)`. Concurrent calls can allocate the same number.
 - The table currently has a primary key on `id` and foreign keys to referrals and auth users, but no unique constraint on the referral/print-number pair.
 
 A future implementation should serialize allocation on the parent referral row (or use a dedicated atomic sequence mechanism), add a unique constraint only after duplicate preflight, and validate label length/allowed values. This requires a reviewed role contract and synthetic concurrency tests first.
