@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase.js";
+import AdminPublicHealthReporting from "./AdminPublicHealthReporting.jsx";
 
 /* =======================================================
    ADMIN DASHBOARD
@@ -2267,6 +2268,23 @@ function AdminDashboard({
   }
 
   /* =======================================================
+     PUBLIC HEALTH REPORTING VIEW
+     ======================================================= */
+
+  if (view === "intelligence") {
+    return (
+      <>
+        <div className="dashboard-actions">
+          <button type="button" className="secondary-button" onClick={() => { setError(""); setMessage(""); setView("home"); }}>
+            ← Back to Administration
+          </button>
+        </div>
+        <AdminPublicHealthReporting />
+      </>
+    );
+  }
+
+  /* =======================================================
      ANALYSIS HUB VIEW
      ======================================================= */
 
@@ -2669,6 +2687,10 @@ function AdminDashboard({
             <span className="admin-nav-icon">▥</span>
             <span>Referral Performance</span>
           </button>
+          <button type="button" className={view === "intelligence" ? "is-active" : ""} onClick={() => setView("intelligence")}>
+            <span className="admin-nav-icon">▤</span>
+            <span>Public Health Reports</span>
+          </button>
         </nav>
 
         <div className="admin-sidebar-section-label">MANAGEMENT</div>
@@ -2722,6 +2744,7 @@ function AdminDashboard({
           <button type="button" className={view === "referrals" || view === "active-referrals" ? "is-active" : ""} onClick={() => setView("referrals")}>Referrals</button>
           <button type="button" className={view === "analysis" ? "is-active" : ""} onClick={() => setView("analysis")}>Analytics</button>
           <button type="button" className={view === "facilities" ? "is-active" : ""} onClick={() => setView("facilities")}>Facilities</button>
+          <button type="button" className={view === "intelligence" ? "is-active" : ""} onClick={() => setView("intelligence")}>Reports</button>
           <button type="button" className={view === "users" ? "is-active" : ""} onClick={() => setView("users")}>Users</button>
         </nav>
 
@@ -2924,6 +2947,7 @@ function AdminDashboard({
                 <button type="button" className={view === "users" ? "is-active" : ""} onClick={() => setView("users")}><span>◎</span><div><strong>Manage Users</strong><small>Roles and access</small></div><b>→</b></button>
                 <button type="button" className={view === "analysis" ? "is-active" : ""} onClick={() => setView("analysis")}><span>◫</span><div><strong>Healthcare Analysis</strong><small>Clinical intelligence</small></div><b>→</b></button>
                 <button type="button" className={view === "analytics" ? "is-active" : ""} onClick={() => setView("analytics")}><span>▥</span><div><strong>Referral Performance</strong><small>Pathway and outcomes</small></div><b>→</b></button>
+                <button type="button" className={view === "intelligence" ? "is-active" : ""} onClick={() => setView("intelligence")}><span>▤</span><div><strong>Public Health Reports</strong><small>Privacy-preserving aggregates</small></div><b>→</b></button>
               </div>
             </div>
           </div>
