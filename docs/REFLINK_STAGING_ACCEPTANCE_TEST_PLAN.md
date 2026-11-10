@@ -30,8 +30,8 @@ Use synthetic names and test-only patient identifiers. Never use real phone numb
 - Invalid status transitions rejected by the database.
 - Emergency referrals rejected when clinical findings are missing.
 - Restore an encrypted draft while online and manually submit it; verify its original `offline_client_id` is reused and `sync_source` is `offline`.
-- Simulate a lost client response after a successful insert, retry with the same client ID, and verify the existing referral is returned without a second insert.
-- Verify a concurrent unique-index collision re-reads only the matching referral owned by the signed-in user; an inaccessible or mismatched collision fails closed.
+- Simulate a lost client response after a successful insert, retry with the same client ID, and verify the UI identifies the existing referral and refuses to report a second successful submission.
+- Verify a concurrent unique-index collision re-reads only the matching referral owned by the signed-in user, reports that referral as already submitted and fails closed; an inaccessible or mismatched collision fails closed.
 - Verify ordinary online submissions use `sync_source=online` and receive a fresh client ID after success.
 - Verify a retry with selected investigation attachments is blocked when an earlier referral with that client ID exists, rather than duplicating uploads.
 - Concurrent print requests produce unique print numbers.
