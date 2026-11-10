@@ -30,6 +30,8 @@ Use synthetic names and test-only patient identifiers. Never use real phone numb
 - Invalid status transitions rejected by the database.
 - Emergency referrals rejected when clinical findings are missing.
 - Restore an encrypted draft while online and manually submit it; verify its original `offline_client_id` is reused and `sync_source` is `offline`.
+- Verify the server-side authenticated profile is re-read at submission time and only `phc_staff` can create referrals; receiving staff, administrators and unrelated roles fail closed.
+- Verify the currently assigned facility is re-read at submission time and is the value used for `referring_facility_id`, even if the draft was created before the user's facility assignment changed.
 - Simulate a lost client response after a successful insert, retry with the same client ID, and verify the UI identifies the existing referral and refuses to report a second successful submission.
 - Verify a concurrent unique-index collision re-reads only the matching referral owned by the signed-in user, reports that referral as already submitted and fails closed; an inaccessible or mismatched collision fails closed.
 - Verify ordinary online submissions use `sync_source=online` and receive a fresh client ID after success.
