@@ -103,11 +103,42 @@ These are database-policy smoke tests using simulated JWT claims, not full brows
 
 ## Release blockers
 - No authenticated browser/API run is claimed until disposable synthetic Auth identities exist.
-- A Vercel Preview deployment for commit `628bd89a333e82d56095650b3e9bbf68620826fb` reached READY. The latest documentation-only commit still needs deployment confirmation, and authenticated browser acceptance remains outstanding.
-- Supabase leaked-password protection still needs Auth configuration access.
+- Current staging Preview is READY at `https://reflink-lk45n99t6-uthaibas-projects.vercel.app/` for branch `reflink/staging-baseline-reconstruction-20261110`, commit `ef44cae23b6704957d850f402a72d405a6e67dec`. Its root returned HTTP 200. This confirms the deployed application shell only; it does not count as an authenticated workflow test. The following documentation-only update is not yet deployed, but it does not change application code.
+- Supabase leaked-password protection still needs to be checked and enabled in the staging project's Auth password-security settings, if supported by the project's plan. Supabase documents the setting under Authentication → Providers → Email / password security; see [Supabase Password security](https://supabase.com/docs/guides/auth/password-security). Record the before/after state and test rejection of a known compromised test password without using a real user's password.
 - No SMS provider or consent workflow is configured.
 - Encrypted local draft save/restore and stable-ID idempotency for manually resubmitting a restored draft are implemented. They have not yet passed authenticated browser/API acceptance. Background synchronization, clinical conflict resolution and attachment synchronization remain unimplemented. Do not claim full offline referral submission.
 - No clinical or privacy sign-off is implied by technical tests.
 
 ## Release rule
 Keep the PR draft and production unchanged until every applicable test has evidence, findings are resolved or accepted by accountable owners, backups/rollback are prepared, and explicit production change approval is recorded.
+
+## Authenticated acceptance execution record
+
+### Deployment under test
+- Preview URL: `https://reflink-lk45n99t6-uthaibas-projects.vercel.app/`
+- Branch: `reflink/staging-baseline-reconstruction-20261110`
+- Deployed code commit: `ef44cae23b6704957d850f402a72d405a6e67dec`
+- Deployment: `dpl_2MG8JADu7xvoUqRHVjpKGfXqPVSo`
+- Root response: HTTP 200
+- CI for deployed commit: quality-gate run #259 passed all three jobs.
+- Important: use only the staging Preview and staging Supabase project. Confirm the browser's network requests point to the staging project before entering any test data.
+
+### Disposable identity provisioning and evidence
+Create the four core test identities using the administrator-controlled account-provisioning workflow on staging. Use synthetic-only names, addresses and clinical test values. Do not create real patients or use personal contact information. Record each synthetic Auth user UUID, role and facility assignment in a restricted test record; do not put passwords, access tokens or refresh tokens in this repository.
+
+For each test case, record: test ID, tester, UTC timestamp, identity/role, preconditions, action, expected result, actual result, pass/fail, evidence reference and defect ID. Redact patient-like test content and all credentials from screenshots, browser exports and logs.
+
+### Required test order
+1. Confirm environment isolation and sign in separately as administrator, PHC A, receiving B and unrelated PHC C.
+2. Run anonymous, cross-facility and cross-role denial tests before creating any synthetic referral.
+3. Run the referral lifecycle using a clearly synthetic test episode; record each state transition and audit event.
+4. Test counter-referral submission, duplicate retry and unauthorized read denial.
+5. Test Storage upload, participant download and unrelated-facility denial.
+6. Test notification queue idempotency, participant visibility and live Realtime delivery.
+7. Test account provisioning, invalid/expired JWT rejection, password change and forced-password-change enforcement.
+8. Test offline vault encryption, wrong passphrase, account isolation, restore, inactivity/tab-hidden lock, attachment exclusion and offline-submit block.
+9. Re-run the negative authorization tests after successful workflow operations to detect privilege drift.
+10. Remove synthetic test users, profiles, facilities, referrals, attachments and notification records using an approved cleanup procedure; verify zero residual fixtures.
+
+### Acceptance boundary
+A test passes only when observed through a real Auth-issued session and the deployed staging application/API. SQL role simulations and migration assertions are supporting evidence, not substitutes. Any test that cannot be executed must be marked BLOCKED, not PASS. No patient data or production identities may be used.
