@@ -9,6 +9,7 @@ const app = await read("../src/App.jsx");
 const admin = await read("../src/components/dashboards/AdminDashboard.jsx");
 const legacyAnalysis = await read("../src/components/dashboards/AnalysisHub.jsx");
 const legacyAnalytics = await read("../src/components/dashboards/AnalyticsDashboard.jsx");
+const verifier = await read("../supabase/verification/referral_analytics_view_privilege_review.sql");
 
 const viewRecord = (name) => {
   const start = catalog.indexOf(`"view_name": "${name}"`);
@@ -71,4 +72,14 @@ test("legacy direct-referral query components remain dormant and are flagged for
   assert.match(legacyAnalysis, /\.from\(["']referrals["']\)/);
   assert.match(legacyAnalytics, /\.from\(["']referrals["']\)/);
   assert.doesNotMatch(app, /AnalysisHub|AnalyticsDashboard/);
+});
+
+
+test("analytics privilege verifier is catalog-only and read-only", () => {
+  assert.match(verifier, /pg_get_viewdef/);
+  assert.match(verifier, /pg_get_functiondef/);
+  assert.match(verifier, /has_table_privilege/);
+  assert.match(verifier, /has_function_privilege/);
+  const executableSql = verifier.replace(/^\\s*--.*$/gm, "");
+  assert.doesNotMatch(executableSql, /\\b(CREATE|ALTER|GRANT|REVOKE|INSERT|UPDATE|DELETE|DROP|TRUNCATE)\\b/i);
 });
