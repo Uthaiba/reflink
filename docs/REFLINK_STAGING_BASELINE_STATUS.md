@@ -79,8 +79,8 @@ All sixteen repository migration filenames match the exact versions recorded in 
 Neither production Edge Function was modified. The staging functions have not yet been exercised end-to-end with synthetic authenticated sessions.
 
 ## CI and deployment
-- GitHub Actions run #186 completed successfully on commit `03f80cc1bd746ef7859dc5b374e6a65e122ba5d6`. All three jobs passed: frontend dependency installation/Oxlint/Vite production build, Deno type checks for both Edge Functions, and migration-integrity assertions.
-- Vercel deployment `dpl_3RYiJbTex4v3UEwj86Dou3FpAC1d` reached READY and its Git metadata confirms the exact same commit `03f80cc1bd746ef7859dc5b374e6a65e122ba5d6` on this staging branch. The Preview root returned HTTP 200 and served the REFLINK application shell. This is deployment/shell verification only, not authenticated browser acceptance or proof of runtime clinical workflows.
+- GitHub Actions run #197 completed successfully on commit `1b193727518e0f025b68bfc69f9640f060e5cd29`. All three jobs passed: frontend dependency installation/Oxlint/Vite production build, Deno type checks for both Edge Functions, and migration-integrity assertions. This validates the new 16th migration filename against the staging history.
+- Vercel deployment `dpl_FDetLZvmjSaoWEdE4er9haDAMJ5i` for commit `98a95022e774ace46a59b5c1fad07b9d5b3a9db9` reached READY and its root returned HTTP 200. It contains the new reporting/counter-referral migration; the subsequent commit `1b193727...` only corrected the documented function inventory, and Vercel's status check for that docs-only commit was rate-limited. This is deployment/shell verification only, not authenticated browser acceptance or proof of runtime clinical workflows.
 - PR #2 is open, draft and unmerged. GitHub currently reports it mergeable; that is not equivalent to release approval.
 
 ## Remaining validation gates
