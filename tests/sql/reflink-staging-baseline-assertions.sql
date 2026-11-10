@@ -34,18 +34,29 @@ SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims','{"sub":"00000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
 SELECT set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000000001',true);
 DO $runtime$
+DECLARE
+  all_facility_counts_denied boolean := false;
 BEGIN
   IF public.is_administrator() THEN RAISE EXCEPTION 'Synthetic non-admin identity resolved as administrator'; END IF;
+
+  -- The facility-specific RPC must reject a null facility for a non-admin.
   BEGIN
     PERFORM public.get_facility_user_count(NULL);
     RAISE EXCEPTION 'Non-admin facility count request unexpectedly succeeded';
   EXCEPTION WHEN SQLSTATE '42501' THEN NULL;
   END;
+
+  -- Capture only the function's expected P0001 denial. Keep the assertion
+  -- outside the exception block so our own failure cannot be swallowed.
   BEGIN
     PERFORM * FROM public.get_facility_user_counts();
-    RAISE EXCEPTION 'Non-admin all-facility count request unexpectedly succeeded';
-  EXCEPTION WHEN raise_exception THEN NULL;
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    all_facility_counts_denied := true;
   END;
+
+  IF NOT all_facility_counts_denied THEN
+    RAISE EXCEPTION 'Non-admin all-facility count request unexpectedly succeeded';
+  END IF;
 END
 $runtime$;
 ROLLBACK;
