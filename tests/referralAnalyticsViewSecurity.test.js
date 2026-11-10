@@ -80,6 +80,6 @@ test("analytics privilege verifier is catalog-only and read-only", () => {
   assert.match(verifier, /pg_get_functiondef/);
   assert.match(verifier, /has_table_privilege/);
   assert.match(verifier, /has_function_privilege/);
-  const executableSql = verifier.replace(/^\\s*--.*$/gm, "");
-  assert.doesNotMatch(executableSql, /\\b(CREATE|ALTER|GRANT|REVOKE|INSERT|UPDATE|DELETE|DROP|TRUNCATE)\\b/i);
+  const executableSql = verifier.replace(/^\s*--.*$/gm, "");
+  assert.doesNotMatch(executableSql, /\b(CREATE|ALTER|GRANT|REVOKE|INSERT|UPDATE|DELETE|DROP|TRUNCATE)\b/i);
 });
