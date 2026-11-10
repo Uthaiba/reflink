@@ -20,7 +20,7 @@ test("read logging is described as caller-reported, not proof of a successful da
 });
 
 test("print sequence race and missing composite uniqueness are documented", () => {
-  assert.match(review, /MAX\\(print_number\\)/i);
+  assert.match(review, /MAX\(print_number\)/i);
   assert.match(review, /no unique constraint on/);
   assert.match(review, /serialize allocation/);
 });
