@@ -157,3 +157,18 @@ GitHub Actions quality-gate run #280 passed all three jobs on commit `c4e4d36a24
 ### Remaining acceptance boundary
 
 The grant test verifies PostgreSQL privileges, not the complete PostgREST request path. Auth-issued receiving-staff browser/API acceptance must still prove all legitimate referral update operations succeed and protected-column attempts fail. In particular, validate investigation upload/result metadata updates, assessment, admission, discharge and the transactional counter-referral RPC.
+
+
+## SECURITY DEFINER endpoint review — 10 November 2026
+
+A fresh staging catalog and function-definition review was completed after the column-level referral UPDATE boundary was applied.
+
+- All 12 advisor-flagged, authenticated-callable SECURITY DEFINER endpoints were inspected individually: six administrator aggregate reporting RPCs, two facility user-count RPCs, is_administrator(), referral print/read audit RPCs and submit_counter_referral(...).
+- Every reviewed function pins search_path to the empty string and uses schema-qualified application objects or pg_catalog references.
+- Catalog privilege checks confirm none of the 12 endpoints is executable by anon; the intended authenticated EXECUTE grants remain. No grant changes were made.
+- Authorization checks were confirmed in the function bodies: administrator reporting requires a signed-in administrator; facility user counts enforce administrator or same-facility scope; print/read auditing checks referral participation; counter-referral completion requires a signed-in receiving-staff profile assigned to the referral's receiving facility and validates the discharged lifecycle state.
+- is_administrator() is a narrowly scoped profile-role predicate used by authorization logic. It returns a boolean and does not expose profile data.
+- log_referral_read() has no standalone early auth.uid() IS NULL branch, but its referral-participant predicate cannot match a null user identity; it raises an authorization exception before inserting an audit event when no matching referral is found. Add an explicit null-identity guard in a future bounded hardening migration for clarity and defense in depth; do not treat this as a demonstrated anonymous-access bypass.
+- The security advisor continues to report 12 WARN findings because its rule flags any authenticated-callable SECURITY DEFINER endpoint, including intentionally privileged RPCs with internal authorization. This review reduces uncertainty but does not replace independent security-owner review or real Auth-issued API acceptance.
+- Performance advisor continues to report 10 unused-index INFO findings in low-volume staging. No indexes were dropped because usage statistics from this environment are not representative.
+- No production resources were modified.
