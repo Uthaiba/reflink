@@ -65,6 +65,10 @@ jobs:
           for file in "${files[@]}"; do
             test -s "$file"
           done
+          test -s supabase/functions/create-user/index.ts
+          test -s supabase/functions/change-password/index.ts
+          grep -Fq 'supabase.functions.invoke(' src/App.jsx
+          grep -Fq '"change-password"' src/App.jsx
 
           # Ignore INSERT statements inside PL/pgSQL function bodies. These are
           # application runtime operations, not migration-time production data imports.
