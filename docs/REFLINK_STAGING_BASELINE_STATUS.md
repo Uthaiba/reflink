@@ -228,3 +228,41 @@ The application referral update field review found that all explicit fields used
 Before real API acceptance, establish a first administrator through a controlled, out-of-band Supabase Auth Admin operation available only to the project owner, then create its matching `public.profiles` row and seed synthetic facilities. Keep this operation outside the public application and never expose the service-role key. Record the administrator bootstrap as a separately reviewed staging-only operation. Once the first administrator exists, use the protected `create-user` function to provision the remaining disposable role accounts, then perform real-session acceptance tests.
 
 No rows were inserted or modified during this readiness check. No production resources were accessed or changed.
+
+
+## Five-gate continuation check — 10 November 2026
+
+### Gate 1 — synthetic administrator bootstrap
+- Rechecked the synthetic staging identity baseline: `auth.users`, `public.profiles` and `public.facilities` each contain zero rows.
+- Re-discovered the connected Supabase tool surface. It supports project metadata, SQL, migrations, advisors and Edge Function source/deployment operations, but exposes no Auth Admin user-creation operation or Auth settings control.
+- The Vercel connection exposes project environment metadata but cannot create a Supabase Auth identity. No safe, owner-authorized first-admin bootstrap path is available in the connected tools.
+- **Status: BLOCKED pending project-owner Auth Admin bootstrap.** No synthetic identity or facility was fabricated and no production identity was touched.
+
+### Gate 2 — Auth-issued API/browser acceptance
+- **Status: BLOCKED by Gate 1.** Without a real synthetic administrator, the protected `create-user` flow cannot provision PHC, receiving-staff and unrelated-facility test identities.
+- The required test matrix remains: real session login; facility-scoped referral visibility; referral create and full receiving lifecycle; investigation metadata; counter-referral; notification and Realtime visibility; allowed receiving-workflow column writes; denied provenance/identity column writes; and account-provisioning rollback.
+- SQL-context tests and catalog privilege assertions remain useful preflight evidence, but are not represented as real Auth-issued API acceptance.
+
+### Gate 3 — CORS configuration and preflight
+- Re-listed Vercel environment metadata for the staging branch and project. The branch-scoped Preview environment contains only `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; no `REFLINK_ALLOWED_ORIGINS` variable is present in the Vercel project environment list.
+- This does **not** establish whether the Supabase Edge Function secret exists: Supabase Function secrets are managed separately from Vercel frontend environment variables, and the connected Supabase tools do not expose their values or a direct OPTIONS invocation facility.
+- Both deployed staging functions remain ACTIVE with `verify_jwt=true`. The exact-origin OPTIONS tests and denied-origin 403 test remain unexecuted.
+- **Status: PARTIALLY VERIFIED / ACCEPTANCE BLOCKED.** Do not add CORS secrets to Vercel; if required, configure the allowlist in the staging Supabase Function secrets only, then test from the Preview origin. Never alter production function secrets.
+
+### Gate 4 — SECURITY DEFINER review
+- Re-ran the staging Security Advisor. It still reports 12 authenticated-callable SECURITY DEFINER WARN findings, matching the 12 individually reviewed endpoints documented above.
+- The review did not identify a basis to revoke the application-required authenticated grants blindly. Empty pinned search paths, no anon EXECUTE and in-function authorization remain the documented controls.
+- **Status: REVIEWED; independent security-owner sign-off and Auth-issued negative/positive API tests remain open.** No grants were changed.
+
+### Gate 5 — unused-index assessment
+- Re-ran the staging Performance Advisor. It still reports 10 unused-index INFO findings.
+- Queried `pg_stat_user_indexes` for all ten findings. Each currently has `idx_scan=0`; observed index sizes range from 8 KB to 16 KB. Definitions include referral-linked lookup indexes, an audit record lookup index, notification history and due-queue partial indexes, a draft updated-time index, and a sent-referral acknowledgement-deadline partial index.
+- These indexes support plausible production query paths and scheduled queue/alert processing that the empty synthetic staging workload has not exercised. Zero scans in this environment is not sufficient evidence for removal.
+- **Decision: retain all ten indexes.** Validate with representative synthetic referral/notification/audit workloads and EXPLAIN (ANALYZE, BUFFERS) before proposing any index change. No index was dropped.
+
+### Advisor and identity snapshot
+- Security: 12 WARN findings (known SECURITY DEFINER rule).
+- Performance: 10 INFO findings (unused indexes under a low-volume/empty workload).
+- Health: no findings.
+- Synthetic staging identity baseline remains empty: 0 Auth users, 0 profiles, 0 facilities.
+- No database rows, grants, indexes, Edge Function code/secrets, Auth settings, or production resources were changed during this five-gate check.
