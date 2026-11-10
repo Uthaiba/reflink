@@ -4,7 +4,7 @@
 This branch reconstructs the existing production schema into the isolated synthetic staging project. It does not copy production rows and does not apply migrations to production.
 
 ## Applied staging migrations
-The fourteen repository migration filenames now match the exact versions recorded in the staging migration history:
+The fifteen repository migration filenames now match the exact versions recorded in the staging migration history:
 1. `20261110063521_reconstruct_production_schema_in_staging`
 2. `20261110063620_configure_private_referral_storage_and_realtime`
 3. `20261110063704_add_staging_foreign_key_indexes_and_secure_views`
@@ -19,6 +19,7 @@ The fourteen repository migration filenames now match the exact versions recorde
 12. `20261110135058_restrict_notification_trigger_function`
 13. `20261110135145_add_privacy_preserving_public_health_aggregate`
 14. `20261110135512_exclude_referral_identifiers_from_audit`
+15. `20261110140000_publish_referral_notifications_to_realtime`
 
 ## Verified state
 - 14 public tables, 17 functions, 3 views and 10 application triggers.
@@ -26,7 +27,7 @@ The fourteen repository migration filenames now match the exact versions recorde
 - 16 indexes added for previously uncovered foreign keys.
 - Private `referral-investigation-results` bucket configured with a 10 MB limit and PDF/JPEG/PNG/WebP/TXT/CSV MIME allowlist.
 - Five referral-scoped Storage policies present.
-- `public.referrals` included in `supabase_realtime`.
+- `public.referrals` and `public.referral_notifications` included in `supabase_realtime`.
 - All three analytics views use `security_invoker=true`. The pre-existing detailed `referral_analytics` view still contains patient-linked operational fields and remains subject to referral RLS; it is not the policy-export view.
 
 - Added a service-role-only monthly public-health aggregate by month, state, LGA, facility type, urgency and status. It excludes patient identifiers and free-text clinical content and suppresses groups smaller than five. Authenticated clients and anon cannot query it directly; external publication still requires governance approval.
@@ -40,6 +41,7 @@ The fourteen repository migration filenames now match the exact versions recorde
 - The PHI minimization assertion checks the exclusion operation and verifies both audit triggers remain attached. Synthetic JSON test values are used; no patient records are created.
 - Added an idempotent dashboard notification queue for referral-sent and referral-acknowledged events. Database trigger inserts one queued dashboard event per referral/status, guarded by a unique idempotency key. Direct EXECUTE privileges on the trigger-only function are revoked from PUBLIC, anon and authenticated clients. This does not send SMS; an approved provider integration, consent rules, retry worker and delivery monitoring remain outstanding.
 - Notification queue index, trigger, idempotent insert behaviour and client-role execution denial verified against staging; rollback-only SQL assertions passed after updating expected counts to 17 functions and 10 application triggers.
+- Added an authenticated dashboard notification centre to all three workspace roles. It loads only dashboard-channel events allowed by the existing referral-participant RLS policy and refreshes on Realtime inserts. It intentionally displays no patient identifiers, referral numbers, phone numbers or clinical details. This is an in-app event feed, not a delivered/read receipt system.
 
 ## Staging Edge Functions
 
