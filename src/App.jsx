@@ -4229,7 +4229,7 @@ function PHCStaffDashboard({ onNewReferral }) {
               filter:
                 `referring_facility_id=eq.${profile.facility_id}`,
             },
-            (payload) => {
+            () => {
               loadMyReferrals();
             }
           )
