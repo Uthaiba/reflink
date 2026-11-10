@@ -4233,8 +4233,7 @@ function PHCStaffDashboard({ onNewReferral }) {
               loadMyReferrals();
             }
           )
-          .subscribe((status) => {
-          });
+          .subscribe();
       } catch (err) {
         console.error(
           "PHC REALTIME ERROR:",
