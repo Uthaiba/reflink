@@ -100,3 +100,29 @@ Execution order:
 ## 8. Release gate
 
 PR #1 remains draft and unmerged. No production release is approved by this handoff. Security, database, clinical workflow, offline PHI, accessibility, browser/mobile, disaster-recovery and product-owner/clinical-governance gates must be evidenced before release.
+
+## 9. Session update — 10 November 2026: schema export recovered
+
+The owner-supplied production schema export has now been received, inspected and committed to this remediation branch.
+
+- Repository artifact: `docs/catalog_exports/reflink-production-schema.sql`
+- Commit adding the artifact: `cdf3046658297244340a5a9652e0aa2932879530`
+- Original upload: 64,434 bytes; 1,612 lines.
+- Original-file SHA-256: `72c5fc6ecce0cb44f348605ab1d371021c1e87c75d75c1d1a11367794a8224c3`.
+- Two uploaded copies were byte-identical; only one canonical repository copy was added.
+- The file contains schema definitions and privilege statements, not exported patient rows. INSERT statements occur inside stored-function bodies; there are no data COPY blocks.
+- Inventory from the export: 14 public tables, 16 public functions, 2 public views, 30 public RLS policies, 10 explicit indexes and 23 foreign-key constraints.
+- The export contains **zero CREATE TRIGGER statements**. The nine-trigger evidence remains separately recorded in `docs/catalog_exports/20261109_live_public_trigger_snapshot.sql`.
+
+The missing-schema-export blocker is therefore **resolved**. The staging reconstruction itself is **not complete**.
+
+### Next actions
+
+1. Reconcile the schema export with the nine-trigger snapshot and the latest read-only production catalog evidence.
+2. Review ownership, grants and default privileges before preparing a staging-only baseline. The exported broad default privileges must not be copied blindly into staging.
+3. Inventory extensions, non-public schemas, Auth, Storage and Realtime configuration where relevant.
+4. Prepare the baseline as a reviewed migration set and validate SQL dependencies and trigger order.
+5. Apply only to the isolated, empty synthetic staging project after the baseline has been reviewed; production remains read-only.
+6. Verify the reconstructed catalog and run synthetic role/facility authorization and referral-lifecycle tests.
+
+No Supabase migration has been applied by this session. Production and staging database state have not been changed. PR #1 remains open, draft and unmerged.
