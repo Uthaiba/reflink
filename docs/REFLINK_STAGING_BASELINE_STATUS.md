@@ -60,8 +60,7 @@ All fifteen repository migration filenames match the exact versions recorded in 
 Neither production Edge Function was modified. The staging functions have not yet been exercised end-to-end with synthetic authenticated sessions.
 
 ## CI and deployment
-- GitHub Actions run #103 passed all three jobs on commit `8395978a06e2ddff77b68bd70989ec6c89240106`: npm ci, Oxlint, Vite production build, Deno type-checks for both Edge Functions and migration-integrity checks.
-- The notification centre and Realtime publication were added after run #103. A fresh exact-HEAD CI run is required before considering the newest changes verified.
+- GitHub Actions run #131 passed all three jobs on commit `929af92ae05bd0af1333db1edd7840d9201ebf79`: npm ci, Oxlint, Vite production build, Deno type-checks for both Edge Functions, migration integrity, and static notification-centre integration checks.
 - Vercel has reached its free deployment-rate limit for some recent commits. The previously verified READY Preview is at `https://reflink-git-reflink-staging-baseline-r-7d07c2-uthaibas-projects.vercel.app`; it may not contain the latest notification-centre changes.
 - A successful build or deployment does not replace authenticated browser/API acceptance.
 
