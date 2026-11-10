@@ -6,6 +6,7 @@ import AnalyticsDashboard from "./components/dashboards/AnalyticsDashboard.jsx";
 import AnalysisHub from "./components/dashboards/AnalysisHub.jsx";
 import NotificationCenter from "./components/notifications/NotificationCenter.jsx";
 import OfflineDraftVault from "./components/offline/OfflineDraftVault.jsx";
+import CounterReferralForm from "./components/CounterReferralForm.jsx";
 import "./App.css";
 import "./reflink-theme-professional.css";
 import "./admin-dashboard-modern.css";
@@ -4182,7 +4183,8 @@ function PHCStaffDashboard({ onNewReferral }) {
           discharged_at,
 
           referring_facility_id,
-          receiving_facility_id
+          receiving_facility_id,
+          counter_referral:counter_referrals(*)
         `)
         .eq(
           "referring_facility_id",
@@ -5091,6 +5093,19 @@ function PHCStaffDashboard({ onNewReferral }) {
                   : "Not discharged"
               }
             </p>
+            
+            {selectedReferral.counter_referral && (
+              <section className="dashboard-card counter-referral-feedback">
+                <span className="eyebrow">CLOSED-LOOP REFERRAL</span>
+                <h3>Counter-referral feedback received</h3>
+                <p><strong>Final diagnosis:</strong> {selectedReferral.counter_referral.final_diagnosis || "Not recorded"}</p>
+                <p><strong>Treatment provided:</strong> {selectedReferral.counter_referral.treatment_provided || "Not recorded"}</p>
+                <p><strong>Outcome:</strong> {String(selectedReferral.counter_referral.outcome || "Not recorded").replace(/_/g, " ")}</p>
+                <p><strong>Follow-up instructions:</strong> {selectedReferral.counter_referral.follow_up_instructions || "Not recorded"}</p>
+                {selectedReferral.counter_referral.referred_further_to && <p><strong>Further referral destination:</strong> {selectedReferral.counter_referral.referred_further_to}</p>}
+                {selectedReferral.counter_referral.additional_notes && <p><strong>Additional notes:</strong> {selectedReferral.counter_referral.additional_notes}</p>}
+              </section>
+            )}
 
             <hr />
 
@@ -5481,7 +5496,8 @@ function ReceivingDashboard() {
               state,
               lga,
               is_active
-            )
+            ),
+            counter_referral:counter_referrals(*)
           `)
           .eq(
             "receiving_facility_id",
@@ -7376,6 +7392,25 @@ const handleStartAssessment = async (referralId) => {
                   <strong> Under Assessment</strong>.
                 </p>
               </div>
+            )}
+
+            {selectedReferral.status === "discharged" && !selectedReferral.counter_referral && (
+              <CounterReferralForm
+                referral={selectedReferral}
+                onCompleted={(updatedReferral) => {
+                  setSelectedReferral(updatedReferral);
+                  loadIncomingReferrals();
+                }}
+              />
+            )}
+
+            {selectedReferral.counter_referral && (
+              <section className="dashboard-card counter-referral-feedback">
+                <span className="eyebrow">CLOSED-LOOP REFERRAL</span>
+                <h3>Counter-referral already recorded</h3>
+                <p><strong>Final diagnosis:</strong> {selectedReferral.counter_referral.final_diagnosis || "Not recorded"}</p>
+                <p><strong>Outcome:</strong> {String(selectedReferral.counter_referral.outcome || "Not recorded").replace(/_/g, " ")}</p>
+              </section>
             )}
 
             <button
