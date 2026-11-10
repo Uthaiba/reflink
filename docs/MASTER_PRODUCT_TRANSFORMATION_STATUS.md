@@ -636,3 +636,12 @@ A significant refinement: broad default privileges apply to future public object
 - This remains a dated catalog/source review, not a live current-state certification or PostgreSQL integration test. `reloptions=NULL` means `security_invoker=true` was not captured; keep direct view grants restricted and service-role use server-side.
 - The new referral-analytics regression tests require exact-HEAD CI verification. No SQL was executed; no production or staging schema, grants, RLS, functions, views, Auth users, data, secrets or deployments were changed. PR remains draft and unmerged.
 - **Next:** verify exact-HEAD CI, then inspect `get_referral_analytics_summary()` dependency/call-site history and the remaining privileged RPCs before deciding whether any legacy analytics objects can be safely retired. Continue staging baseline reconstruction before applying migrations.
+
+
+### Live analytics privilege verification — 10 November 2026
+
+- Re-ran read-only production catalog queries for `referral_analytics`, `referral_analytics_summary` and `get_referral_analytics_summary()`, using effective privilege functions rather than relying only on ACL text.
+- Live result: anon/authenticated have no effective SELECT on either view and no effective EXECUTE on the legacy summary RPC; service_role has the corresponding privileges. Both views are postgres-owned with `reloptions=NULL`; the RPC remains SECURITY DEFINER with `search_path=public` and an administrator check in its body.
+- Added `supabase/verification/referral_analytics_view_privilege_review.sql` as a repeatable read-only verifier and recorded the current result in `docs/REFERRAL_ANALYTICS_VIEW_SECURITY_REVIEW.md`.
+- The verifier reads catalog metadata and object definitions only. No referral rows or Auth users were queried; no SQL writes, DDL, grants, RLS changes or deployments were performed.
+- Exact-head CI for the latest verifier/test/documentation commits is pending and must complete before marking this step validated.
