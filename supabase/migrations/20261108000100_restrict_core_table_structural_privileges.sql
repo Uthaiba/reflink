@@ -1,46 +1,84 @@
 -- REFLINK proposal migration — NOT APPROVED FOR EXECUTION.
--- Production catalog audit (2026-11-08) found authenticated has direct,
--- postgres-granted TRUNCATE, TRIGGER and REFERENCES privileges on core
--- application tables. RLS does not constrain TRUNCATE.
+-- Expanded after a fresh read-only production privilege audit on 10 November 2026.
+-- Authenticated had TRUNCATE, REFERENCES, TRIGGER and MAINTAIN on 12 of
+-- 14 public tables, and USAGE/SELECT/UPDATE on both public identity sequences.
+-- RLS does not constrain TRUNCATE or MAINTAIN. This migration removes only
+-- structural and sequence privileges; it deliberately leaves ordinary DML
+-- and SELECT grants unchanged pending the separate column/write-path review.
 --
--- This narrow proposal removes only structural privileges not required by
--- browser workflows. It intentionally leaves SELECT/INSERT/UPDATE/DELETE
--- unchanged pending a complete call-site and column-write review.
--- Apply only after baseline reconstruction, external-consumer review,
--- synthetic staging validation and explicit release approval.
+-- Apply only to the reconstructed synthetic staging database after baseline
+-- restore, exact ACL verification, app-call-site review, and synthetic tests.
+-- Production is read-only and must never be targeted by this proposal.
 
-begin;
+BEGIN;
 
-revoke truncate, trigger, references
-  on table public.referrals,
-            public.counter_referrals,
-            public.profiles,
-            public.facilities
-  from authenticated;
+REVOKE TRUNCATE, REFERENCES, TRIGGER, MAINTAIN
+  ON TABLE
+    public.audit_log,
+    public.counter_referrals,
+    public.diagnosis_categories,
+    public.facilities,
+    public.feedback,
+    public.profiles,
+    public.referral_drafts,
+    public.referral_notifications,
+    public.referral_print_events,
+    public.referral_updates,
+    public.referrals,
+    public.users
+  FROM anon, authenticated;
 
-do $verification$
-begin
-  if has_table_privilege('authenticated', 'public.referrals', 'TRUNCATE')
-     or has_table_privilege('authenticated', 'public.counter_referrals', 'TRUNCATE')
-     or has_table_privilege('authenticated', 'public.profiles', 'TRUNCATE')
-     or has_table_privilege('authenticated', 'public.facilities', 'TRUNCATE') then
-    raise exception 'Authenticated role still has TRUNCATE on a core REFLINK table';
-  end if;
+REVOKE ALL PRIVILEGES
+  ON SEQUENCE
+    public.audit_log_id_seq,
+    public.referral_print_events_id_seq
+  FROM anon, authenticated;
 
-  if has_table_privilege('authenticated', 'public.referrals', 'TRIGGER')
-     or has_table_privilege('authenticated', 'public.counter_referrals', 'TRIGGER')
-     or has_table_privilege('authenticated', 'public.profiles', 'TRIGGER')
-     or has_table_privilege('authenticated', 'public.facilities', 'TRIGGER') then
-    raise exception 'Authenticated role still has TRIGGER on a core REFLINK table';
-  end if;
+DO $verification$
+DECLARE
+  v_table text;
+  v_privilege text;
+  v_sequence text;
+BEGIN
+  FOREACH v_table IN ARRAY ARRAY[
+    'public.audit_log',
+    'public.counter_referrals',
+    'public.diagnosis_categories',
+    'public.facilities',
+    'public.feedback',
+    'public.profiles',
+    'public.referral_drafts',
+    'public.referral_notifications',
+    'public.referral_print_events',
+    'public.referral_updates',
+    'public.referrals',
+    'public.users'
+  ]
+  LOOP
+    FOREACH v_privilege IN ARRAY ARRAY['TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']
+    LOOP
+      IF has_table_privilege('anon', v_table, v_privilege)
+         OR has_table_privilege('authenticated', v_table, v_privilege) THEN
+        RAISE EXCEPTION 'Browser role retains % on %', v_privilege, v_table;
+      END IF;
+    END LOOP;
+  END LOOP;
 
-  if has_table_privilege('authenticated', 'public.referrals', 'REFERENCES')
-     or has_table_privilege('authenticated', 'public.counter_referrals', 'REFERENCES')
-     or has_table_privilege('authenticated', 'public.profiles', 'REFERENCES')
-     or has_table_privilege('authenticated', 'public.facilities', 'REFERENCES') then
-    raise exception 'Authenticated role still has REFERENCES on a core REFLINK table';
-  end if;
-end;
+  FOREACH v_sequence IN ARRAY ARRAY[
+    'public.audit_log_id_seq',
+    'public.referral_print_events_id_seq'
+  ]
+  LOOP
+    IF has_sequence_privilege('anon', v_sequence, 'USAGE')
+       OR has_sequence_privilege('anon', v_sequence, 'SELECT')
+       OR has_sequence_privilege('anon', v_sequence, 'UPDATE')
+       OR has_sequence_privilege('authenticated', v_sequence, 'USAGE')
+       OR has_sequence_privilege('authenticated', v_sequence, 'SELECT')
+       OR has_sequence_privilege('authenticated', v_sequence, 'UPDATE') THEN
+      RAISE EXCEPTION 'Browser role retains sequence access on %', v_sequence;
+    END IF;
+  END LOOP;
+END;
 $verification$;
 
-commit;
+COMMIT;
