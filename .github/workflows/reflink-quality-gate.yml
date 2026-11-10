@@ -105,6 +105,8 @@ jobs:
           grep -Fq 'AES-GCM' src/lib/offlineDraftVault.js
           grep -Fq 'indexedDB.open' src/lib/offlineDraftVault.js
           grep -Fq 'navigator.onLine' src/App.jsx
+          grep -Fq 'OfflineDraftVault' src/App.jsx
+          grep -Fq 'profile={profile}' src/App.jsx
           ! grep -Fq 'localStorage' src/lib/offlineDraftVault.js
 
           # Ignore INSERT statements inside PL/pgSQL function bodies. These are
