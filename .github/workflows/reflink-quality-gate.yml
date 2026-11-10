@@ -81,6 +81,7 @@ jobs:
             supabase/migrations/20261110065634_guard_forced_password_change_flag.sql
             supabase/migrations/20261110134607_minimize_phi_in_audit_ledger.sql
             supabase/migrations/20261110134826_add_idempotent_referral_notification_queue.sql
+            supabase/migrations/20261110135500_restrict_notification_trigger_function.sql
           )
           for file in "${files[@]}"; do
             test -s "$file"
@@ -123,5 +124,6 @@ jobs:
           grep -Fq "to_jsonb(NEW) - sensitive_fields" "${files[9]}"
           grep -Fq "patient_identifier" "${files[9]}"
           grep -Fq "ON CONFLICT (idempotency_key) DO NOTHING" "${files[10]}"
+          grep -Fq "REVOKE ALL ON FUNCTION public.enqueue_referral_dashboard_notification() FROM authenticated" "${files[11]}"
           grep -Fq "channel" "${files[10]}"
           echo "Migration integrity checks passed."
