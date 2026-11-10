@@ -193,3 +193,18 @@ A source-to-grant static review was performed against the current staging-branch
 - Confirmed the conditional admission/discharge timestamp fields in the assessment payload are also in the allowlist.
 - This is a source-level coverage check only. It does not prove every runtime code path, PostgREST behavior, or that each role's actual workflow succeeds. The Auth-issued acceptance gate remains open, especially for receiving-facility RLS, investigation file metadata, and concurrent status changes.
 - No database or production resources were changed during this review.
+
+## Edge Function CORS and staging authentication evidence review — 10 November 2026
+
+The two deployed staging Edge Functions were fetched and inspected directly from the synthetic staging project.
+
+- `create-user` and `change-password` are both ACTIVE, version 1, with `verify_jwt=true`.
+- Both functions implement an explicit origin allowlist. If `REFLINK_ALLOWED_ORIGINS` is set, its comma-separated value replaces the source-code defaults; otherwise the defaults are `https://reflink-ten.vercel.app` and `http://localhost:5173`.
+- The current staging Preview origin `https://reflink-lk45n99t6-uthaibas-projects.vercel.app` is not in those source defaults. The environment override is not readable through the available project tools, so its effective value cannot be confirmed from source inspection.
+- Log review for 10 November 2026 found password-grant requests from the Preview origin returning HTTP 400 `invalid_credentials`. This confirms the Auth endpoint was reached, but it does not establish successful authentication, user provisioning, or Edge Function CORS.
+- The same log window contained no requests to the `create-user` or `change-password` function paths. Therefore no Edge Function preflight or authenticated invocation has been evidenced.
+- The project log query tool exposes request metadata but not the secret environment value or a supported direct Edge Function invocation interface. No secret was changed and no test account was created.
+- The source code returns HTTP 204 for allowed-origin OPTIONS preflight, echoes the exact allowed origin, allows POST/OPTIONS and the authorization, x-client-info, apikey and content-type headers. A disallowed origin is rejected with HTTP 403 before preflight handling.
+- Required next acceptance: from the actual staging Preview origin, verify OPTIONS on both function URLs returns 204 and exact `Access-Control-Allow-Origin`; verify an unapproved test origin returns 403; then use a disposable Auth-issued administrator session to exercise `create-user` and a synthetic user's session to exercise `change-password`. Never use production credentials or patient data.
+- Authentication log entries with `invalid_credentials` are not evidence of a CORS failure. They indicate the submitted login credentials were rejected by Auth. Use a known synthetic staging account and do not repeatedly guess passwords.
+- No database schema, Edge Function code, secret, or production resource was changed during this review.
