@@ -645,3 +645,15 @@ A significant refinement: broad default privileges apply to future public object
 - Added `supabase/verification/referral_analytics_view_privilege_review.sql` as a repeatable read-only verifier and recorded the current result in `docs/REFERRAL_ANALYTICS_VIEW_SECURITY_REVIEW.md`.
 - The verifier reads catalog metadata and object definitions only. No referral rows or Auth users were queried; no SQL writes, DDL, grants, RLS changes or deployments were performed.
 - Exact-head CI for the latest verifier/test/documentation commits is pending and must complete before marking this step validated.
+
+
+## Continuation update — privileged RPC security review (10 November 2026)
+
+- Completed a read-only production catalog review of `is_administrator()`, `is_current_user_administrator()`, `log_referral_read(uuid)` and `log_referral_print(uuid,text)`.
+- Confirmed the two administrator helpers use the same canonical `profiles.id = auth.uid()` role predicate but have different volatility and EXECUTE grants. `is_administrator()` has 12 `pg_depend` entries into RLS policies, so authenticated EXECUTE must not be revoked without a dependency-preserving replacement.
+- Confirmed read and print RPCs allow administrator, referring-user or receiving-facility membership. Their receiving-facility branch does not explicitly check `receiving_staff` or active assignment. The read RPC creates caller-reported events and does not prove a successful RLS-protected read.
+- Confirmed print numbering uses `MAX(print_number)+1` and `referral_print_events` has no unique `(referral_id, print_number)` constraint; concurrent allocation remains a race.
+- Added `docs/PRIVILEGED_RPC_SECURITY_REVIEW_20261110.md`, a catalog-only verifier at `supabase/verification/privileged_rpc_security_review.sql`, and source-contract tests at `tests/privilegedRpcSecurityReview.test.js`.
+- No production or staging function, grant, policy, table, constraint, Auth setting, secret, referral row or deployment was changed. No RPC was invoked against a patient referral.
+- Latest branch HEAD before this update: `5bb895923a0ef90d76cc4777238006166ecfc245`; its push and PR quality runs passed. The new review/test commits require a fresh exact-HEAD CI run.
+- **Next:** review the role/facility assignment contract with clinical operations, then reconstruct the schema baseline and run synthetic role-boundary and print-concurrency tests before preparing any remediation migration.
