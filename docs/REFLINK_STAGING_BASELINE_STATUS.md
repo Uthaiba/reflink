@@ -4,7 +4,7 @@
 This branch advances the existing REFLINK product in an isolated synthetic staging project. It does not copy production rows or apply migrations to production.
 
 ## Applied staging migrations
-All eighteen repository migration filenames match the exact versions recorded in the staging migration history:
+All nineteen repository migration filenames match the exact versions recorded in the staging migration history:
 1. `20261110063521_reconstruct_production_schema_in_staging`
 2. `20261110063620_configure_private_referral_storage_and_realtime`
 3. `20261110063704_add_staging_foreign_key_indexes_and_secure_views`
@@ -23,6 +23,7 @@ All eighteen repository migration filenames match the exact versions recorded in
 16. `20261110181053_restore_admin_reporting_and_counter_referral_workflows`
 17. `20261110181810_fix_admin_facility_reporting_output_qualification`
 18. `20261110182140_allow_referring_facility_to_read_counter_referral`
+19. `20261110182502_fix_counter_referral_completed_at_ambiguity`
 
 ## Verified staging state
 - 14 public tables, 24 functions, 3 views, 10 application triggers and 28 public RLS policies.
@@ -63,7 +64,9 @@ All eighteen repository migration filenames match the exact versions recorded in
 - Applied the migration to staging only. Migration history now records version `20261110181053`; repository migration filename was aligned to that exact version after the migration runner assigned its timestamp.
 - Post-apply catalog verification found all seven RPCs, SECURITY DEFINER enabled, `search_path=""`, EXECUTE granted to `authenticated`, and no EXECUTE grant to `anon` or PUBLIC.
 - A synthetic administrator SQL-context smoke test invoked all six reporting RPCs for October 2026 with no referral fixtures; all calls completed and returned empty/zero aggregates as expected. The synthetic Auth user/profile were created and rolled back in one transaction; a separate cleanup query confirmed zero residual fixtures. This is not a substitute for Auth-issued API/browser acceptance.
-- The first smoke test exposed an ambiguous `facility_type` output reference in `get_admin_facility_referral_summary`. Added migration `20261110181810_fix_admin_facility_reporting_output_qualification` to qualify output expressions; the full aggregate smoke-test transaction then completed successfully.
+- A rollback-only synthetic counter-referral lifecycle test created a discharged test referral and receiving-staff identity, submitted the counter-referral through the RPC, verified transition to `completed`, then repeated the same request and verified the same counter-referral ID was returned with `already_recorded=true`. All fixtures were rolled back and a cleanup query confirmed zero residual records.
+- A rollback-only RLS test verified PHC staff at the referring facility and receiving staff at the receiving facility can read the counter-referral, while an unrelated PHC facility sees zero rows. Synthetic facilities, users, profiles, referral and counter-referral were rolled back; cleanup confirmed zero residual records.
+- The first reporting smoke test exposed an ambiguous `facility_type` output reference in `get_admin_facility_referral_summary`; migration `20261110181810_fix_admin_facility_reporting_output_qualification` qualified the output expressions. The counter-referral lifecycle test then exposed an ambiguous `completed_at` output reference in `submit_counter_referral`; migration `20261110182502_fix_counter_referral_completed_at_ambiguity` qualified the updated referral row. Both test transactions then completed successfully.
 - This restores the missing database-side dependencies and the current staging branch now includes a dedicated Public Health Reports workspace plus the receiving-side counter-referral form and referring-facility feedback display. Auth-issued administrator/PHC/receiving-staff browser/API acceptance remains outstanding; the older Phase 1 deployment and current staging branch still have different frontend commits and must be reconciled without discarding either branch's valid work.
 
 ## Staging Edge Functions
@@ -85,7 +88,7 @@ All eighteen repository migration filenames match the exact versions recorded in
 Neither production Edge Function was modified. The staging functions have not yet been exercised end-to-end with synthetic authenticated sessions.
 
 ## CI and deployment
-- GitHub Actions run #230 completed successfully on commit `5e3a136690705b404c67b1c053d3b27c9bbf090b`. All three jobs passed: frontend dependency installation/Oxlint/Vite production build, Deno type checks for both Edge Functions, and migration-integrity assertions. This validates the administrator reporting workspace, counter-referral form integration, 18 migration filenames and both Edge Functions.
+- GitHub Actions run #230 completed successfully on commit `5e3a136690705b404c67b1c053d3b27c9bbf090b`. All three jobs passed: frontend dependency installation/Oxlint/Vite production build, Deno type checks for both Edge Functions, and migration-integrity assertions. This validates the administrator reporting workspace, counter-referral form integration, 19 migration filenames and both Edge Functions.
 - Vercel deployment `dpl_FDetLZvmjSaoWEdE4er9haDAMJ5i` for commit `98a95022e774ace46a59b5c1fad07b9d5b3a9db9` reached READY and its root returned HTTP 200. It contains the reporting/counter-referral database migration but predates the new reporting UI component. Vercel rate-limited subsequent staging preview builds, so the current UI commit has passed CI but does not yet have its own READY Preview deployment. This is deployment/shell verification only, not authenticated browser acceptance or proof of runtime clinical workflows.
 - PR #2 is open, draft and unmerged. GitHub currently reports it mergeable; that is not equivalent to release approval.
 
@@ -102,4 +105,4 @@ Neither production Edge Function was modified. The staging functions have not ye
 - Validate unused indexes after representative synthetic workload; do not drop them solely because empty staging reports no usage.
 
 ## Safety
-All eighteen migrations and both Edge Functions target staging only. Production database migrations, policies, Auth settings, secrets, Edge Functions, patient records and production deployment were not modified. Production migration history remains at the original single baseline migration, and its existing `create-user` Edge Function remains active with JWT verification. Keep PR #2 in draft until all release gates have evidence and explicit production approval is recorded.
+All nineteen migrations and both Edge Functions target staging only. Production database migrations, policies, Auth settings, secrets, Edge Functions, patient records and production deployment were not modified. Production migration history remains at the original single baseline migration, and its existing `create-user` Edge Function remains active with JWT verification. Keep PR #2 in draft until all release gates have evidence and explicit production approval is recorded.
