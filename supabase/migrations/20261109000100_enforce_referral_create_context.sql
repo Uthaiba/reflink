@@ -12,6 +12,7 @@ DECLARE
   v_actor_id uuid;
   v_profile_role text;
   v_sender_facility_id uuid;
+  v_sender_facility_active boolean;
   v_destination_active boolean;
 BEGIN
   -- Preserve explicitly privileged database/service operations. Ordinary
@@ -35,6 +36,17 @@ BEGIN
      OR v_profile_role IS DISTINCT FROM 'phc_staff'
      OR v_sender_facility_id IS NULL THEN
     RAISE EXCEPTION 'An assigned PHC staff profile is required to create a referral.'
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- The sender facility must still be active when the referral is created.
+  SELECT f.is_active
+    INTO v_sender_facility_active
+  FROM public.facilities AS f
+  WHERE f.id = v_sender_facility_id;
+
+  IF NOT FOUND OR v_sender_facility_active IS DISTINCT FROM TRUE THEN
+    RAISE EXCEPTION 'The referring facility must exist and be active.'
       USING ERRCODE = '42501';
   END IF;
 
