@@ -94,10 +94,10 @@ All twenty repository migration filenames match the exact versions recorded in t
 Neither production Edge Function was modified. The staging functions have not yet been exercised end-to-end with synthetic authenticated sessions.
 
 ## CI and deployment
-- GitHub Actions quality-gate run #259 completed successfully on branch head `ef44cae23b6704957d850f402a72d405a6e67dec`. All three jobs passed: frontend lint/production build, Supabase Edge Function type check and migration integrity.
+- GitHub Actions quality-gate run #261 completed successfully on application-code commit `80728d0f8c2d6553b31c6378fa5eb7d037675af6`; all three jobs passed: frontend lint/production build, Supabase Edge Function type check and migration integrity. The Preview deployment below contains application code commit `ef44cae23b6704957d850f402a72d405a6e67dec`; run #261 is not represented as testing that later commit.
 - Branch-specific Vercel Preview environment variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are scoped only to `reflink/staging-baseline-reconstruction-20261110` and point to the staging Supabase project. No production-target environment variables were changed.
 - A fresh Vercel Preview deployment `dpl_2MG8JADu7xvoUqRHVjpKGfXqPVSo` is READY at [https://reflink-lk45n99t6-uthaibas-projects.vercel.app/](https://reflink-lk45n99t6-uthaibas-projects.vercel.app/) for the exact current branch head `ef44cae23b6704957d850f402a72d405a6e67dec`. Its root returned HTTP 200. This is the first verified READY Preview after branch-scoped staging environment variables were configured. HTTP 200 verifies the application shell only, not authenticated browser acceptance or clinical workflow behaviour.
-- Documentation-only updates were committed after run #259; run #261 also completed successfully on commit `80728d0f8c2d6553b31c6378fa5eb7d037675af6`, with all three jobs passing. The subsequent acceptance-plan/CORS documentation updates do not change application code or migrations.
+- Documentation-only updates after the deployed application code include acceptance-plan corrections, the CORS gate and branch-reconciliation review. The latest documentation commits have no associated workflow runs in the available PR-triggered workflow query; they do not change application code or migrations.
 - PR #2 is open, draft and unmerged. GitHub currently reports it mergeable; that is not equivalent to release approval.
 
 ## Remaining validation gates
@@ -115,3 +115,12 @@ Neither production Edge Function was modified. The staging functions have not ye
 
 ## Safety
 All twenty migrations and both Edge Functions target staging only. Production database migrations, policies, Auth settings, secrets, Edge Functions, patient records and production deployment were not modified. Production migration history remains at the original single baseline migration, and its existing `create-user` Edge Function remains active with JWT verification. Keep PR #2 in draft until all release gates have evidence and explicit production approval is recorded.
+
+
+## Branch reconciliation review — 10 November 2026
+
+- Compared `reflink/phase-1-security-remediation` against this staging branch using Git's compare endpoint.
+- The branches are materially diverged from common ancestor `26eed63d006e16d744c923fa9f5fabc7a0fe9a8e`: Phase 1 is 634 commits ahead of the common ancestor and staging is 184 commits ahead.
+- Both branches modify core application entry points, dashboards, offline, notification, migration and test areas. A wholesale merge or file replacement is unsafe.
+- Added `docs/REFLINK_BRANCH_RECONCILIATION_REVIEW_20261110.md` with the bounded integration sequence, domain-contract risks and recommended feature order.
+- Next integration target: review Phase 1 receiving lifecycle compare-and-set protections against current staging handlers and database transition enforcement. No branch merge or production change is authorised.
