@@ -23,7 +23,7 @@ All sixteen repository migration filenames match the exact versions recorded in 
 16. `20261110181053_restore_admin_reporting_and_counter_referral_workflows`
 
 ## Verified staging state
-- 14 public tables, 17 functions, 3 views, 10 application triggers and 28 public RLS policies.
+- 14 public tables, 24 functions, 3 views, 10 application triggers and 28 public RLS policies.
 - 16 indexes added for previously uncovered foreign keys.
 - Private `referral-investigation-results` bucket with a 10 MB limit, PDF/JPEG/PNG/WebP/TXT/CSV MIME allowlist and five referral-scoped Storage policies.
 - `public.referrals` and `public.referral_notifications` are included in `supabase_realtime`.
