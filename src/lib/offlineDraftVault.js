@@ -244,11 +244,14 @@ export async function deleteEncryptedOfflineDraft(id, vaultId) {
   if (!id || !vaultId) return;
   const database = await openDatabase();
   try {
-    const transaction = database.transaction(DRAFT_STORE, "readwrite");
-    const store = transaction.objectStore(DRAFT_STORE);
-    const record = await requestValue(store.get(id));
-    if (record?.vaultId === vaultId) store.delete(id);
-    await transactionComplete(transaction);
+    const readTransaction = database.transaction(DRAFT_STORE, "readonly");
+    const record = await requestValue(readTransaction.objectStore(DRAFT_STORE).get(id));
+    await transactionComplete(readTransaction);
+    if (record?.vaultId !== vaultId) return;
+
+    const writeTransaction = database.transaction(DRAFT_STORE, "readwrite");
+    writeTransaction.objectStore(DRAFT_STORE).delete(id);
+    await transactionComplete(writeTransaction);
   } finally {
     database.close();
   }
