@@ -31,7 +31,7 @@ All eighteen repository migration filenames match the exact versions recorded in
 - `public.referrals` and `public.referral_notifications` are included in `supabase_realtime`.
 - All three analytics views use `security_invoker=true`. The detailed operational `referral_analytics` view contains patient-linked operational fields and remains subject to referral RLS; it is not the policy-export view.
 - The service-role-only monthly public-health aggregate groups by month, state, LGA, facility type, urgency and status. It excludes direct identifiers and free-text clinical content and suppresses groups smaller than five. External publication requires governance approval.
-- All 11 SECURITY DEFINER functions pin `search_path` to empty.
+- All 18 SECURITY DEFINER functions pin `search_path` to empty.
 - Referral print numbering is serialized per referral using a transaction-scoped advisory lock, with a unique `(referral_id, print_number)` index.
 - The profile security trigger prevents authenticated users from clearing `must_change_password` directly. Password changes use the staging-only authenticated `change-password` Edge Function.
 - Authenticated users cannot TRUNCATE `audit_log` or read internal referral event/feedback ledgers; anon cannot read referrals.
@@ -64,7 +64,7 @@ All eighteen repository migration filenames match the exact versions recorded in
 - Post-apply catalog verification found all seven RPCs, SECURITY DEFINER enabled, `search_path=""`, EXECUTE granted to `authenticated`, and no EXECUTE grant to `anon` or PUBLIC.
 - A synthetic administrator SQL-context smoke test invoked all six reporting RPCs for October 2026 with no referral fixtures; all calls completed and returned empty/zero aggregates as expected. The synthetic Auth user/profile were created and rolled back in one transaction; a separate cleanup query confirmed zero residual fixtures. This is not a substitute for Auth-issued API/browser acceptance.
 - The first smoke test exposed an ambiguous `facility_type` output reference in `get_admin_facility_referral_summary`. Added migration `20261110181810_fix_admin_facility_reporting_output_qualification` to qualify output expressions; the full aggregate smoke-test transaction then completed successfully.
-- This restores the missing database-side dependencies. Auth-issued administrator browser/API tests and UI integration on the current staging branch remain outstanding; the older Phase 1 deployment and current staging branch still have different frontend commits and must be reconciled without discarding either branch's valid work.
+- This restores the missing database-side dependencies and the current staging branch now includes a dedicated Public Health Reports workspace plus the receiving-side counter-referral form and referring-facility feedback display. Auth-issued administrator/PHC/receiving-staff browser/API acceptance remains outstanding; the older Phase 1 deployment and current staging branch still have different frontend commits and must be reconciled without discarding either branch's valid work.
 
 ## Staging Edge Functions
 ### `create-user`
@@ -102,4 +102,4 @@ Neither production Edge Function was modified. The staging functions have not ye
 - Validate unused indexes after representative synthetic workload; do not drop them solely because empty staging reports no usage.
 
 ## Safety
-All sixteen migrations and both Edge Functions target staging only. Production database migrations, policies, Auth settings, secrets, Edge Functions, patient records and production deployment were not modified. Production migration history remains at the original single baseline migration, and its existing `create-user` Edge Function remains active with JWT verification. Keep PR #2 in draft until all release gates have evidence and explicit production approval is recorded.
+All eighteen migrations and both Edge Functions target staging only. Production database migrations, policies, Auth settings, secrets, Edge Functions, patient records and production deployment were not modified. Production migration history remains at the original single baseline migration, and its existing `create-user` Edge Function remains active with JWT verification. Keep PR #2 in draft until all release gates have evidence and explicit production approval is recorded.
