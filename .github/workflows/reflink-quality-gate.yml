@@ -107,6 +107,10 @@ jobs:
           grep -Fq 'navigator.onLine' src/App.jsx
           grep -Fq 'OfflineDraftVault' src/App.jsx
           grep -Fq 'profile={profile}' src/App.jsx
+          grep -Fq 'offline_client_id: offlineClientId' src/App.jsx
+          grep -Fq '.eq("offline_client_id", offlineClientId)' src/App.jsx
+          grep -Fq 'referralError.code === "23505"' src/App.jsx
+          grep -Fq 'sync_source: isRestoredOfflineDraft ? "offline" : "online"' src/App.jsx
           ! grep -Fq 'localStorage' src/lib/offlineDraftVault.js
 
           # Ignore INSERT statements inside PL/pgSQL function bodies. These are
