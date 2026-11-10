@@ -8,7 +8,7 @@ BEGIN
   SELECT count(*) INTO v_count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','p');
   IF v_count <> 14 THEN RAISE EXCEPTION 'Expected 14 public tables, got %',v_count; END IF;
   SELECT count(*) INTO v_count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='v';
-  IF v_count <> 2 THEN RAISE EXCEPTION 'Expected 2 public views, got %',v_count; END IF;
+  IF v_count <> 3 THEN RAISE EXCEPTION 'Expected 3 public views, got %',v_count; END IF;
   SELECT count(*) INTO v_count FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prokind='f';
   IF v_count <> 17 THEN RAISE EXCEPTION 'Expected 17 public functions, got %',v_count; END IF;
   SELECT count(*) INTO v_count FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE NOT t.tgisinternal AND n.nspname='public';
@@ -20,6 +20,10 @@ BEGIN
   IF has_table_privilege('authenticated','public.referral_feedback','SELECT') THEN RAISE EXCEPTION 'Authenticated role can read internal referral_feedback'; END IF;
   IF has_table_privilege('anon','public.referrals','SELECT') THEN RAISE EXCEPTION 'Anonymous role can read referrals'; END IF;
   IF NOT has_table_privilege('service_role','public.referral_analytics','SELECT') THEN RAISE EXCEPTION 'Service role cannot read analytics'; END IF;
+  IF has_table_privilege('authenticated','public.public_health_monthly_aggregate','SELECT') THEN RAISE EXCEPTION 'Authenticated users can read restricted public-health aggregate'; END IF;
+  IF NOT has_table_privilege('service_role','public.public_health_monthly_aggregate','SELECT') THEN RAISE EXCEPTION 'Service role cannot read public-health aggregate'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_class WHERE oid='public.public_health_monthly_aggregate'::regclass AND reloptions @> ARRAY['security_invoker=true']) THEN RAISE EXCEPTION 'Public-health aggregate is not security_invoker'; END IF;
+  IF position('HAVING count(*) >= 5' in pg_get_viewdef('public.public_health_monthly_aggregate'::regclass,true)) = 0 THEN RAISE EXCEPTION 'Public-health aggregate small-cell suppression missing'; END IF;
   IF to_regclass('public.referral_print_events_referral_print_number_uidx') IS NULL THEN RAISE EXCEPTION 'Referral print numbering unique index is missing'; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE oid='public.log_referral_print(uuid,text)'::regprocedure AND prosecdef AND proconfig @> ARRAY['search_path=""']) THEN RAISE EXCEPTION 'Referral print function lost SECURITY DEFINER or empty search_path'; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='public.profiles'::regclass AND tgname='guard_profile_security_fields' AND NOT tgisinternal) THEN RAISE EXCEPTION 'Profile security-field guard trigger is missing'; END IF;
