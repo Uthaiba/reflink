@@ -181,3 +181,15 @@ A fresh staging catalog and function-definition review was completed after the c
 - Post-migration catalog verification confirms `SECURITY DEFINER` remains enabled, `search_path` remains pinned to empty, `anon` EXECUTE is false and `authenticated` EXECUTE remains true.
 - Migration history records version `20261110203341`; the matching SQL migration is committed in this branch.
 - This verifies deployed function definition and grants, not an Auth-issued API/browser call. The broader authenticated acceptance gate remains open. No production resources were modified.
+
+
+## Receiving-workflow column grant coverage review — 10 November 2026
+
+A source-to-grant static review was performed against the current staging-branch `src/App.jsx` and migration `20261110202141_restrict_referral_update_columns.sql`.
+
+- Enumerated the direct `public.referrals.update({...})` payloads in the application, including investigation metadata, admission, discharge, acknowledgement and patient-arrival writes.
+- Inspected the dynamically constructed clinical assessment `updateData` payload, including assessment findings, diagnosis fields, treatment/procedure fields, clinical feedback, disposition, assessment timestamp and status.
+- Confirmed every statically identified application update field is present in the migration's authenticated column-level UPDATE allowlist; no missing field was found.
+- Confirmed the conditional admission/discharge timestamp fields in the assessment payload are also in the allowlist.
+- This is a source-level coverage check only. It does not prove every runtime code path, PostgREST behavior, or that each role's actual workflow succeeds. The Auth-issued acceptance gate remains open, especially for receiving-facility RLS, investigation file metadata, and concurrent status changes.
+- No database or production resources were changed during this review.
