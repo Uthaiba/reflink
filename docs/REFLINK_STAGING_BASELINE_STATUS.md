@@ -37,6 +37,7 @@ All fifteen repository migration filenames match the exact versions recorded in 
 - The audit mutation trigger excludes patient identifiers, referral numbers, offline client IDs, contact details and clinical narrative fields from OLD/NEW audit snapshots. Actor, action, record reference and non-clinical workflow metadata remain.
 - The idempotent dashboard notification queue creates events for referral-sent and referral-acknowledged transitions. The trigger-only function is not directly executable by PUBLIC, anon or authenticated clients. SMS delivery is not configured.
 - The notification centre is integrated into PHC, receiving-facility and administrator dashboards. It selects only non-clinical dashboard notification fields, relies on the existing referral-participant SELECT policy, and refreshes on Realtime INSERT events. It does not expose patient identifiers, referral numbers, phone numbers or clinical details. It is an event feed, not a delivered/read receipt system.
+- Added a device-only encrypted referral draft vault using IndexedDB, PBKDF2-derived AES-256-GCM encryption, a 16-character local passphrase, per-record random IVs and authenticated additional data. The derived key is non-extractable and held only in memory; the vault locks after five minutes of inactivity, when the tab is hidden, or when the form unmounts. Draft content and owner ID are encrypted; only random record IDs and timestamps remain as metadata. Attachments are deliberately excluded.
 - Both staging Edge Functions are ACTIVE with JWT verification enabled.
 - Latest Supabase health advisor returned no findings. Five authenticated-callable SECURITY DEFINER warnings remain for least-privilege review.
 
@@ -71,7 +72,7 @@ Neither production Edge Function was modified. The staging functions have not ye
 - Enable leaked-password protection through Supabase Auth configuration.
 - Review the five authenticated-callable SECURITY DEFINER RPCs. Existing grants were retained pending dependency tests; do not revoke them blindly.
 - SMS provider, recipient consent, retry worker and delivery monitoring remain unconfigured.
-- Implement an encrypted offline browser queue, key management and synchronization conflict resolution. The current frontend does not yet have an offline queue.
+- Implement retry-safe synchronization of encrypted offline drafts using the existing unique offline_client_id constraint, including conflict handling and attachment policy. The current vault saves/restores locally but does not automatically sync or submit queued drafts. Complete browser security testing before enabling operational offline use.
 - Validate clinical/public-health indicators, complete privacy impact assessment, accessibility testing and operational acceptance.
 - Approve audit retention, access monitoring, backup/restore and breach-response procedures.
 - Validate unused indexes after representative synthetic workload; do not drop them solely because empty staging reports no usage.
