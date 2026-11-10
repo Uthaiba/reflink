@@ -93,9 +93,9 @@ All twenty repository migration filenames match the exact versions recorded in t
 Neither production Edge Function was modified. The staging functions have not yet been exercised end-to-end with synthetic authenticated sessions.
 
 ## CI and deployment
-- GitHub Actions run #247 completed successfully on current branch head `b508196f0cdd909438d4f21a8f6cbacb223ba02d`. All three jobs passed: frontend dependency installation/Oxlint/Vite production build, Deno type checks for both Edge Functions, and migration-integrity assertions. This validates the administrator reporting workspace, counter-referral form integration, 20 migration filenames and both Edge Functions.
-- Added branch-specific Vercel Preview environment variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` scoped only to `reflink/staging-baseline-reconstruction-20261110`, pointing at the staging Supabase project. No production-target environment variables were changed. A rebuild/redeployment to consume these new Preview settings was attempted but Vercel returned `api-deployments-free-per-day` (100 deployments/day; retry after 24 hours). The last READY Preview therefore predates these new branch-scoped settings; rebuild before browser acceptance.
-- Latest Vercel Preview deployment `dpl_FKbRioiNNqdsPUdK6rfWhmaB9U9P` is READY for commit `7cb55f04cb0bcea23ec694c048cae58fe004db2a` on the staging branch: [https://reflink-ghreitnqc-uthaibas-projects.vercel.app/](https://reflink-ghreitnqc-uthaibas-projects.vercel.app/). Its root returned HTTP 200 and serves the build containing the Public Health Reports workspace and counter-referral UI. The current branch head `ded6d3e...` is a documentation-only commit after that code build. HTTP 200 verifies the app shell only, not authenticated browser acceptance or clinical workflow behaviour.
+- GitHub Actions quality-gate run #259 completed successfully on branch head `ef44cae23b6704957d850f402a72d405a6e67dec`. All three jobs passed: frontend lint/production build, Supabase Edge Function type check and migration integrity.
+- Branch-specific Vercel Preview environment variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are scoped only to `reflink/staging-baseline-reconstruction-20261110` and point to the staging Supabase project. No production-target environment variables were changed.
+- A fresh Vercel Preview deployment `dpl_2MG8JADu7xvoUqRHVjpKGfXqPVSo` is READY at [https://reflink-lk45n99t6-uthaibas-projects.vercel.app/](https://reflink-lk45n99t6-uthaibas-projects.vercel.app/) for the exact current branch head `ef44cae23b6704957d850f402a72d405a6e67dec`. Its root returned HTTP 200. This is the first verified READY Preview after branch-scoped staging environment variables were configured. HTTP 200 verifies the application shell only, not authenticated browser acceptance or clinical workflow behaviour.
 - PR #2 is open, draft and unmerged. GitHub currently reports it mergeable; that is not equivalent to release approval.
 
 ## Remaining validation gates
@@ -103,7 +103,7 @@ Neither production Edge Function was modified. The staging functions have not ye
 - Test role/facility isolation, notification visibility, Realtime delivery, full referral lifecycle, counter-referral, attachments and account-provisioning rollback.
 - Verify a current Preview points to staging and test browser CORS/JWT behaviour.
 - Enable leaked-password protection through Supabase Auth configuration.
-- Obtain least-privilege/security-owner sign-off for the five authenticated-callable SECURITY DEFINER RPCs; do not revoke their existing grants blindly.
+- Obtain least-privilege/security-owner sign-off for the twelve authenticated-callable SECURITY DEFINER functions flagged by the advisor; do not revoke application-required grants blindly.
 - SMS provider, recipient consent, retry worker and delivery monitoring remain unconfigured.
 - Complete authenticated browser/API acceptance for the stable-ID manual retry flow, including lost-response and unique-index race tests. Background synchronization, clinical conflict resolution and attachment synchronization remain future work; the current workflow deliberately requires the user to restore, review and explicitly submit online.
 - Validate clinical/public-health indicators, complete privacy impact assessment, accessibility testing and operational acceptance.
