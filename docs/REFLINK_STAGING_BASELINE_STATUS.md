@@ -208,3 +208,23 @@ The two deployed staging Edge Functions were fetched and inspected directly from
 - Required next acceptance: from the actual staging Preview origin, verify OPTIONS on both function URLs returns 204 and exact `Access-Control-Allow-Origin`; verify an unapproved test origin returns 403; then use a disposable Auth-issued administrator session to exercise `create-user` and a synthetic user's session to exercise `change-password`. Never use production credentials or patient data.
 - Authentication log entries with `invalid_credentials` are not evidence of a CORS failure. They indicate the submitted login credentials were rejected by Auth. Use a known synthetic staging account and do not repeatedly guess passwords.
 - No database schema, Edge Function code, secret, or production resource was changed during this review.
+
+## Synthetic Auth acceptance readiness check — 10 November 2026
+
+A read-only count against the synthetic staging database returned:
+
+- `public.profiles`: 0 rows
+- `auth.users`: 0 rows
+- `public.facilities`: 0 rows
+
+This is a clean/empty staging identity and facility baseline, not evidence of a failed production dataset. It explains why real Auth-issued role acceptance could not proceed: there is no administrator identity to authenticate, no facility records to assign, and the deployed `create-user` function requires an already authenticated administrator profile. The function cannot bootstrap its own first administrator.
+
+Do not work around this by inserting rows directly into `auth.users`, fabricating JWTs, disabling `verify_jwt`, or using a service-role credential in the browser. Those would bypass the exact Auth/RLS path that acceptance must validate.
+
+The application referral update field review found that all explicit fields used by the nine referral update call sites in `src/App.jsx` are represented in the restricted column allowlist, including investigation metadata, assessment fields, lifecycle timestamps/status, admission and discharge fields. The assessment handler also uses a status predicate (`under_assessment`) and `.maybeSingle()`. The dynamic update object contains only the reviewed receiving-workflow fields.
+
+### Controlled bootstrap requirement
+
+Before real API acceptance, establish a first administrator through a controlled, out-of-band Supabase Auth Admin operation available only to the project owner, then create its matching `public.profiles` row and seed synthetic facilities. Keep this operation outside the public application and never expose the service-role key. Record the administrator bootstrap as a separately reviewed staging-only operation. Once the first administrator exists, use the protected `create-user` function to provision the remaining disposable role accounts, then perform real-session acceptance tests.
+
+No rows were inserted or modified during this readiness check. No production resources were accessed or changed.
