@@ -1555,24 +1555,6 @@ const handleSignIn = async () => {
   }
 };
 
-  /* =========================================================
-     TEST SUPABASE CONNECTION
-     ========================================================= */
-
-  useEffect(() => {
-    const testSupabase = async () => {
-      const { data, error } = await supabase
-        .from("facilities")
-        .select("*")
-        .limit(1);
-
-      console.log("Supabase data:", data);
-      console.log("Supabase error:", error);
-    };
-
-    testSupabase();
-  }, []);
-
 
   useEffect(() => {
     const {
@@ -2863,15 +2845,6 @@ provisional_diagnosis: "",
       .eq("is_active", true)
       .order("name");
 
-    console.log(
-      "FACILITIES FROM SUPABASE:",
-      data
-    );
-
-    console.log(
-      "FACILITIES ERROR:",
-      error
-    );
 
     if (error) {
       setError(
@@ -3229,20 +3202,6 @@ provisional_diagnosis: "",
           "sent",
       };
 
-      console.log(
-        "AUTH USER:",
-        user.id
-      );
-
-      console.log(
-        "PROFILE:",
-        profile
-      );
-
-      console.log(
-        "REFERRAL PAYLOAD:",
-        referralPayload
-      );
 
       const {
         data: insertedReferral,
@@ -4192,10 +4151,6 @@ function PHCStaffDashboard({ onNewReferral }) {
         throw referralError;
       }
 
-      console.log(
-        "PHC REFERRALS:",
-        data
-      );
 
       setReferrals(data || []);
     } catch (err) {
@@ -4275,19 +4230,10 @@ function PHCStaffDashboard({ onNewReferral }) {
                 `referring_facility_id=eq.${profile.facility_id}`,
             },
             (payload) => {
-              console.log(
-                "PHC REALTIME REFERRAL UPDATE:",
-                payload
-              );
-
               loadMyReferrals();
             }
           )
           .subscribe((status) => {
-            console.log(
-              "PHC REALTIME STATUS:",
-              status
-            );
           });
       } catch (err) {
         console.error(
@@ -5505,10 +5451,6 @@ function ReceivingDashboard() {
           throw referralError;
         }
 
-        console.log(
-          "INCOMING REFERRALS:",
-          data
-        );
 
         setReferrals(
           data || []
