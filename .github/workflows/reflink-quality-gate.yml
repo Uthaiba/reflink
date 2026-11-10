@@ -80,6 +80,7 @@ jobs:
             supabase/migrations/20261110065403_harden_concurrent_referral_print_auditing.sql
             supabase/migrations/20261110065634_guard_forced_password_change_flag.sql
             supabase/migrations/20261110134607_minimize_phi_in_audit_ledger.sql
+            supabase/migrations/20261110134826_add_idempotent_referral_notification_queue.sql
           )
           for file in "${files[@]}"; do
             test -s "$file"
@@ -121,4 +122,6 @@ jobs:
           grep -Fq "NEW.must_change_password IS DISTINCT FROM OLD.must_change_password" "${files[8]}"
           grep -Fq "to_jsonb(NEW) - sensitive_fields" "${files[9]}"
           grep -Fq "patient_identifier" "${files[9]}"
+          grep -Fq "ON CONFLICT (idempotency_key) DO NOTHING" "${files[10]}"
+          grep -Fq "channel" "${files[10]}"
           echo "Migration integrity checks passed."
