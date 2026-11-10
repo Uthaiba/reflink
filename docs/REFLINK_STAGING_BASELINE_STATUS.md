@@ -68,9 +68,9 @@ All fifteen repository migration filenames match the exact versions recorded in 
 Neither production Edge Function was modified. The staging functions have not yet been exercised end-to-end with synthetic authenticated sessions.
 
 ## CI and deployment
-- GitHub Actions run #168 passed all three jobs on commit `78ff145eaffc7d19a0a90de42dd939858c984e3d`. It is not the latest commit. No workflow run is currently recorded for latest branch commit `2aef76325a17562949affcc7deaacd8d8175bfa3`; therefore latest CI is unverified.
-- The Vercel check for the current PR head failed because the account reached its deployment/build rate limit. The previously READY Preview is older and does not contain the latest role-check/manual-retry changes. Do not use it as validation of the current branch.
-- PR #2 is open, draft and unmerged. GitHub currently reports it mergeable; that is not equivalent to passing checks or release approval.
+- GitHub Actions run #186 completed successfully on commit `03f80cc1bd746ef7859dc5b374e6a65e122ba5d6`. All three jobs passed: frontend dependency installation/Oxlint/Vite production build, Deno type checks for both Edge Functions, and migration-integrity assertions.
+- Vercel deployment `dpl_3RYiJbTex4v3UEwj86Dou3FpAC1d` reached READY and its Git metadata confirms the exact same commit `03f80cc1bd746ef7859dc5b374e6a65e122ba5d6` on this staging branch. The Preview root returned HTTP 200 and served the REFLINK application shell. This is deployment/shell verification only, not authenticated browser acceptance or proof of runtime clinical workflows.
+- PR #2 is open, draft and unmerged. GitHub currently reports it mergeable; that is not equivalent to release approval.
 
 ## Remaining validation gates
 - Provision disposable synthetic administrator, PHC, receiving-staff and unrelated-facility accounts, then run authenticated integration tests.
