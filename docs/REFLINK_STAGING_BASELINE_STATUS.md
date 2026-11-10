@@ -26,7 +26,8 @@ The thirteen repository migration filenames now match the exact versions recorde
 - Private `referral-investigation-results` bucket configured with a 10 MB limit and PDF/JPEG/PNG/WebP/TXT/CSV MIME allowlist.
 - Five referral-scoped Storage policies present.
 - `public.referrals` included in `supabase_realtime`.
-- All three analytics views use `security_invoker=true`.
+- All three analytics views use `security_invoker=true`. The pre-existing detailed `referral_analytics` view still contains patient-linked operational fields and remains subject to referral RLS; it is not the policy-export view.
+
 - Added a service-role-only monthly public-health aggregate by month, state, LGA, facility type, urgency and status. It excludes patient identifiers and free-text clinical content and suppresses groups smaller than five. Authenticated clients and anon cannot query it directly; external publication still requires governance approval.
 - All 11 SECURITY DEFINER functions pin `search_path` to empty.
 - Referral print numbering is serialized per referral using a transaction-scoped advisory lock, with a unique `(referral_id, print_number)` index as the integrity backstop. The staging catalog confirms the index and hardened function are present.
@@ -68,7 +69,7 @@ Neither production Edge Function was modified. The staging functions have not ye
 - Enable leaked-password protection through the Supabase Auth dashboard once configuration access is available.
 - The advisor reports unused indexes because the staging database has no workload data; validate their usage after synthetic workflow load. Do not drop these indexes solely from an empty-staging advisor scan.
 - The referral print concurrency migration was applied successfully to staging and its index/function definition were verified from PostgreSQL catalogs.
-- GitHub Actions run #17 passed both frontend-quality and migration-integrity jobs after the migration-check false positive and non-admin assertion were corrected. That run predates the latest password-change integration and final migration filename alignment. The workflow now also includes Deno type-checking for both Edge Functions and static checks for password-endpoint wiring; exact-HEAD execution of these newest additions is not yet confirmed.
+- GitHub Actions run #92 passed all three jobs on commit `628bd89a333e82d56095650b3e9bbf68620826fb`: frontend dependency installation, Oxlint, Vite production build, Deno type-checks for both Edge Functions, and migration-integrity/security assertions. The Vercel status check for the same commit is also successful. This confirms the branch build/deployment check, but it does not replace authenticated browser acceptance testing.
 - Do not promote staging migrations to production until all integration gates pass and a production change window is approved.
 
 ## Safety
