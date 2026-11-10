@@ -1,0 +1,73 @@
+name: REFLINK Quality Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+      - "reflink/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reflink-quality-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-quality:
+    name: Frontend lint and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run Oxlint
+        run: npm run lint
+
+      - name: Build production bundle
+        run: npm run build
+
+  migration-integrity:
+    name: Supabase migration integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify staged migration files exist and contain no production data imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            supabase/migrations/20261110063521_reconstruct_production_schema_in_staging.sql
+            supabase/migrations/20261110063620_configure_private_referral_storage_and_realtime.sql
+            supabase/migrations/20261110063704_add_staging_foreign_key_indexes_and_secure_views.sql
+            supabase/migrations/20261110063756_optimize_rls_auth_context_evaluation.sql
+            supabase/migrations/20261110063844_merge_equivalent_permissive_rls_policies.sql
+            supabase/migrations/20261110063912_pin_security_definer_search_paths.sql
+            supabase/migrations/20261110063935_explicitly_deny_client_access_to_internal_ledgers.sql
+          )
+          for file in "${files[@]}"; do
+            test -s "$file"
+          done
+          if grep -Eiq '^[[:space:]]*(INSERT[[:space:]]+INTO|COPY[[:space:]])' "${files[0]}"; then
+            echo "Baseline migration must not import production data."
+            exit 1
+          fi
+          grep -q 'ALTER VIEW public.referral_analytics SET (security_invoker = true)' "${files[2]}"
+          grep -q 'ALTER VIEW public.referral_analytics_summary SET (security_invoker = true)' "${files[2]}"
+          grep -q 'ALTER FUNCTION public.is_administrator() SET search_path = '\'' '\'';' "${files[5]}"
+          echo "Migration integrity checks passed."
