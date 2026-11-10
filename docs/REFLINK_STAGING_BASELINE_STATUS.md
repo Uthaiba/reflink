@@ -4,7 +4,7 @@
 This branch reconstructs the existing production schema into the isolated synthetic staging project. It does not copy production rows and does not apply migrations to production.
 
 ## Applied staging migrations
-The thirteen repository migration filenames now match the exact versions recorded in the staging migration history:
+The fourteen repository migration filenames now match the exact versions recorded in the staging migration history:
 1. `20261110063521_reconstruct_production_schema_in_staging`
 2. `20261110063620_configure_private_referral_storage_and_realtime`
 3. `20261110063704_add_staging_foreign_key_indexes_and_secure_views`
@@ -18,6 +18,7 @@ The thirteen repository migration filenames now match the exact versions recorde
 11. `20261110134826_add_idempotent_referral_notification_queue`
 12. `20261110135058_restrict_notification_trigger_function`
 13. `20261110135145_add_privacy_preserving_public_health_aggregate`
+14. `20261110135512_exclude_referral_identifiers_from_audit`
 
 ## Verified state
 - 14 public tables, 17 functions, 3 views and 10 application triggers.
@@ -35,7 +36,7 @@ The thirteen repository migration filenames now match the exact versions recorde
 - Authenticated users cannot TRUNCATE `audit_log` or read internal referral event/feedback ledgers; anon cannot read referrals.
 - Equivalent permissive policy warnings and auth.uid() initialization-plan warnings were eliminated in the staging advisor scan.
 - Rollback-only SQL assertions passed for schema counts, least-privilege grants, private storage, Realtime, view security, non-admin RPC denial, referral print uniqueness and protection of the forced-password-change flag.
-- The referral/counter-referral audit mutation trigger now removes patient identifiers, contact details and clinical narrative fields from OLD/NEW JSON snapshots before writing audit_log. It retains actor, action, record ID and non-clinical workflow metadata. Source clinical records remain unchanged. Retention, audit access monitoring and legal/privacy acceptance remain release gates.
+- The referral/counter-referral audit mutation trigger now removes patient identifiers, referral numbers, offline client IDs, contact details and clinical narrative fields from OLD/NEW JSON snapshots before writing audit_log. It retains actor, action, record ID and non-clinical workflow metadata. Source clinical records remain unchanged. Retention, audit access monitoring and legal/privacy acceptance remain release gates.
 - The PHI minimization assertion checks the exclusion operation and verifies both audit triggers remain attached. Synthetic JSON test values are used; no patient records are created.
 - Added an idempotent dashboard notification queue for referral-sent and referral-acknowledged events. Database trigger inserts one queued dashboard event per referral/status, guarded by a unique idempotency key. Direct EXECUTE privileges on the trigger-only function are revoked from PUBLIC, anon and authenticated clients. This does not send SMS; an approved provider integration, consent rules, retry worker and delivery monitoring remain outstanding.
 - Notification queue index, trigger, idempotent insert behaviour and client-role execution denial verified against staging; rollback-only SQL assertions passed after updating expected counts to 17 functions and 10 application triggers.
