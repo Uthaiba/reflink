@@ -4,7 +4,7 @@
 This branch advances the existing REFLINK product in an isolated synthetic staging project. It does not copy production rows or apply migrations to production.
 
 ## Applied staging migrations
-All seventeen repository migration filenames match the exact versions recorded in the staging migration history:
+All eighteen repository migration filenames match the exact versions recorded in the staging migration history:
 1. `20261110063521_reconstruct_production_schema_in_staging`
 2. `20261110063620_configure_private_referral_storage_and_realtime`
 3. `20261110063704_add_staging_foreign_key_indexes_and_secure_views`
@@ -22,6 +22,7 @@ All seventeen repository migration filenames match the exact versions recorded i
 15. `20261110142053_publish_referral_notifications_to_realtime`
 16. `20261110181053_restore_admin_reporting_and_counter_referral_workflows`
 17. `20261110181810_fix_admin_facility_reporting_output_qualification`
+18. `20261110182140_allow_referring_facility_to_read_counter_referral`
 
 ## Verified staging state
 - 14 public tables, 24 functions, 3 views, 10 application triggers and 28 public RLS policies.
@@ -39,6 +40,8 @@ All seventeen repository migration filenames match the exact versions recorded i
 - Additional isolated staging RLS smoke tests used temporary synthetic PHC, receiving-staff and unrelated-facility identities with simulated JWT subject claims under the `authenticated` role. PHC A successfully inserted a synthetic referral; receiving staff INSERT was denied; PHC C could not insert while claiming Facility A; PHC C saw zero rows for PHC A's synthetic referral. Referral writes were rolled back, and cleanup verification confirmed zero remaining synthetic Auth users, profiles or facilities. These SQL-context tests do not replace Auth-issued browser/API acceptance.
 - The audit mutation trigger excludes patient identifiers, referral numbers, offline client IDs, contact details and clinical narrative fields from OLD/NEW audit snapshots. Actor, action, record reference and non-clinical workflow metadata remain.
 - The idempotent dashboard notification queue creates events for referral-sent and referral-acknowledged transitions. The trigger-only function is not directly executable by PUBLIC, anon or authenticated clients. SMS delivery is not configured.
+- Restored the closed-loop counter-referral workflow in the current frontend: receiving staff can submit final diagnosis, outcome and follow-up through the transactional RPC after discharge; PHC referral details load and display the returned feedback. The database remains authoritative for role/facility validation and completion.
+- Updated counter-referral SELECT RLS so PHC staff at the referring facility and receiving staff at the receiving facility can read the associated feedback, while unrelated facilities remain excluded. This replaces the narrower policy that only allowed the original referring user or receiving facility.
 - Added an administrator-only Public Health Reports workspace to the current staging frontend. It calls the six restored aggregate RPCs, supports complete-month selection, displays suppression explicitly, and keeps patient-level records out of the reporting interface.
 - The notification centre is integrated into PHC, receiving-facility and administrator dashboards. It selects only non-clinical dashboard notification fields, relies on the existing referral-participant SELECT policy, and refreshes on Realtime INSERT events. It does not expose patient identifiers, referral numbers, phone numbers or clinical details. It is an event feed, not a delivered/read receipt system.
 - Added a device-only, per-account encrypted referral draft vault using IndexedDB, PBKDF2-derived AES-256-GCM encryption, a 16-character local passphrase, per-record random IVs and authenticated additional data. The derived key is non-extractable and held only in memory; it locks after five minutes of inactivity or when the tab is hidden, and its in-memory reference is released when the referral form unmounts. Draft content and owner ID are encrypted; only a one-way account fingerprint, random vault/record IDs and timestamps remain as metadata. Attachments are deliberately excluded. Offline submission remains blocked. A stable client-generated `offline_client_id` is encrypted with the draft and reused when the user restores and manually submits it online; submission checks for the user's existing referral and fails closed if it was already submitted. A unique-index race also fails closed after re-reading only the matching referral owned by the signed-in user. Ordinary online submissions are marked `sync_source=online`; restored drafts are marked `offline`. Retries with selected investigation attachments are blocked to avoid duplicate uploads. This is manual retry idempotency, not background sync or clinical conflict resolution.
@@ -82,7 +85,7 @@ All seventeen repository migration filenames match the exact versions recorded i
 Neither production Edge Function was modified. The staging functions have not yet been exercised end-to-end with synthetic authenticated sessions.
 
 ## CI and deployment
-- GitHub Actions run #207 completed successfully on application commit `82542fe21c2fec3a4e642d4346517034598be08c`. All three jobs passed: frontend dependency installation/Oxlint/Vite production build, Deno type checks for both Edge Functions, and migration-integrity assertions. This validates the administrator reporting UI, stale-response protection, the 16th migration filename and both Edge Functions.
+- GitHub Actions run #230 completed successfully on commit `5e3a136690705b404c67b1c053d3b27c9bbf090b`. All three jobs passed: frontend dependency installation/Oxlint/Vite production build, Deno type checks for both Edge Functions, and migration-integrity assertions. This validates the administrator reporting workspace, counter-referral form integration, 18 migration filenames and both Edge Functions.
 - Vercel deployment `dpl_FDetLZvmjSaoWEdE4er9haDAMJ5i` for commit `98a95022e774ace46a59b5c1fad07b9d5b3a9db9` reached READY and its root returned HTTP 200. It contains the reporting/counter-referral database migration but predates the new reporting UI component. Vercel rate-limited subsequent staging preview builds, so the current UI commit has passed CI but does not yet have its own READY Preview deployment. This is deployment/shell verification only, not authenticated browser acceptance or proof of runtime clinical workflows.
 - PR #2 is open, draft and unmerged. GitHub currently reports it mergeable; that is not equivalent to release approval.
 
