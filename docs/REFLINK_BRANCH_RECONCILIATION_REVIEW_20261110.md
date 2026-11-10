@@ -97,3 +97,41 @@ For each capability:
 ## Next execution item
 
 Begin with a focused review of the Phase 1 receiving lifecycle compare-and-set implementation against the current staging `src/App.jsx` handlers and database transition enforcement. Produce a bounded compatibility patch only if it closes a verified gap without weakening staging RLS or workflow invariants. Do not merge the branches wholesale.
+
+
+## Receiving lifecycle compare-and-set review — 10 November 2026
+
+A bounded compatibility change was made after comparing the Phase 1 source and its lifecycle source-contract test with the current staging frontend.
+
+### Implemented in staging
+
+Commit: `5927c177cbbe9cb9f99e3b1af2e6ebe5511764ab`
+
+The six receiving-facility update handlers now include expected-current-status filters and use `maybeSingle()` to detect a stale/no-match update:
+
+| Operation | Required current status | New status |
+|---|---|---|
+| Acknowledge referral | `sent` | `acknowledged` |
+| Record patient arrival | `acknowledged` | `patient_arrived` |
+| Start assessment | `patient_arrived` | `under_assessment` |
+| Save clinical assessment | `under_assessment` | Disposition selected by the assessment workflow |
+| Save admission details | `admitted` | `admitted` |
+| Discharge patient | `admitted` | `discharged` |
+
+A no-match now produces a stale-referral message instructing the user to refresh and review the current status. This prevents the frontend from treating a stale update as a successful transition.
+
+### Validation
+
+- GitHub Actions quality-gate run #275 completed successfully on commit `5927c177cbbe9cb9f99e3b1af2e6ebe5511764ab`.
+- Frontend lint and production build: PASS.
+- Supabase Edge Function type check: PASS.
+- Supabase migration integrity: PASS.
+- This run does not include a real concurrent PostgreSQL transaction test or Auth-issued browser workflow. The source change is therefore CI-validated, not yet live lifecycle acceptance.
+
+### Important boundary
+
+These compare-and-set predicates are an application-level concurrency guard. They do not replace authoritative database-side role/facility RLS, workflow transition enforcement, trigger validation or transactional RPCs. The staging database must still reject forbidden transitions and unauthorized field changes. Do not describe this change as a complete server-side concurrency guarantee.
+
+### Next bounded verification
+
+Inspect the current staging database transition triggers/constraints and the six update paths together. Confirm each expected prior status matches the actual lifecycle contract, then add rollback-only synthetic SQL tests for forbidden and stale transitions before declaring the receiving workflow concurrency-safe.
