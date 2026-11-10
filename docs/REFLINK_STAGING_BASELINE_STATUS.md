@@ -4,7 +4,7 @@
 This branch advances the existing REFLINK product in an isolated synthetic staging project. It does not copy production rows or apply migrations to production.
 
 ## Applied staging migrations
-All nineteen repository migration filenames match the exact versions recorded in the staging migration history:
+All twenty repository migration filenames match the exact versions recorded in the staging migration history:
 1. `20261110063521_reconstruct_production_schema_in_staging`
 2. `20261110063620_configure_private_referral_storage_and_realtime`
 3. `20261110063704_add_staging_foreign_key_indexes_and_secure_views`
@@ -24,6 +24,7 @@ All nineteen repository migration filenames match the exact versions recorded in
 17. `20261110181810_fix_admin_facility_reporting_output_qualification`
 18. `20261110182140_allow_referring_facility_to_read_counter_referral`
 19. `20261110182502_fix_counter_referral_completed_at_ambiguity`
+20. `20261110184000_restrict_counter_referral_clinical_read_to_participants`
 
 ## Verified staging state
 - 14 public tables, 24 functions, 3 views, 10 application triggers and 28 public RLS policies.
@@ -64,6 +65,8 @@ All nineteen repository migration filenames match the exact versions recorded in
 - Applied the migration to staging only. Migration history now records version `20261110181053`; repository migration filename was aligned to that exact version after the migration runner assigned its timestamp.
 - Post-apply catalog verification found all seven RPCs, SECURITY DEFINER enabled, `search_path=""`, EXECUTE granted to `authenticated`, and no EXECUTE grant to `anon` or PUBLIC.
 - A synthetic administrator SQL-context smoke test invoked all six reporting RPCs for October 2026 with no referral fixtures; all calls completed and returned empty/zero aggregates as expected. The synthetic Auth user/profile were created and rolled back in one transaction; a separate cleanup query confirmed zero residual fixtures. This is not a substitute for Auth-issued API/browser acceptance.
+- Tightened the counter-referral SELECT policy after review found that administrators could read individual clinical feedback. Administrator access to individual counter-referral records is now denied; PHC staff at the referring facility and receiving staff at the receiving facility retain access. Administrator public-health reporting remains aggregate-only through the dedicated reporting RPCs.
+- A rollback-only synthetic RLS test verified administrator denial, referring-PHC access, receiving-facility access and unrelated-facility denial. All synthetic facilities, Auth users, profiles, referral and counter-referral were rolled back; cleanup confirmed zero residual fixtures.
 - A rollback-only synthetic aggregate test seeded eight non-production referrals split into groups of three and five, then verified referral-volume counts, primary and complementary suppression for facility/LGA/pathway summaries, suppression of a four-facility coverage cell, and the overdue acknowledgement aggregate. All temporary facilities, Auth users, profiles and referrals were rolled back; cleanup confirmed zero residual fixtures.
 - A rollback-only non-administrator authorization test confirmed PHC staff cannot execute administrator reporting RPCs or the receiving-staff counter-referral completion RPC.
 - A rollback-only synthetic counter-referral lifecycle test created a discharged test referral and receiving-staff identity, submitted the counter-referral through the RPC, verified transition to `completed`, then repeated the same request and verified the same counter-referral ID was returned with `already_recorded=true`. All fixtures were rolled back and a cleanup query confirmed zero residual records.
@@ -90,7 +93,7 @@ All nineteen repository migration filenames match the exact versions recorded in
 Neither production Edge Function was modified. The staging functions have not yet been exercised end-to-end with synthetic authenticated sessions.
 
 ## CI and deployment
-- GitHub Actions run #247 completed successfully on current branch head `b508196f0cdd909438d4f21a8f6cbacb223ba02d`. All three jobs passed: frontend dependency installation/Oxlint/Vite production build, Deno type checks for both Edge Functions, and migration-integrity assertions. This validates the administrator reporting workspace, counter-referral form integration, 19 migration filenames and both Edge Functions.
+- GitHub Actions run #247 completed successfully on current branch head `b508196f0cdd909438d4f21a8f6cbacb223ba02d`. All three jobs passed: frontend dependency installation/Oxlint/Vite production build, Deno type checks for both Edge Functions, and migration-integrity assertions. This validates the administrator reporting workspace, counter-referral form integration, 20 migration filenames and both Edge Functions.
 - Added branch-specific Vercel Preview environment variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` scoped only to `reflink/staging-baseline-reconstruction-20261110`, pointing at the staging Supabase project. No production-target environment variables were changed. A rebuild/redeployment to consume these new Preview settings was attempted but Vercel returned `api-deployments-free-per-day` (100 deployments/day; retry after 24 hours). The last READY Preview therefore predates these new branch-scoped settings; rebuild before browser acceptance.
 - Latest Vercel Preview deployment `dpl_FKbRioiNNqdsPUdK6rfWhmaB9U9P` is READY for commit `7cb55f04cb0bcea23ec694c048cae58fe004db2a` on the staging branch: [https://reflink-ghreitnqc-uthaibas-projects.vercel.app/](https://reflink-ghreitnqc-uthaibas-projects.vercel.app/). Its root returned HTTP 200 and serves the build containing the Public Health Reports workspace and counter-referral UI. The current branch head `ded6d3e...` is a documentation-only commit after that code build. HTTP 200 verifies the app shell only, not authenticated browser acceptance or clinical workflow behaviour.
 - PR #2 is open, draft and unmerged. GitHub currently reports it mergeable; that is not equivalent to release approval.
@@ -108,4 +111,4 @@ Neither production Edge Function was modified. The staging functions have not ye
 - Validate unused indexes after representative synthetic workload; do not drop them solely because empty staging reports no usage.
 
 ## Safety
-All nineteen migrations and both Edge Functions target staging only. Production database migrations, policies, Auth settings, secrets, Edge Functions, patient records and production deployment were not modified. Production migration history remains at the original single baseline migration, and its existing `create-user` Edge Function remains active with JWT verification. Keep PR #2 in draft until all release gates have evidence and explicit production approval is recorded.
+All twenty migrations and both Edge Functions target staging only. Production database migrations, policies, Auth settings, secrets, Edge Functions, patient records and production deployment were not modified. Production migration history remains at the original single baseline migration, and its existing `create-user` Edge Function remains active with JWT verification. Keep PR #2 in draft until all release gates have evidence and explicit production approval is recorded.
