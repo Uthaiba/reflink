@@ -81,8 +81,8 @@ jobs:
             supabase/migrations/20261110065634_guard_forced_password_change_flag.sql
             supabase/migrations/20261110134607_minimize_phi_in_audit_ledger.sql
             supabase/migrations/20261110134826_add_idempotent_referral_notification_queue.sql
-            supabase/migrations/20261110135145_add_privacy_preserving_public_health_aggregate.sql
             supabase/migrations/20261110135058_restrict_notification_trigger_function.sql
+            supabase/migrations/20261110135145_add_privacy_preserving_public_health_aggregate.sql
           )
           for file in "${files[@]}"; do
             test -s "$file"
