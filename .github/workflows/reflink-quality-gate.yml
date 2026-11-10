@@ -47,7 +47,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Verify staged migration files exist and contain no production data imports
+      - name: Verify staged migration files and exclude production data imports
         shell: bash
         run: |
           set -euo pipefail
@@ -63,11 +63,32 @@ jobs:
           for file in "${files[@]}"; do
             test -s "$file"
           done
-          if grep -Eiq '^[[:space:]]*(INSERT[[:space:]]+INTO|COPY[[:space:]])' "${files[0]}"; then
-            echo "Baseline migration must not import production data."
-            exit 1
-          fi
-          grep -q 'ALTER VIEW public.referral_analytics SET (security_invoker = true)' "${files[2]}"
-          grep -q 'ALTER VIEW public.referral_analytics_summary SET (security_invoker = true)' "${files[2]}"
-          grep -q 'ALTER FUNCTION public.is_administrator() SET search_path = '\'' '\'';' "${files[5]}"
+
+          # Ignore INSERT statements inside PL/pgSQL function bodies. These are
+          # application runtime operations, not migration-time production data imports.
+          python3 - "${files[0]}" <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          sql = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+          sql_without_dollar_bodies = re.sub(
+              r"(\$[A-Za-z_][A-Za-z0-9_]*\$|\$\$).*?\1",
+              "",
+              sql,
+              flags=re.DOTALL,
+          )
+          if re.search(
+              r"^[ \t]*(?:INSERT\s+INTO|COPY\s+)",
+              sql_without_dollar_bodies,
+              flags=re.IGNORECASE | re.MULTILINE,
+          ):
+              raise SystemExit(
+                  "Baseline migration contains a top-level data import statement."
+              )
+          PY
+
+          grep -Fq 'ALTER VIEW public.referral_analytics SET (security_invoker = true)' "${files[2]}"
+          grep -Fq 'ALTER VIEW public.referral_analytics_summary SET (security_invoker = true)' "${files[2]}"
+          grep -Fq "ALTER FUNCTION public.is_administrator() SET search_path = '';" "${files[5]}"
           echo "Migration integrity checks passed."
