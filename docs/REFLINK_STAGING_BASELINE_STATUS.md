@@ -4,7 +4,7 @@
 This branch reconstructs the existing production schema into the isolated synthetic staging project. It does not copy production rows and does not apply migrations to production.
 
 ## Applied staging migrations
-The seven repository migration filenames now match the exact versions recorded in the staging migration history:
+The eight repository migration filenames now match the exact versions recorded in the staging migration history:
 1. `20261110063521_reconstruct_production_schema_in_staging`
 2. `20261110063620_configure_private_referral_storage_and_realtime`
 3. `20261110063704_add_staging_foreign_key_indexes_and_secure_views`
