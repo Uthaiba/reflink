@@ -123,6 +123,18 @@ Keep the PR draft and production unchanged until every applicable test has evide
 - CI for deployed commit: quality-gate run #259 passed all three jobs.
 - Important: use only the staging Preview and staging Supabase project. Confirm the browser's network requests point to the staging project before entering any test data.
 
+### Staging Edge Function CORS preflight gate
+The deployed `create-user` and `change-password` functions both default to an origin allowlist containing the production REFLINK hostname and localhost, but not the current staging Preview hostname. Each function supports `REFLINK_ALLOWED_ORIGINS`, which overrides that default list. The deployed staging secret's value is not visible through the connected project tools, so the effective allowlist is currently unverified.
+
+Before authenticated browser tests:
+1. In the staging Supabase project only, inspect the Edge Function secrets/configuration and confirm `REFLINK_ALLOWED_ORIGINS` includes the exact browser origin used for the staging Preview.
+2. Keep the allowlist explicit; do not use wildcard origins or reflect arbitrary request origins.
+3. Send browser preflight OPTIONS requests for both functions from the Preview origin and verify HTTP 204 plus `Access-Control-Allow-Origin` exactly matching that origin, allowed methods POST/OPTIONS and the required headers.
+4. Verify an unapproved origin receives HTTP 403 and no permissive CORS response.
+5. Repeat the test against both functions after any deployment or Preview hostname change.
+
+Until these checks pass, mark staging account-provisioning and password-change browser tests BLOCKED by CORS configuration uncertainty. Do not modify production function configuration.
+
 ### Disposable identity provisioning and evidence
 Create the four core test identities using the administrator-controlled account-provisioning workflow on staging. Use synthetic-only names, addresses and clinical test values. Do not create real patients or use personal contact information. Record each synthetic Auth user UUID, role and facility assignment in a restricted test record; do not put passwords, access tokens or refresh tokens in this repository.
 
