@@ -36,7 +36,7 @@ export default function OfflineDraftVault({ userId, draft, onRestore, hasAttachm
     return () => {
       active = false;
     };
-  }, []);
+  }, [userId]);
 
   const refreshDrafts = useCallback(async (key = vaultKey, currentVaultId = vaultId) => {
     if (!key || !userId || !currentVaultId) return;
