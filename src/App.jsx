@@ -3082,11 +3082,20 @@ provisional_diagnosis: "",
         );
       }
 
+      if (profile.role !== "phc_staff") {
+        throw new Error(
+          "Only an authorised PHC staff account can submit a referral. Please contact your REFLINK administrator if you believe this is an error."
+        );
+      }
+
       if (!profile.facility_id) {
         throw new Error(
           "Your account has not been assigned to a healthcare facility yet."
         );
       }
+
+      // Revalidate the authenticated user's PHC role and facility on every
+      // submission, including drafts restored after a period offline.
 
       // A stable client ID survives retries and is stored inside encrypted offline drafts.
       // The database's unique partial index on offline_client_id is the final duplicate guard.
