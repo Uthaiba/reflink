@@ -172,3 +172,12 @@ A fresh staging catalog and function-definition review was completed after the c
 - The security advisor continues to report 12 WARN findings because its rule flags any authenticated-callable SECURITY DEFINER endpoint, including intentionally privileged RPCs with internal authorization. This review reduces uncertainty but does not replace independent security-owner review or real Auth-issued API acceptance.
 - Performance advisor continues to report 10 unused-index INFO findings in low-volume staging. No indexes were dropped because usage statistics from this environment are not representative.
 - No production resources were modified.
+
+
+## Explicit authentication guard for referral-read audit — 10 November 2026
+
+- Applied staging migration `20261110203341_require_authenticated_referral_read_audit` to add an explicit `auth.uid() IS NULL` rejection at the start of `public.log_referral_read(uuid)`.
+- The function also rejects a null referral ID, preserves the existing referral-participant authorization predicate, raises SQLSTATE `42501` for missing identity or unauthorized access, and inserts the same minimized READ audit event only after authorization succeeds.
+- Post-migration catalog verification confirms `SECURITY DEFINER` remains enabled, `search_path` remains pinned to empty, `anon` EXECUTE is false and `authenticated` EXECUTE remains true.
+- Migration history records version `20261110203341`; the matching SQL migration is committed in this branch.
+- This verifies deployed function definition and grants, not an Auth-issued API/browser call. The broader authenticated acceptance gate remains open. No production resources were modified.
