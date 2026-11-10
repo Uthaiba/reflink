@@ -69,7 +69,7 @@ Neither production Edge Function was modified. The staging functions have not ye
 - Enable leaked-password protection through the Supabase Auth dashboard once configuration access is available.
 - The advisor reports unused indexes because the staging database has no workload data; validate their usage after synthetic workflow load. Do not drop these indexes solely from an empty-staging advisor scan.
 - The referral print concurrency migration was applied successfully to staging and its index/function definition were verified from PostgreSQL catalogs.
-- GitHub Actions run #92 passed all three jobs on commit `628bd89a333e82d56095650b3e9bbf68620826fb`: frontend dependency installation, Oxlint, Vite production build, Deno type-checks for both Edge Functions, and migration-integrity/security assertions. The Vercel status check for the same commit is also successful. This confirms the branch build/deployment check, but it does not replace authenticated browser acceptance testing.
+- GitHub Actions run #92 passed all three jobs on commit `628bd89a333e82d56095650b3e9bbf68620826fb`: frontend dependency installation, Oxlint, Vite production build, Deno type-checks for both Edge Functions, and migration-integrity/security assertions. Vercel deployed that exact commit with state `READY`; preview alias: `https://reflink-git-reflink-staging-baseline-r-7d07c2-uthaibas-projects.vercel.app`. The later documentation-only commit requires its own deployment confirmation. This does not replace authenticated browser acceptance testing.
 - Do not promote staging migrations to production until all integration gates pass and a production change window is approved.
 
 ## Safety
