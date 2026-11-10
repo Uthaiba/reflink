@@ -13,6 +13,7 @@ The eight repository migration filenames now match the exact versions recorded i
 6. `20261110063912_pin_security_definer_search_paths`
 7. `20261110063935_explicitly_deny_client_access_to_internal_ledgers`
 8. `20261110064010_harden_concurrent_referral_print_auditing`
+9. `20261110064100_guard_forced_password_change_flag`
 
 ## Verified state
 - 14 public tables, 16 functions, 2 views and 9 application triggers.
@@ -24,6 +25,7 @@ The eight repository migration filenames now match the exact versions recorded i
 - Both analytics views use `security_invoker=true`.
 - All 10 SECURITY DEFINER functions pin `search_path` to empty.
 - Referral print numbering is serialized per referral using a transaction-scoped advisory lock, with a unique `(referral_id, print_number)` index as the integrity backstop. The staging catalog confirms the index and hardened function are present.
+- The profile security trigger now prevents authenticated users from clearing `must_change_password` directly. Password changes use the staging-only authenticated `change-password` Edge Function, which validates the session, changes the Auth password and clears the profile flag using the service role.
 - Authenticated users cannot TRUNCATE `audit_log` or read internal referral event/feedback ledgers; anon cannot read referrals.
 - Equivalent permissive policy warnings and auth.uid() initialization-plan warnings were eliminated in the staging advisor scan.
 - Rollback-only SQL assertions passed for schema counts, least-privilege grants, private storage, Realtime, view security and non-admin RPC denial.
@@ -34,10 +36,11 @@ A hardened `create-user` Edge Function is deployed to staging (JWT verification 
 - verifies the caller JWT and administrator profile;
 - restricts roles to the database's three permitted profile roles;
 - validates email, required fields and optional facility UUID;
+- the password-change endpoint validates the signed-in user and password policy, updates Auth through the service role, then clears the protected profile flag;
 - compensates by deleting the Auth user if profile insertion fails;
 - avoids returning internal database error details.
 
-The production Edge Function was not modified. The staging function has not yet been exercised end-to-end with a real synthetic administrator JWT.
+Neither production Edge Function was modified. The staging functions have not yet been exercised end-to-end with real synthetic authenticated sessions.
 
 ## Remaining validation gates
 - Provision synthetic PHC, receiving-staff and administrator accounts, then run full authenticated integration tests.
