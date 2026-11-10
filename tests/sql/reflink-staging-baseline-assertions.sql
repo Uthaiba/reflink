@@ -10,9 +10,9 @@ BEGIN
   SELECT count(*) INTO v_count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='v';
   IF v_count <> 2 THEN RAISE EXCEPTION 'Expected 2 public views, got %',v_count; END IF;
   SELECT count(*) INTO v_count FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prokind='f';
-  IF v_count <> 16 THEN RAISE EXCEPTION 'Expected 16 public functions, got %',v_count; END IF;
+  IF v_count <> 17 THEN RAISE EXCEPTION 'Expected 17 public functions, got %',v_count; END IF;
   SELECT count(*) INTO v_count FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE NOT t.tgisinternal AND n.nspname='public';
-  IF v_count <> 9 THEN RAISE EXCEPTION 'Expected 9 application triggers, got %',v_count; END IF;
+  IF v_count <> 10 THEN RAISE EXCEPTION 'Expected 10 application triggers, got %',v_count; END IF;
   SELECT count(*) INTO v_count FROM pg_policies WHERE schemaname='public';
   IF v_count <> 28 THEN RAISE EXCEPTION 'Expected 28 public policies, got %',v_count; END IF;
   IF has_table_privilege('authenticated','public.audit_log','TRUNCATE') THEN RAISE EXCEPTION 'Authenticated role can TRUNCATE audit_log'; END IF;
