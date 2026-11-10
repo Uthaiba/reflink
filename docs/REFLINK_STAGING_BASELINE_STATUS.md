@@ -28,7 +28,8 @@ The nine repository migration filenames now match the exact versions recorded in
 - The profile security trigger now prevents authenticated users from clearing `must_change_password` directly. Password changes use the staging-only authenticated `change-password` Edge Function, which validates the session, changes the Auth password and clears the profile flag using the service role.
 - Authenticated users cannot TRUNCATE `audit_log` or read internal referral event/feedback ledgers; anon cannot read referrals.
 - Equivalent permissive policy warnings and auth.uid() initialization-plan warnings were eliminated in the staging advisor scan.
-- Rollback-only SQL assertions passed for schema counts, least-privilege grants, private storage, Realtime, view security and non-admin RPC denial.
+- Rollback-only SQL assertions passed for schema counts, least-privilege grants, private storage, Realtime, view security, non-admin RPC denial, referral print uniqueness and protection of the forced-password-change flag.
+- Privacy review finding: the existing audit mutation trigger serializes full OLD/NEW row values into audit_log. For referrals and other clinical records this can duplicate patient identifiers and clinical details into the audit ledger. Retention, access monitoring and field-level minimization must be approved before production release; this was documented, not changed.
 
 ## Staging Edge Functions
 
