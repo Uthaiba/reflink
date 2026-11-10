@@ -12,8 +12,8 @@ The eight repository migration filenames now match the exact versions recorded i
 5. `20261110063844_merge_equivalent_permissive_rls_policies`
 6. `20261110063912_pin_security_definer_search_paths`
 7. `20261110063935_explicitly_deny_client_access_to_internal_ledgers`
-8. `20261110064010_harden_concurrent_referral_print_auditing`
-9. `20261110064100_guard_forced_password_change_flag`
+8. `20261110065403_harden_concurrent_referral_print_auditing`
+9. `20261110065634_guard_forced_password_change_flag`
 
 ## Verified state
 - 14 public tables, 16 functions, 2 views and 9 application triggers.
