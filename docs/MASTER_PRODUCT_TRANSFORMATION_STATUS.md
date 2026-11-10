@@ -624,3 +624,15 @@ A significant refinement: broad default privileges apply to future public object
 - Added `tests/profileRoleDelegationBoundary.test.js` to enforce source-contract invariants and keep the SQL artifact explicitly marked as design-only. These are not database integration tests.
 - Queried the synthetic staging project's public schema read-only; it currently contains no application tables. Consequently, SQL trigger integration testing is not yet possible.
 - No migration was created or applied, and no production or staging objects, grants, policies, triggers, profiles or Auth users were changed.
+
+
+## Continuation update — facility-count and referral-analytics security review (10 November 2026)
+
+- Added `docs/FACILITY_USER_COUNT_RPC_SECURITY_REVIEW.md` and `tests/facilityUserCountSecurity.test.js`. The review confirms the single-facility RPC binds non-admin callers to their own facility, while the all-facility RPC is administrator-only. The active dashboard uses only the all-facility aggregate. The remaining semantic question is whether inactive profiles should count.
+- CI passed on exact commit `e5a8e1f73554bef741d45e9eea3364581ac1b391`: automated tests, lint, production build, Chromium installation and real-browser offline queue tests all succeeded.
+- Reviewed the dated production catalog snapshot for `referral_analytics`, `referral_analytics_summary` and `get_referral_analytics_summary()`. The first view contains patient identifiers and diagnosis fields; both views are captured as SELECT-denied to anon/authenticated and SELECT-allowed to service_role. The legacy summary RPC is SECURITY DEFINER, administrator-checks in its body, and its captured ACL lists postgres/service_role only.
+- Confirmed active `App.jsx` mounts `AdminDashboard.jsx`; the active dashboard uses dedicated aggregate RPCs. Legacy `AnalysisHub.jsx` and `AnalyticsDashboard.jsx` contain direct referral queries but are not imported by the reviewed active route.
+- Added `docs/REFERRAL_ANALYTICS_VIEW_SECURITY_REVIEW.md` and `tests/referralAnalyticsViewSecurity.test.js` to preserve these privilege, PHI-classification and active-route boundaries.
+- This remains a dated catalog/source review, not a live current-state certification or PostgreSQL integration test. `reloptions=NULL` means `security_invoker=true` was not captured; keep direct view grants restricted and service-role use server-side.
+- The new referral-analytics regression tests require exact-HEAD CI verification. No SQL was executed; no production or staging schema, grants, RLS, functions, views, Auth users, data, secrets or deployments were changed. PR remains draft and unmerged.
+- **Next:** verify exact-HEAD CI, then inspect `get_referral_analytics_summary()` dependency/call-site history and the remaining privileged RPCs before deciding whether any legacy analytics objects can be safely retired. Continue staging baseline reconstruction before applying migrations.
