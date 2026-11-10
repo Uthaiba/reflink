@@ -2557,6 +2557,7 @@ const handleSignIn = async () => {
           <main className="dashboard">
 
             <NewReferralForm
+              profile={profile}
               onBack={() => setScreen("dashboard")}
             />
 
