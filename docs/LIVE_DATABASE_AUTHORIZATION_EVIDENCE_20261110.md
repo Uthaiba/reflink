@@ -17,9 +17,13 @@ These are the exact policy predicates observed in the live catalog. This is not 
 
 ## 2. Table-level privileges verified
 
-The authenticated role has all of the following table-level privileges on every one of the 14 public application tables returned by the catalog inspection: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE and UPDATE.
+The effective privilege check using has_table_privilege() confirms that 12 of the 14 public tables have at least one of the listed privileges, but the privilege set differs by table:
 
-Tables: audit_log, counter_referrals, diagnosis_categories, facilities, feedback, profiles, referral_drafts, referral_notifications, referral_print_events, referral_updates, referrals and users, plus the remaining public application tables present in the schema inventory. The list_tables inventory also confirms referral_events and referral_feedback. The catalog grant query returned 12 table names; the schema inventory contains 14 tables, so the grant inventory should be reconciled against relacl/aclexplode and inherited privileges before stating that the same grant set applies to every table.
+- Eleven tables — counter_referrals, diagnosis_categories, facilities, feedback, profiles, referral_drafts, referral_notifications, referral_print_events, referral_updates, referrals and users — grant authenticated all seven privileges: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE and UPDATE.
+- audit_log grants authenticated SELECT, REFERENCES, TRIGGER and TRUNCATE, but not DELETE, INSERT or UPDATE.
+- referral_events and referral_feedback grant authenticated none of those seven privileges.
+
+This effective check resolves the earlier aggregate-grant query ambiguity. It is based on has_table_privilege() and includes effective/inherited privileges.
 
 Critical interpretation: RLS does not protect against TRUNCATE. Broad table-level DELETE and UPDATE grants also materially expand the impact of a policy mistake. Do not revoke privileges until all application paths, function ownership, service-role usage and migration dependencies are mapped.
 
