@@ -4,6 +4,7 @@ import { supabase } from "./lib/supabase.js";
 import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
 import AnalyticsDashboard from "./components/dashboards/AnalyticsDashboard.jsx";
 import AnalysisHub from "./components/dashboards/AnalysisHub.jsx";
+import NotificationCenter from "./components/notifications/NotificationCenter.jsx";
 import "./App.css";
 import "./reflink-theme-professional.css";
 import "./admin-dashboard-modern.css";
@@ -2508,6 +2509,8 @@ const handleSignIn = async () => {
               </div>
 
             </div>
+
+            <NotificationCenter userId={profile?.auth_user_id || profile?.id} />
 
             {role === "PHC Staff" && (
               <PHCStaffDashboard
