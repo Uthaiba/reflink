@@ -142,3 +142,41 @@ Before creating an executable migration:
 - Deploy only through the approved migration process after review and merge.
 
 **Environment safety:** production remains read-only. No SQL was executed as part of this proposal. Isolated staging remains unchanged.
+
+## Live production revalidation and selected access model — 10 November 2026
+
+This section supersedes the earlier preferred/alternative selection above. It records a read-only recheck; no production or staging DDL was executed.
+
+Effective PostgreSQL privilege checks returned:
+
+| Role | SELECT | TRUNCATE | REFERENCES | TRIGGER | MAINTAIN | Sequence USAGE / SELECT / UPDATE |
+|---|---:|---:|---:|---:|---:|---|
+| anon | No | No | No | No | No | No / No / No |
+| authenticated | Yes | Yes | Yes | Yes | Yes | Yes / Yes / Yes |
+| service_role | Yes | Yes | Yes | Yes | Yes | Yes / Yes / Yes |
+
+The effective privilege function confirmed MAINTAIN even though information_schema.role_table_grants did not list it. Authenticated has no direct INSERT, UPDATE or DELETE on audit_log. The sole RLS policy is administrator-only SELECT using public.is_administrator().
+
+Source review confirms there is no direct audit_log table query in src/App.jsx or src/components/dashboards/AdminDashboard.jsx. App.jsx calls log_referral_read(uuid) from two referral-detail paths. The current inspected UI does not yet implement an audit viewer. The master product requirement includes administrator visibility into system activity and security events, so the selected proposal preserves the existing administrator-only SELECT grant and policy rather than silently removing that capability.
+
+### Selected SQL direction
+
+```sql
+REVOKE TRUNCATE, REFERENCES, TRIGGER, MAINTAIN
+ON TABLE public.audit_log
+FROM anon, authenticated;
+
+REVOKE ALL PRIVILEGES
+ON SEQUENCE public.audit_log_id_seq
+FROM anon, authenticated;
+```
+
+Do not revoke the existing authenticated SELECT grant or change its RLS policy in this proposal. Do not add INSERT, UPDATE or DELETE grants. Preserve the existing service_role ACL pending a separate backend consumer review. A stricter no-direct-read model requires an explicit product/security decision and external consumer review.
+
+Live function checks confirm audit_referral_mutation() and log_referral_read(uuid) are SECURITY DEFINER functions owned by postgres with search_path=public. Authenticated cannot execute audit_referral_mutation() directly but can execute log_referral_read(uuid). The postgres owner context is expected to preserve trigger/RPC audit writes after authenticated direct structural and sequence privileges are revoked; prove this using synthetic staging tests before release.
+
+Additional verified controls: public CREATE is false for anon, authenticated and PUBLIC; all 14 public tables have RLS enabled and none has FORCE RLS. Broad future-object default ACLs for postgres and supabase_admin remain a separate release-blocking workstream.
+
+Required staging tests remain: administrator SELECT succeeds under the existing policy; non-administrator SELECT is denied; authenticated TRUNCATE/REFERENCES/TRIGGER/MAINTAIN and sequence USAGE/SELECT/UPDATE are denied; referral and counter-referral trigger writes and authorised/unauthorised log_referral_read calls behave correctly.
+
+**Status remains design/review only. Production and staging are unchanged.**
