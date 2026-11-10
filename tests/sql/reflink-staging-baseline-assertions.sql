@@ -31,6 +31,9 @@ BEGIN
   SELECT count(*) INTO v_count FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname ILIKE '%investigation%';
   IF v_count <> 5 THEN RAISE EXCEPTION 'Expected 5 storage policies, got %',v_count; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname='supabase_realtime' AND schemaname='public' AND tablename='referrals') THEN RAISE EXCEPTION 'Referrals missing from Realtime'; END IF;
+  IF to_regclass('public.referral_notifications_idempotency_key_uidx') IS NULL THEN RAISE EXCEPTION 'Notification idempotency index missing'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='public.referrals'::regclass AND tgname='enqueue_referral_dashboard_notification' AND NOT tgisinternal) THEN RAISE EXCEPTION 'Referral notification enqueue trigger missing'; END IF;
+  IF position('ON CONFLICT (idempotency_key) DO NOTHING' in pg_get_functiondef('public.enqueue_referral_dashboard_notification()'::regprocedure)) = 0 THEN RAISE EXCEPTION 'Notification enqueue is not idempotent'; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_class WHERE oid='public.referral_analytics'::regclass AND reloptions @> ARRAY['security_invoker=true']) THEN RAISE EXCEPTION 'Analytics view is not security_invoker'; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_class WHERE oid='public.referral_analytics_summary'::regclass AND reloptions @> ARRAY['security_invoker=true']) THEN RAISE EXCEPTION 'Analytics summary view is not security_invoker'; END IF;
 END
