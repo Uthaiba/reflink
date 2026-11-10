@@ -59,6 +59,7 @@ jobs:
             supabase/migrations/20261110063844_merge_equivalent_permissive_rls_policies.sql
             supabase/migrations/20261110063912_pin_security_definer_search_paths.sql
             supabase/migrations/20261110063935_explicitly_deny_client_access_to_internal_ledgers.sql
+            supabase/migrations/20261110064010_harden_concurrent_referral_print_auditing.sql
           )
           for file in "${files[@]}"; do
             test -s "$file"
@@ -91,4 +92,6 @@ jobs:
           grep -Fq 'ALTER VIEW public.referral_analytics SET (security_invoker = true)' "${files[2]}"
           grep -Fq 'ALTER VIEW public.referral_analytics_summary SET (security_invoker = true)' "${files[2]}"
           grep -Fq "ALTER FUNCTION public.is_administrator() SET search_path = '';" "${files[5]}"
+          grep -Fq "pg_advisory_xact_lock" "${files[7]}"
+          grep -Fq "CREATE UNIQUE INDEX IF NOT EXISTS referral_print_events_referral_print_number_uidx" "${files[7]}"
           echo "Migration integrity checks passed."
