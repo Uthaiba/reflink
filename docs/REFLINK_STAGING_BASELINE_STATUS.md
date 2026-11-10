@@ -19,6 +19,7 @@ The fifteen repository migration filenames now match the exact versions recorded
 12. `20261110135058_restrict_notification_trigger_function`
 13. `20261110135145_add_privacy_preserving_public_health_aggregate`
 14. `20261110135512_exclude_referral_identifiers_from_audit`
+15. `20261110142053_publish_referral_notifications_to_realtime`
 15. `20261110140000_publish_referral_notifications_to_realtime`
 
 ## Verified state
@@ -41,6 +42,7 @@ The fifteen repository migration filenames now match the exact versions recorded
 - The PHI minimization assertion checks the exclusion operation and verifies both audit triggers remain attached. Synthetic JSON test values are used; no patient records are created.
 - Added an idempotent dashboard notification queue for referral-sent and referral-acknowledged events. Database trigger inserts one queued dashboard event per referral/status, guarded by a unique idempotency key. Direct EXECUTE privileges on the trigger-only function are revoked from PUBLIC, anon and authenticated clients. This does not send SMS; an approved provider integration, consent rules, retry worker and delivery monitoring remain outstanding.
 - Notification queue index, trigger, idempotent insert behaviour and client-role execution denial verified against staging; rollback-only SQL assertions passed after updating expected counts to 17 functions and 10 application triggers.
+- Added a live dashboard notification centre to all three authenticated workspace roles. It reads only dashboard-channel events allowed by the existing referral-participant RLS policy and refreshes on Realtime inserts. It displays no patient identifiers, referral numbers, phone numbers or clinical details. This is an in-app event feed, not a delivered/read receipt system.
 - Added an authenticated dashboard notification centre to all three workspace roles. It loads only dashboard-channel events allowed by the existing referral-participant RLS policy and refreshes on Realtime inserts. It intentionally displays no patient identifiers, referral numbers, phone numbers or clinical details. This is an in-app event feed, not a delivered/read receipt system.
 
 ## Staging Edge Functions
