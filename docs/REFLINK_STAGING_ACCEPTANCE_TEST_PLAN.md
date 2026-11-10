@@ -73,7 +73,7 @@ Use synthetic names and test-only patient identifiers. Never use real phone numb
 
 ## Release blockers
 - No authenticated browser/API run is claimed until disposable synthetic Auth identities exist.
-- Vercel preview deployment is blocked by the current build-rate limit.
+- A Vercel Preview deployment for commit `628bd89a333e82d56095650b3e9bbf68620826fb` reached READY. The latest documentation-only commit still needs deployment confirmation, and authenticated browser acceptance remains outstanding.
 - Supabase leaked-password protection still needs Auth configuration access.
 - No SMS provider or consent workflow is configured.
 - No offline browser queue exists in the current frontend; offline draft schema and referral deduplication fields exist, but encryption/key management and sync conflict handling must be implemented and tested before claiming offline readiness.
