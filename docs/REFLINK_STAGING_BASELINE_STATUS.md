@@ -46,10 +46,12 @@ All sixteen repository migration filenames match the exact versions recorded in 
 - Both staging Edge Functions are ACTIVE with JWT verification enabled.
 
 ## Latest Supabase advisor review — 10 November 2026
-- Security advisor reports five WARN findings for authenticated-callable SECURITY DEFINER functions: `get_facility_user_count(uuid)`, `get_facility_user_counts()`, `is_administrator()`, `log_referral_print(uuid,text)` and `log_referral_read(uuid)`.
+- Security advisor reports twelve WARN findings for authenticated-callable SECURITY DEFINER functions: the original five (`get_facility_user_count(uuid)`, `get_facility_user_counts()`, `is_administrator()`, `log_referral_print(uuid,text)` and `log_referral_read(uuid)`) plus the six administrator aggregate reporting RPCs and `submit_counter_referral(...)`.
 - Reviewed each live staging definition and ACL. All five pin an empty `search_path`; execution is granted to `authenticated` and `service_role` (plus owner), not PUBLIC/anon. The two facility-count functions enforce caller role/facility scope; print/read audit functions verify referral participation before writing; `is_administrator()` only evaluates the authenticated profile. These grants were intentionally retained because the application depends on the RPCs. This is a documented, reviewed risk—not a clean security-advisor result or a formal security sign-off.
 - Performance advisor reports 11 indexes as unused in the current staging workload, including referral, audit, notification and foreign-key indexes. This low-volume staging observation is not evidence that they are unnecessary. Do not drop them until representative workload/query-plan analysis and dependency review are completed.
-- No migration or grant change was made as part of this advisor review.
+- All twelve functions were verified to pin an empty `search_path` and to grant EXECUTE to `authenticated` but not `anon` or PUBLIC. The seven restored functions enforce administrator or receiving-facility role/facility checks inside the SECURITY DEFINER body. The advisor warning is expected for this callable design, but formal least-privilege owner sign-off remains outstanding.
+- Performance advisor still reports 11 unused indexes in low-volume staging; no indexes were removed. Health advisor returned no findings.
+- No grants were revoked as part of this advisor review.
 
 
 
