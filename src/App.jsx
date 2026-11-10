@@ -1667,31 +1667,21 @@ const handleSignIn = async () => {
     setPasswordSaving(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "change-password",
+        { body: { password: newPassword } }
+      );
 
       if (error) throw error;
+      if (!data?.success) {
+        throw new Error(data?.error || "Unable to change your password.");
+      }
 
       setPasswordForm({
         currentPassword: "",
         newPassword: "",
         confirmPassword: "",
       });
-
-      try {
-        await supabase
-          .from("profiles")
-          .update({
-            must_change_password: false,
-          })
-          .eq("id", profile?.id || "");
-      } catch (profileUpdateError) {
-        console.warn(
-          "PASSWORD FLAG UPDATE SKIPPED:",
-          profileUpdateError
-        );
-      }
 
       setPasswordMessage(
         "Password changed successfully. Your new password is now active."
