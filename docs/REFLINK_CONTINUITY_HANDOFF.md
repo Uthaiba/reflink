@@ -138,3 +138,14 @@ A fresh live `audit_log` ACL inspection confirmed that `authenticated` has SELEC
 Detailed evidence and controlled next steps: `docs/PRODUCTION_SCHEMA_RECONCILIATION_20261110.md`.
 
 **Updated task state:** schema export located; all nine triggers reconciled; default-ACL omission and unsafe grants identified; staging baseline design remains in progress. No production or staging database changes were made.
+
+### Additional production catalog inventory — 10 November 2026
+
+- Read-only inventory covered public, auth, storage, realtime and extensions, plus non-system schemas and installed extensions.
+- Installed extensions: `pgcrypto 1.3`, `uuid-ossp 1.1`, `pg_stat_statements 1.11`, `supabase_vault 0.3.1` and `plpgsql 1.0`. Other extensions shown as available are not assumed to be installed or required.
+- Managed schemas also present include `auth`, `storage`, `realtime`, `graphql`, `graphql_public`, `vault`, `extensions` and `supabase_migrations`. The supplied SQL export is not a complete Supabase project backup. Recreate required managed-service configuration through the staging project's supported services; do not replay managed internal tables or copy Auth users, patient rows, Vault secrets or Storage data.
+- Live catalog check found no CREATE privilege on `public` for `anon`, `authenticated` or `service_role`.
+- All 16 public functions are owned by `postgres`; 10 are SECURITY DEFINER. Five SECURITY DEFINER functions have authenticated EXECUTE grants: `get_facility_user_count(uuid)`, `get_facility_user_counts()`, `is_administrator()`, `log_referral_print(uuid,text)` and `log_referral_read(uuid)`. Function ACLs alone do not establish safety; body, dependency and negative-role testing remain required.
+- Detailed inventory appended to `docs/PRODUCTION_SCHEMA_RECONCILIATION_20261110.md`.
+
+No production or staging database configuration was changed. Next: finish the managed-service configuration inventory and function/ACL review, then prepare the least-privilege synthetic staging baseline.
