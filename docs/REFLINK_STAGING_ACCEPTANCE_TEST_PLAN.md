@@ -29,7 +29,11 @@ Use synthetic names and test-only patient identifiers. Never use real phone numb
 - Admission/discharge and structured counter-referral requirement before completion.
 - Invalid status transitions rejected by the database.
 - Emergency referrals rejected when clinical findings are missing.
-- Offline duplicate retry uses a stable client-generated identifier and does not create duplicate referrals.
+- Restore an encrypted draft while online and manually submit it; verify its original `offline_client_id` is reused and `sync_source` is `offline`.
+- Simulate a lost client response after a successful insert, retry with the same client ID, and verify the existing referral is returned without a second insert.
+- Verify a concurrent unique-index collision re-reads only the matching referral owned by the signed-in user; an inaccessible or mismatched collision fails closed.
+- Verify ordinary online submissions use `sync_source=online` and receive a fresh client ID after success.
+- Verify a retry with selected investigation attachments is blocked when an earlier referral with that client ID exists, rather than duplicating uploads.
 - Concurrent print requests produce unique print numbers.
 - Referral status and audit records remain consistent after rollback/failure.
 
@@ -58,7 +62,8 @@ Use synthetic names and test-only patient identifiers. Never use real phone numb
 - Verify the vault locks after five minutes of inactivity, when the tab is hidden and when the referral form unmounts.
 - Verify investigation attachments prevent offline saving.
 - Verify offline submission is blocked with a clear message; saving locally must never be represented as a sent referral.
-- Verify local drafts are not automatically synchronized; a separately tested idempotent sync flow is required before enabling offline referral submission.
+- Verify local drafts are never automatically synchronized or silently submitted. The restored form requires an explicit online submit action.
+- Verify manual retry idempotency with the stable `offline_client_id` and database unique index. This does not provide background sync, automatic retries, conflict resolution for changed clinical data or attachment synchronization.
 
 ## Notification tests
 - A referral entering sent queues one dashboard notification.
@@ -87,7 +92,7 @@ Use synthetic names and test-only patient identifiers. Never use real phone numb
 - A Vercel Preview deployment for commit `628bd89a333e82d56095650b3e9bbf68620826fb` reached READY. The latest documentation-only commit still needs deployment confirmation, and authenticated browser acceptance remains outstanding.
 - Supabase leaked-password protection still needs Auth configuration access.
 - No SMS provider or consent workflow is configured.
-- Encrypted local draft save/restore is implemented, but automatic synchronization, retry-safe submission, conflict handling and attachment synchronization are not implemented. Do not claim full offline referral submission until those are tested.
+- Encrypted local draft save/restore and stable-ID idempotency for manually resubmitting a restored draft are implemented. They have not yet passed authenticated browser/API acceptance. Background synchronization, clinical conflict resolution and attachment synchronization remain unimplemented. Do not claim full offline referral submission.
 - No clinical or privacy sign-off is implied by technical tests.
 
 ## Release rule
