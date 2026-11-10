@@ -657,3 +657,5 @@ A significant refinement: broad default privileges apply to future public object
 - No production or staging function, grant, policy, table, constraint, Auth setting, secret, referral row or deployment was changed. No RPC was invoked against a patient referral.
 - Latest branch HEAD before this update: `5bb895923a0ef90d76cc4777238006166ecfc245`; its push and PR quality runs passed. The new review/test commits require a fresh exact-HEAD CI run.
 - **Next:** review the role/facility assignment contract with clinical operations, then reconstruct the schema baseline and run synthetic role-boundary and print-concurrency tests before preparing any remediation migration.
+
+- Corrected the print-number regression assertion to match SQL's uppercase `MAX` token case-insensitively.
