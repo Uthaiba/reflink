@@ -60,3 +60,20 @@ The legacy `AnalysisHub.jsx` and `AnalyticsDashboard.jsx` source files each cont
 **No immediate production ACL change is recommended from this evidence.** The captured grants already keep both views and the legacy aggregate RPC away from anon/authenticated. The main requirements are to preserve that boundary, verify effective privileges against the live catalog, keep service-role use server-side, and prevent dormant PHI-bearing components from being remounted.
 
 This review does not certify current production state beyond the dated catalog evidence. No SQL was executed and no production or staging object was changed.
+
+
+## Live production catalog recheck — 10 November 2026
+
+A fresh read-only catalog query against the linked production project rechecked effective privileges using `has_table_privilege` and `has_function_privilege`, and retrieved only view/function definitions and catalog metadata.
+
+| Object | anon | authenticated | service_role | Additional metadata |
+|---|---:|---:|---:|---|
+| `public.referral_analytics` SELECT | false | false | true | owner postgres; `reloptions=NULL` |
+| `public.referral_analytics_summary` SELECT | false | false | true | owner postgres; `reloptions=NULL` |
+| `public.get_referral_analytics_summary()` EXECUTE | false | false | true | SECURITY DEFINER; `search_path=public` |
+
+The live function body still checks `public.is_current_user_administrator()` before returning the aggregate summary. The query did not invoke the RPC or read any referral rows. The live results match the 7 November snapshot for these objects.
+
+**Interpretation:** browser roles currently have no effective direct SELECT on either view and no effective EXECUTE on the legacy summary RPC. The service-role role does have these privileges and remains a privileged backend identity. The view's owner-execution semantics remain a reason not to grant it to browser roles. This is a point-in-time privilege check, not a guarantee against future ACL/default-privilege changes.
+
+The read-only repeatable query is committed at `supabase/verification/referral_analytics_view_privilege_review.sql`. It should be rerun after any grant, migration, view or function change.
