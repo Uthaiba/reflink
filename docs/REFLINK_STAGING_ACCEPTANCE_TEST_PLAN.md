@@ -67,6 +67,18 @@ Use synthetic names and test-only patient identifiers. Never use real phone numb
 - Verify local drafts are never automatically synchronized or silently submitted. The restored form requires an explicit online submit action.
 - Verify manual retry idempotency with the stable `offline_client_id` and database unique index. This does not provide background sync, automatic retries, conflict resolution for changed clinical data or attachment synchronization.
 
+## Executed staging SQL smoke checks — 10 November 2026
+
+The following checks were executed against the isolated staging project using temporary synthetic Auth users and facilities. JWT subject claims were set within SQL transactions while running as the `authenticated` database role. Every referral insert/read test was rolled back; all temporary users, profiles and facilities were then deleted and verified absent.
+
+- PHC staff at Facility A successfully inserted a synthetic referral addressed to Facility B under the existing INSERT RLS policy. The row was rolled back.
+- Receiving staff at Facility B was denied INSERT by RLS (`42501`). No referral was committed.
+- PHC staff assigned to Facility C was denied INSERT when attempting to claim Facility A as the referring facility (`42501`).
+- PHC staff at unrelated Facility C saw zero rows for a referral created by PHC staff at Facility A (`0` visible rows).
+- Cleanup verification returned zero remaining synthetic profiles, Auth users and facilities.
+
+These are database-policy smoke tests using simulated JWT claims, not full browser sessions or Auth-issued access tokens. They do not validate Edge Function login, Realtime delivery, Storage upload, browser vault behaviour or end-to-end referral lifecycle. Full authenticated browser acceptance remains outstanding.
+
 ## Notification tests
 - A referral entering sent queues one dashboard notification.
 - A referral entering acknowledged queues one dashboard notification.
