@@ -47,7 +47,7 @@ The `handle_new_user()` function is a SECURITY DEFINER function intended for Aut
 
 ### Object and dependency order
 
-The schema export contains 16 public functions, 14 public tables, 2 views, 10 explicit indexes, 23 foreign keys, and 30 RLS policies, but **zero `CREATE TRIGGER` statements**. A separate read-only live-catalog snapshot, `docs/catalog_exports/20261109_live_public_trigger_snapshot.sql`, records nine public trigger attachments. Those nine triggers are supplemental reconstruction evidence, not objects defined by the schema export. A reviewed restore candidate should be applied in this order:
+The schema export contains 16 public functions, 14 public tables, 2 views, 10 explicit indexes, 23 foreign keys, 30 RLS policies, and **nine `CREATE OR REPLACE TRIGGER` statements**. Their names and definitions match the separate read-only live-catalog snapshot, `docs/catalog_exports/20261109_live_public_trigger_snapshot.sql`, and the live production `pg_trigger` catalogue. The export is the canonical trigger source; the separate snapshot is corroborating evidence and must not be applied as a second trigger migration. A reviewed restore candidate should be applied in this order:
 
 1. Preflight managed roles, schemas, Auth functions, extension versions/schemas, ownership capabilities, and clean target state.
 2. Create the public application tables and identity sequences; include table-local defaults, primary keys, unique constraints, and check constraints where their referenced objects are already available.
@@ -146,3 +146,14 @@ The SELECT-only catalog verification query was independently executed against st
 - The managed schemas also expose their own default ACL entries; these are platform-owned and must not be altered as part of the REFLINK public-schema reconstruction without separate authorization.
 
 This rerun confirms the empty public target and the previously identified default-privilege blocker. It is read-only; no schema, grant, data, or configuration changes were made.
+
+
+## 8. Reconciliation correction and fresh staging check — 10 November 2026
+
+The earlier statement in this runbook that the schema export contained zero trigger statements was incorrect. The checksum-verified export contains nine trigger definitions, and all nine match the supplemental snapshot and live production trigger catalogue. Use the export as the canonical trigger source; do not apply the supplemental snapshot twice.
+
+A fresh read-only check on 10 November confirms the staging project remains ACTIVE_HEALTHY, with zero public application tables and zero migration records. The current Supabase security and performance advisor results on the empty public schema contain no lints; this does not validate the future restored schema.
+
+The fresh staging catalogue also confirms broad default ACLs for both `postgres` and `supabase_admin` in `public`, and the same six relevant role identities. The migration proposal now covers TRUNCATE, REFERENCES, TRIGGER and PostgreSQL 17 MAINTAIN across all 12 public tables where authenticated has structural privileges, plus both public identity sequences. It remains a proposal and has not been applied.
+
+The runbook remains preparation/review only. The next gate is an authorised, least-privilege default-ACL strategy for objects created as `postgres`, followed by dependency-ordered baseline assembly and SQL dry-run/review. Do not alter platform-managed schemas or assume the postgres migration role can alter `supabase_admin` defaults. Production remains read-only.
