@@ -43,8 +43,8 @@ The production Edge Function was not modified. The staging function has not yet 
 - Verify the Vercel preview points to staging and test the full browser CORS/JWT flow.
 - Review the five intentionally exposed SECURITY DEFINER RPCs individually; each has authorization logic and an empty `search_path`, but the Supabase advisor still flags them because authenticated execution is intentionally granted.
 - Enable leaked-password protection through the Supabase Auth dashboard once configuration access is available.
-- The advisor reports unused indexes because the staging database has no workload data; validate their usage after synthetic workflow load.
-- No CI workflow run is associated with this branch's latest commit yet. Do not interpret the absence of a run as a passing CI result.
+- The advisor reports unused indexes because the staging database has no workload data; validate their usage after synthetic workflow load. Do not drop these indexes solely from an empty-staging advisor scan.
+- The first GitHub Actions run completed: frontend lint and production build passed; the migration-integrity job exposed a false positive because it treated legitimate INSERT statements inside PL/pgSQL function bodies as migration-time data imports. The workflow was corrected to strip dollar-quoted function bodies before checking top-level data-import statements. The non-admin all-facility RPC assertion was also corrected so its own failure cannot be swallowed by a broad exception handler. A fresh CI run is required to verify these corrections; until then, CI is not green.
 - Do not promote staging migrations to production until all integration gates pass and a production change window is approved.
 
 ## Safety
