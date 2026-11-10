@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase.js";
 
 function monthBounds(value) {
@@ -81,14 +81,17 @@ export default function AdminPublicHealthReporting() {
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const requestVersion = useRef(0);
 
   const loadReports = useCallback(async () => {
     const bounds = monthBounds(month);
     if (!bounds) {
+      setLoading(false);
       setErrors({ period: "Select a valid reporting month." });
       return;
     }
 
+    const currentRequest = ++requestVersion.current;
     setLoading(true);
     setErrors({});
     const datedArgs = {
@@ -116,6 +119,8 @@ export default function AdminPublicHealthReporting() {
       })
     );
 
+    if (currentRequest !== requestVersion.current) return;
+
     const nextReports = {};
     const nextErrors = {};
     for (const [key, data, error] of results) {
@@ -131,6 +136,9 @@ export default function AdminPublicHealthReporting() {
 
   useEffect(() => {
     loadReports();
+    return () => {
+      requestVersion.current += 1;
+    };
   }, [loadReports]);
 
   const volume = reports.volume[0] || null;
