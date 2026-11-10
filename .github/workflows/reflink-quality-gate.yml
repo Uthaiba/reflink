@@ -93,11 +93,19 @@ jobs:
           test -s supabase/functions/change-password/index.ts
           test -s src/components/notifications/NotificationCenter.jsx
           test -s src/components/notifications/NotificationCenter.css
+          test -s src/components/offline/OfflineDraftVault.jsx
+          test -s src/components/offline/OfflineDraftVault.css
+          test -s src/lib/offlineDraftVault.js
           grep -Fq 'supabase.functions.invoke(' src/App.jsx
           grep -Fq '"change-password"' src/App.jsx
           grep -Fq 'NotificationCenter' src/App.jsx
           grep -Fq 'referral_notifications' src/components/notifications/NotificationCenter.jsx
           grep -Fq 'postgres_changes' src/components/notifications/NotificationCenter.jsx
+          grep -Fq 'PBKDF2' src/lib/offlineDraftVault.js
+          grep -Fq 'AES-GCM' src/lib/offlineDraftVault.js
+          grep -Fq 'indexedDB.open' src/lib/offlineDraftVault.js
+          grep -Fq 'navigator.onLine' src/App.jsx
+          ! grep -Fq 'localStorage' src/lib/offlineDraftVault.js
 
           # Ignore INSERT statements inside PL/pgSQL function bodies. These are
           # application runtime operations, not migration-time production data imports.
