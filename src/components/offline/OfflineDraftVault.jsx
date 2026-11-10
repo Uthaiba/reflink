@@ -83,8 +83,8 @@ export default function OfflineDraftVault({ userId, draft, onRestore, hasAttachm
       setError("A signed-in REFLINK account is required to use the local vault.");
       return;
     }
-    if (passphrase.length < 12) {
-      setError("Use a local vault passphrase of at least 12 characters.");
+    if (passphrase.length < 16) {
+      setError("Use a local vault passphrase of at least 16 characters.");
       return;
     }
     if (!vaultExists && passphrase !== confirmPassphrase) {
@@ -187,8 +187,8 @@ export default function OfflineDraftVault({ userId, draft, onRestore, hasAttachm
             autoComplete="new-password"
             value={passphrase}
             onChange={(event) => setPassphrase(event.target.value)}
-            placeholder="At least 12 characters"
-            minLength={12}
+            placeholder="At least 16 characters"
+            minLength={16}
           />
           {!vaultExists && (
             <>
@@ -200,7 +200,7 @@ export default function OfflineDraftVault({ userId, draft, onRestore, hasAttachm
                 value={confirmPassphrase}
                 onChange={(event) => setConfirmPassphrase(event.target.value)}
                 placeholder="Re-enter local passphrase"
-                minLength={12}
+                minLength={16}
               />
             </>
           )}
