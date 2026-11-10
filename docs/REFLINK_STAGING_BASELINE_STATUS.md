@@ -4,7 +4,7 @@
 This branch advances the existing REFLINK product in an isolated synthetic staging project. It does not copy production rows or apply migrations to production.
 
 ## Applied staging migrations
-All sixteen repository migration filenames match the exact versions recorded in the staging migration history:
+All seventeen repository migration filenames match the exact versions recorded in the staging migration history:
 1. `20261110063521_reconstruct_production_schema_in_staging`
 2. `20261110063620_configure_private_referral_storage_and_realtime`
 3. `20261110063704_add_staging_foreign_key_indexes_and_secure_views`
@@ -21,6 +21,7 @@ All sixteen repository migration filenames match the exact versions recorded in 
 14. `20261110135512_exclude_referral_identifiers_from_audit`
 15. `20261110142053_publish_referral_notifications_to_realtime`
 16. `20261110181053_restore_admin_reporting_and_counter_referral_workflows`
+17. `20261110181810_fix_admin_facility_reporting_output_qualification`
 
 ## Verified staging state
 - 14 public tables, 24 functions, 3 views, 10 application triggers and 28 public RLS policies.
@@ -58,6 +59,8 @@ All sixteen repository migration filenames match the exact versions recorded in 
 - Added staging migration `20261110181053_restore_admin_reporting_and_counter_referral_workflows`, porting the reviewed Phase 1 SQL for six administrator aggregate reporting RPCs and the transactional `submit_counter_referral` RPC. It enforces administrator checks, complete Africa/Lagos calendar-month windows where applicable, primary and complementary small-cell suppression, no patient-level administrator SELECT grant, authenticated-only execution and pinned empty search paths.
 - Applied the migration to staging only. Migration history now records version `20261110181053`; repository migration filename was aligned to that exact version after the migration runner assigned its timestamp.
 - Post-apply catalog verification found all seven RPCs, SECURITY DEFINER enabled, `search_path=""`, EXECUTE granted to `authenticated`, and no EXECUTE grant to `anon` or PUBLIC.
+- A synthetic administrator SQL-context smoke test invoked all six reporting RPCs for October 2026 with no referral fixtures; all calls completed and returned empty/zero aggregates as expected. The synthetic Auth user/profile were created and rolled back in one transaction; a separate cleanup query confirmed zero residual fixtures. This is not a substitute for Auth-issued API/browser acceptance.
+- The first smoke test exposed an ambiguous `facility_type` output reference in `get_admin_facility_referral_summary`. Added migration `20261110181810_fix_admin_facility_reporting_output_qualification` to qualify output expressions; the full aggregate smoke-test transaction then completed successfully.
 - This restores the missing database-side dependencies. Auth-issued administrator browser/API tests and UI integration on the current staging branch remain outstanding; the older Phase 1 deployment and current staging branch still have different frontend commits and must be reconciled without discarding either branch's valid work.
 
 ## Staging Edge Functions
