@@ -1,0 +1,49 @@
+.counter-referral-card {
+  margin-top: 1.25rem;
+  border: 1px solid #d8e7e1;
+}
+.counter-referral-card form {
+  display: grid;
+  gap: 0.65rem;
+}
+.counter-referral-card form label {
+  margin-top: 0.45rem;
+  font-weight: 600;
+}
+.counter-referral-card form input,
+.counter-referral-card form select,
+.counter-referral-card form textarea {
+  width: 100%;
+  min-width: 0;
+}
+.counter-referral-completion {
+  margin: 1rem 0;
+  padding: 1rem;
+  border-radius: 12px;
+  background: #f2f8f5;
+}
+.counter-referral-completion ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.2rem;
+  padding: 0;
+  margin: 0.65rem 0 0;
+  list-style: none;
+}
+.counter-referral-completion li {
+  color: #687b73;
+  font-size: 0.9rem;
+}
+.counter-referral-completion li.is-complete {
+  color: #08765b;
+  font-weight: 600;
+}
+.counter-referral-finality-note {
+  padding: 0.85rem 1rem;
+  margin: 0.75rem 0;
+  border-left: 3px solid #c58a26;
+  background: #fff9ed;
+  color: #72551d;
+  border-radius: 6px;
+  line-height: 1.5;
+}
