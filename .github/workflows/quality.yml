@@ -1,0 +1,93 @@
+name: REFLINK quality gates
+
+on:
+  pull_request:
+    branches:
+      - v2.0-release
+  push:
+    branches:
+      - v2.0-release
+      - reflink/phase-1-security-remediation
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reflink-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-lint:
+    name: Build and lint
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Report dependency audit findings
+        shell: bash
+        run: |
+          npm audit --json > "$RUNNER_TEMP/reflink-npm-audit.json" || true
+          node --input-type=commonjs -e '
+            const fs = require("node:fs");
+            const report = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/reflink-npm-audit.json", "utf8"));
+            const totals = report.metadata?.vulnerabilities ?? {};
+            console.log(JSON.stringify({
+              totals,
+              findings: Object.entries(report.vulnerabilities ?? {}).map(([name, item]) => ({
+                name,
+                severity: item.severity,
+                range: item.range,
+                direct: item.isDirect,
+                fixAvailable: item.fixAvailable,
+                via: item.via.map(advisory => typeof advisory === "string" ? advisory : {
+                  title: advisory.title,
+                  url: advisory.url,
+                  range: advisory.range,
+                  severity: advisory.severity
+                })
+              }))
+            }, null, 2));
+            if ((totals.high ?? 0) > 0 || (totals.critical ?? 0) > 0) {
+              console.error("High or critical dependency vulnerabilities block this workflow.");
+              process.exitCode = 1;
+            }
+          '
+      - name: Run automated unit tests
+        run: npm test
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Install pinned browser test runner
+        run: npm install --no-save --package-lock=false @playwright/test@1.56.1
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start Vite browser test server
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 4173 > /tmp/reflink-vite.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/tests/browser/offline-queue.html > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/reflink-vite.log
+          exit 1
+
+      - name: Run real-browser offline queue tests
+        run: npx playwright test tests/browser/offline-queue.spec.js --reporter=line

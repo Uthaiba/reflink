@@ -1,0 +1,140 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+const proposal = await readFile(
+  new URL("../docs/SECURITY_HARDENING_PROPOSAL.md", import.meta.url),
+  "utf8",
+);
+const functionReview = await readFile(
+  new URL("../docs/BASELINE_FUNCTION_SECURITY_REVIEW.md", import.meta.url),
+  "utf8",
+);
+const defaultPrivilegeVerifier = await readFile(
+  new URL("../supabase/verification/default_privilege_effective_access.sql", import.meta.url),
+  "utf8",
+);
+const auditPrivilegeCandidate = await readFile(
+  new URL("../docs/AUDIT_LOG_PRIVILEGE_RESTRICTION_CANDIDATE.md", import.meta.url),
+  "utf8",
+);
+const auditMinimizationDesign = await readFile(
+  new URL("../docs/AUDIT_LOG_PHI_MINIMIZATION_DESIGN.md", import.meta.url),
+  "utf8",
+);
+const printConcurrencyDesign = await readFile(
+  new URL("../docs/REFERRAL_PRINT_SEQUENCE_CONCURRENCY_DESIGN.md", import.meta.url),
+  "utf8",
+);
+
+test("database hardening remains a proposal and cannot be mistaken for an applied migration", () => {
+  assert.match(proposal, /source-level proposal only — NOT an executable migration and NOT applied/i);
+  assert.match(proposal, /Production: read-only/i);
+  assert.match(proposal, /Not ready to convert into an executable migration/i);
+});
+
+test("audit-log hardening removes dangerous browser privileges without bypassing RLS", () => {
+  assert.match(proposal, /REVOKE TRUNCATE, REFERENCES, TRIGGER, MAINTAIN/i);
+  assert.match(proposal, /administrator-only RLS policy/i);
+  assert.match(proposal, /Do not add a new broad SELECT policy/i);
+  assert.match(proposal, /trigger execution identity/i);
+});
+
+test("default privilege remediation accounts for both creators and owner authority", () => {
+  assert.match(proposal, /ALTER DEFAULT PRIVILEGES FOR ROLE postgres/i);
+  assert.match(proposal, /ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin/i);
+  assert.match(proposal, /no membership in `supabase_admin`/i);
+  assert.match(proposal, /separately authorised owner-level operation/i);
+  assert.match(proposal, /Existing object ACLs are not retroactively changed/i);
+});
+
+test("function defaults are not blanket-revoked from existing workflow RPCs", () => {
+  assert.match(proposal, /Do not blanket-revoke function execution/i);
+  assert.match(proposal, /exact signature/i);
+  assert.match(proposal, /SECURITY INVOKER by default/i);
+  assert.match(proposal, /search_path/i);
+});
+
+test("staging matrix includes positive and negative access-control tests", () => {
+  for (const phrase of [
+    "authenticated cannot TRUNCATE",
+    "cross-facility access",
+    "anon/authenticated receive no implicit table/sequence privileges",
+    "direct PostgREST invocation is denied",
+    "supabase_admin creator",
+    "Supabase security/performance advisors",
+  ]) {
+    assert.ok(proposal.includes(phrase), `Missing staging acceptance criterion: ${phrase}`);
+  }
+});
+
+test("function default hardening revokes global PUBLIC execution, not only schema defaults", () => {
+  assert.match(proposal, /ALTER DEFAULT PRIVILEGES FOR ROLE postgres\s+REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC/i);
+  assert.match(proposal, /Do not substitute `IN SCHEMA public` on the final statement/i);
+  assert.match(proposal, /per-schema default privileges are additive to global defaults/i);
+  assert.match(proposal, /has_function_privilege/i);
+  assert.match(proposal, /REVOKE ALL ON TABLES FROM anon, authenticated, service_role/i);
+  assert.match(proposal, /REVOKE ALL ON SEQUENCES FROM anon, authenticated, service_role/i);
+  assert.match(proposal, /REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated, service_role/i);
+});
+
+test("live function execute grants are documented without broadening authenticated access", () => {
+  assert.match(functionReview, /All 16 functions in the inventory above/);
+  for (const fn of [
+    "get_facility_user_count(uuid)",
+    "get_facility_user_counts()",
+    "is_administrator()",
+    "log_referral_print(uuid,text)",
+    "log_referral_read(uuid)",
+  ]) {
+    assert.ok(functionReview.includes(fn), `Missing authenticated EXECUTE dependency: ${fn}`);
+  }
+  assert.match(functionReview, /`anon` \| None recorded/);
+  assert.match(functionReview, /`PUBLIC` \| None recorded in the captured per-function ACLs/);
+  assert.match(functionReview, /Preserve the five authenticated grants/);
+});
+
+test("default privilege verifier is read-only and distinguishes current ACLs from future defaults", () => {
+  const executableSql = defaultPrivilegeVerifier
+    .replace(/^\s*--.*$/gm, "")
+    .trim();
+  assert.match(executableSql, /^(SELECT|WITH)\b/i);
+  assert.match(executableSql, /pg_default_acl/i);
+  assert.match(executableSql, /aclexplode/i);
+  assert.match(executableSql, /has_function_privilege/i);
+  assert.match(executableSql, /COALESCE\(p\.proacl, acldefault\('f', p\.proowner\)\)/i);
+  assert.match(defaultPrivilegeVerifier, /<global>/);
+  assert.match(defaultPrivilegeVerifier, /per-schema REVOKE cannot cancel/i);
+  assert.match(defaultPrivilegeVerifier, /does NOT prove future-object behavior/i);
+  assert.doesNotMatch(executableSql, /\b(CREATE|ALTER|GRANT|REVOKE|INSERT|UPDATE|DELETE|DROP|TRUNCATE)\b/i);
+});
+
+test("audit minimization design excludes patient and clinical payloads from future audit snapshots", () => {
+  assert.match(auditMinimizationDesign, /Design proposal only — NOT an executable migration and NOT applied/);
+  assert.match(auditMinimizationDesign, /replace full-row serialization with a deliberately small, table-specific allowlist/i);
+  assert.match(auditMinimizationDesign, /patient identifier, age, sex, phone, address/i);
+  assert.match(auditMinimizationDesign, /final diagnosis, treatment, outcome, follow-up instructions/i);
+  assert.match(auditMinimizationDesign, /Do not store free-text values, raw JSON payloads, or hashes/i);
+  assert.match(auditMinimizationDesign, /Historical audit rows are not made safe by changing future trigger writes/i);
+  assert.match(auditMinimizationDesign, /Production remains read-only/i);
+});
+
+test("referral print numbering design requires serialization and database uniqueness", () => {
+  assert.match(printConcurrencyDesign, /Design proposal only — NOT an executable migration and NOT applied/);
+  assert.match(printConcurrencyDesign, /MAX\(print_number\)/);
+  assert.match(printConcurrencyDesign, /FOR UPDATE/);
+  assert.match(printConcurrencyDesign, /unique constraint on \(referral_id, print_number\)/);
+  assert.match(printConcurrencyDesign, /genuinely concurrent database sessions/);
+  assert.match(printConcurrencyDesign, /does not explicitly require the caller's profile role/i);
+  assert.match(printConcurrencyDesign, /Production remains read-only/);
+});
+
+
+test("live audit-log privilege evidence preserves admin-only SELECT while removing structural and sequence access", () => {
+  assert.match(auditPrivilegeCandidate, /Live production revalidation and selected access model — 10 November 2026/);
+  assert.match(auditPrivilegeCandidate, /authenticated \| Yes \| Yes \| Yes \| Yes \| Yes \| Yes \/ Yes \/ Yes/);
+  assert.match(auditPrivilegeCandidate, /REVOKE TRUNCATE, REFERENCES, TRIGGER, MAINTAIN/);
+  assert.match(auditPrivilegeCandidate, /REVOKE ALL PRIVILEGES\s+ON SEQUENCE public\.audit_log_id_seq\s+FROM anon, authenticated/i);
+  assert.match(auditPrivilegeCandidate, /preserves the existing administrator-only SELECT grant and policy/i);
+  assert.match(auditPrivilegeCandidate, /no production or staging DDL was executed/i);
+});
