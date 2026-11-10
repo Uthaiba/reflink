@@ -74,3 +74,29 @@ The export expresses these same five privileges for `authenticated`. RLS does no
 6. Verify the resulting PostgreSQL catalogs and execute synthetic PHC, receiving-facility, wrong-facility and administrator tests.
 
 **Status:** trigger reconciliation complete; default ACL discrepancy identified; staging migration not yet prepared or applied; production remains read-only.
+
+## Managed-schema and extension inventory — fresh read-only inspection
+
+A read-only inventory was run across the production `public`, `auth`, `storage`, `realtime` and `extensions` schemas, plus namespace and extension catalogs.
+
+- The application export is a **public-schema baseline**, not a complete database-cluster or Supabase-project backup.
+- The production database also contains managed schemas `auth`, `storage`, `realtime`, `graphql`, `graphql_public`, `vault`, `extensions` and `supabase_migrations`.
+- Five extensions are installed: `pgcrypto 1.3` in `extensions`, `uuid-ossp 1.1` in `extensions`, `pg_stat_statements 1.11` in `extensions`, `supabase_vault 0.3.1` in `vault`, and `plpgsql 1.0` in `pg_catalog`.
+- The extension catalogue also lists many extensions as available but not installed. Availability is not evidence that REFLINK depends on them.
+- No `anon`, `authenticated` or `service_role` CREATE privilege on the `public` schema was found in the live catalog check.
+- The connected production project has managed Auth, Storage and Realtime relations. Their internal tables and records must not be copied into synthetic staging as application schema/data. Provision staging through Supabase's managed project services and recreate only explicitly required configuration.
+- The current public-schema export does not capture the complete Auth configuration, Storage bucket/policy configuration, Realtime publication membership, Vault secrets, Edge Function settings or project-level Auth/security settings. These require separate configuration inventory and controlled recreation, not SQL replay.
+
+## Public function inventory and execution boundary
+
+The live catalog returned 16 public functions, all owned by `postgres`. Ten are marked SECURITY DEFINER. Five SECURITY DEFINER functions have an authenticated EXECUTE grant:
+
+- `get_facility_user_count(uuid)`
+- `get_facility_user_counts()`
+- `is_administrator()`
+- `log_referral_print(uuid,text)`
+- `log_referral_read(uuid)`
+
+The other SECURITY DEFINER functions are not granted to `authenticated` in the inspected ACLs. The five authenticated-callable privileged functions must be reviewed for authorization checks, data exposure, transaction behavior, ownership and safe `search_path` before staging acceptance. In particular, the two administrator helpers use `search_path=public`; public CREATE is not granted to the browser roles in the current catalog, but the staging review should still prefer explicit schema qualification and a fixed/empty search path where compatible.
+
+This inventory does not prove the functions are safe merely because their current ACLs are narrow. Function-body and dependency review plus negative role tests remain required.
