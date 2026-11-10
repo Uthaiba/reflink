@@ -2832,6 +2832,7 @@ provisional_diagnosis: "",
   const [printDraft, setPrintDraft] = useState(null);
   const [savedReferralInfo, setSavedReferralInfo] = useState(null);
   const [offlineClientId, setOfflineClientId] = useState(() => globalThis.crypto.randomUUID());
+  const [isRestoredOfflineDraft, setIsRestoredOfflineDraft] = useState(false);
 
   useEffect(() => {
     loadFacilities();
@@ -3097,12 +3098,15 @@ provisional_diagnosis: "",
         .maybeSingle();
 
       if (existingReferralError) throw existingReferralError;
+      if (existingReferral && selectedInvestigations.some((item) => Boolean(item.result_file))) {
+        throw new Error("This referral was already created by an earlier submission attempt. To prevent duplicate investigation uploads, locate the saved referral and verify its attachments before retrying.");
+      }
 
       const referralNumber = existingReferral?.referral_number || generateReferralNumber();
 
       const referralPayload = {
         offline_client_id: offlineClientId,
-        sync_source: "offline",
+        sync_source: isRestoredOfflineDraft ? "offline" : "online",
   referral_number:
     referralNumber,
 
@@ -3295,6 +3299,7 @@ provisional_diagnosis: "",
       );
 
       setOfflineClientId(globalThis.crypto.randomUUID());
+      setIsRestoredOfflineDraft(false);
       setForm({
   patient_identifier: "",
   patient_age_months: "",
@@ -3435,11 +3440,13 @@ provisional_diagnosis: "",
           selectedInvestigationCategories,
           selectedInvestigations: selectedInvestigations.map(({ result_file, ...item }) => item),
           offlineClientId,
+          isRestoredOfflineDraft,
         }}
         hasAttachments={selectedInvestigations.some((item) => Boolean(item.result_file))}
         onRestore={(savedDraft) => {
           if (savedDraft?.form) setForm(savedDraft.form);
           if (typeof savedDraft?.offlineClientId === "string" && savedDraft.offlineClientId) setOfflineClientId(savedDraft.offlineClientId);
+          setIsRestoredOfflineDraft(true);
           if (Array.isArray(savedDraft?.diagnosisEntries)) setDiagnosisEntries(savedDraft.diagnosisEntries);
           if (Array.isArray(savedDraft?.selectedInvestigationCategories)) setSelectedInvestigationCategories(savedDraft.selectedInvestigationCategories);
           if (Array.isArray(savedDraft?.selectedInvestigations)) setSelectedInvestigations(savedDraft.selectedInvestigations);
