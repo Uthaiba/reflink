@@ -39,6 +39,9 @@ jobs:
       - name: Syntax-check real-Auth staging acceptance runner (no credentials)
         run: node --check scripts/staging-authenticated-referral-access.mjs
 
+      - name: Verify master-plan evidence inventory (offline, no secrets)
+        run: node scripts/reflink-release-evidence-gate.mjs
+
       - name: Build production bundle
         run: npm run build
 
