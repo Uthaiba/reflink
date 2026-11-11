@@ -1,0 +1,56 @@
+-- REFLINK synthetic staging read-only migration equivalence gate.
+-- Run in staging SQL editor; never execute against production.
+-- Returns PASS/FAIL per guard. Does not alter data, policies or migration history.
+WITH checks AS (
+ SELECT 'migration_ledger_current' AS control,
+        EXISTS (SELECT 1 FROM supabase_migrations.schema_migrations WHERE version='20261111201500') AS passed,
+        'Latest source migration must be recorded only after controlled reconciliation' AS expectation
+ UNION ALL SELECT 'offline_idempotency_index',
+        EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname='public'
+          AND indexname='referrals_referrer_offline_client_id_unique'
+          AND indexdef LIKE '%(referring_user_id, offline_client_id)%'
+          AND indexdef LIKE '%WHERE (offline_client_id IS NOT NULL)%'),
+        'Unique referrer/client key with non-null partial predicate'
+ UNION ALL SELECT 'offline_retry_constraint_validated',
+        EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='public.referrals'::regclass
+          AND conname='referrals_offline_submission_key_required' AND convalidated),
+        'Offline retry key CHECK exists and is validated'
+ UNION ALL SELECT 'investigation_storage_no_client_mutation_policy',
+        NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects'
+          AND cmd IN ('UPDATE','DELETE','ALL')),
+        'No Storage UPDATE, DELETE or ALL policy grants client mutation'
+ UNION ALL SELECT 'investigation_storage_participant_select',
+        EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects'
+          AND policyname='Authenticated users can view investigation result files'
+          AND cmd='SELECT' AND roles::text LIKE '%authenticated%'
+          AND qual LIKE '%referral-investigation-results%'
+          AND qual LIKE '%referring_user_id%'
+          AND qual LIKE '%receiving_facility_id%'),
+        'Read policy checks referral author or receiving facility participant'
+ UNION ALL SELECT 'investigation_storage_participant_insert',
+        EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects'
+          AND policyname='Authorized users can upload investigation result files'
+          AND cmd='INSERT' AND roles::text LIKE '%authenticated%'
+          AND with_check LIKE '%referral-investigation-results%'
+          AND with_check LIKE '%referring_user_id%'
+          AND with_check LIKE '%receiving_facility_id%'),
+        'Upload policy checks referral author or receiving facility participant'
+ UNION ALL SELECT 'investigation_registration_function_guards',
+        EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+          WHERE n.nspname='public' AND p.proname='register_referral_investigation_files'
+            AND pg_get_function_identity_arguments(p.oid)='p_referral_id uuid, p_records jsonb'
+            AND p.prosecdef AND p.proconfig @> ARRAY['search_path=""']::text[]
+            AND pg_get_functiondef(p.oid) LIKE '%Incomplete investigation file descriptor%'
+            AND pg_get_functiondef(p.oid) LIKE '%Registered investigation file metadata cannot be modified%'
+            AND pg_get_functiondef(p.oid) LIKE '%IF jsonb_array_length(p_records) > 0 THEN%'
+            AND pg_get_functiondef(p.oid) LIKE '%IS DISTINCT FROM ''array''%'),
+        'Latest registration guards, SECURITY DEFINER and pinned search path'
+ UNION ALL SELECT 'investigation_registration_anon_denied',
+        NOT has_function_privilege('anon','public.register_referral_investigation_files(uuid,jsonb)','EXECUTE'),
+        'Anonymous callers cannot register investigation metadata'
+ UNION ALL SELECT 'admin_analytics_anon_denied',
+        NOT has_function_privilege('anon','public.get_referral_analytics_summary()','EXECUTE'),
+        'Anonymous callers cannot invoke analytics'
+)
+SELECT control, CASE WHEN passed THEN 'PASS' ELSE 'FAIL' END AS status, expectation
+FROM checks ORDER BY control;
