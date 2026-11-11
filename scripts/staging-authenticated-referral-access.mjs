@@ -94,6 +94,17 @@ if (byId.get(OUTSIDER.profile.facility_id)?.facility_type !== 'general_hospital'
   throw new Error('Unrelated receiving staff must belong to a separate general hospital');
 }
 const referralId = env.REFLINK_STAGING_REFERRAL_ID;
+// Never run access assertions against a real patient referral, even in staging.
+// Validate the fixture through the admin session before testing other roles.
+const { data: fixture, error: fixtureError } = await ADMIN.api.from('referrals')
+  .select('id,is_test,referring_user_id,referring_facility_id,receiving_facility_id')
+  .eq('id', referralId).maybeSingle();
+if (fixtureError || !fixture || fixture.is_test !== true ||
+    fixture.referring_user_id !== PHC.profile.id ||
+    fixture.referring_facility_id !== PHC.profile.facility_id ||
+    fixture.receiving_facility_id !== RECEIVING.profile.facility_id) {
+  throw new Error('Refusing missing, non-synthetic, or misassigned referral fixture');
+}
 const fetchReferral = async (name) => {
   const { data, error } = await actors[name].api.from('referrals')
     .select('id,referring_user_id,receiving_facility_id')
