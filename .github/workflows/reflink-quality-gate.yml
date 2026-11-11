@@ -42,6 +42,15 @@ jobs:
       - name: Verify master-plan evidence inventory (offline, no secrets)
         run: node scripts/reflink-release-evidence-gate.mjs
 
+      - name: Verify release gate fails closed without approvals
+        shell: bash
+        run: |
+          if node scripts/reflink-release-evidence-gate.mjs --require-release-ready; then
+            echo 'SECURITY FAILURE: release gate accepted missing approvals' >&2
+            exit 1
+          fi
+          echo 'Release gate correctly refuses unapproved promotion.'
+
       - name: Build production bundle
         run: npm run build
 
