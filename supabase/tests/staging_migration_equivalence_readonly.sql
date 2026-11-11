@@ -40,6 +40,14 @@ WITH checks AS (
           AND with_check LIKE '%referring_user_id%'
           AND with_check LIKE '%receiving_facility_id%'),
         'Upload policy checks referral author or receiving facility participant'
+ UNION ALL SELECT 'sensitive_rpcs_authenticated_only',
+        (SELECT count(*) = 2 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+          WHERE n.nspname='public'
+          AND p.proname IN ('get_referral_analytics_summary','register_referral_investigation_files')
+          AND p.prosecdef
+          AND NOT has_function_privilege('anon',p.oid,'EXECUTE')
+          AND has_function_privilege('authenticated',p.oid,'EXECUTE')),
+        'Clinical registration and administrator analytics RPCs must deny anonymous execution'
  UNION ALL SELECT 'clinical_tables_rls_enabled',
         (SELECT count(*) = 4 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
           WHERE c.relrowsecurity AND
