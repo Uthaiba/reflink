@@ -48,7 +48,7 @@ BEGIN
     IF v_new ? 'result_file_path' THEN
       IF nullif(v_new->>'result_file_path','') IS NULL
          OR nullif(v_new->>'result_file_name','') IS NULL
-         OR nullif(v_new->>'result_file_type','') IS NULL
+         OR jsonb_typeof(v_new->'result_file_type') IS DISTINCT FROM 'string'
          OR jsonb_typeof(v_new->'result_file_size') IS DISTINCT FROM 'number'
          OR (v_new->>'result_file_size')::numeric <= 0
       THEN RAISE EXCEPTION 'Incomplete investigation file descriptor' USING ERRCODE='22023'; END IF;
