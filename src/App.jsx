@@ -2420,106 +2420,63 @@ const handleSignIn = async () => {
           DASHBOARD
           ===================================================== */}
 
-      {screen === "dashboard" && (
+      {screen === "dashboard" && role === "Administrator" && (
+        <AdministratorRoute>
+          <AdminDashboard
+            profile={profile}
+            AnalyticsDashboard={AnalyticsDashboard}
+            AnalysisHub={AnalysisHub}
+            formatPatientAge={formatPatientAge}
+            getStatusLabel={getStatusLabel}
+            onChangePassword={() => {
+              setPasswordError("");
+              setPasswordMessage("");
+              setPasswordForm({
+                currentPassword: "",
+                newPassword: "",
+                confirmPassword: "",
+              });
+              setScreen("change-password");
+            }}
+            onSignOut={logout}
+          />
+        </AdministratorRoute>
+      )}
+
+      {screen === "dashboard" && role !== "Administrator" && (
         <div className="dashboard-page">
-
           <header className="dashboard-header">
-
             <div className="brand">
-
-              <div className="brand-mark">
-                R
-              </div>
-
+              <div className="brand-mark">R</div>
               <div>
                 <h1>REFLINK</h1>
-
-                <p>
-  {profile?.full_name
-    ? `${profile.full_name} • ${role}`
-    : role}
-</p>
+                <p>{profile?.full_name ? `${profile.full_name} • ${role}` : role}</p>
               </div>
-
             </div>
-
             <div className="dashboard-header-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => {
-                  setPasswordError("");
-                  setPasswordMessage("");
-                  setPasswordForm({
-                    currentPassword: "",
-                    newPassword: "",
-                    confirmPassword: "",
-                  });
-                  setScreen("change-password");
-                }}
-              >
-                Change Password
-              </button>
-
-              <button
-                type="button"
-                className="logout-button"
-                onClick={logout}
-              >
-                Sign Out
-              </button>
+              <button type="button" className="secondary-button" onClick={() => {
+                setPasswordError("");
+                setPasswordMessage("");
+                setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+                setScreen("change-password");
+              }}>Change Password</button>
+              <button type="button" className="logout-button" onClick={logout}>Sign Out</button>
             </div>
-
           </header>
-
           <main className="dashboard">
-
             <div className="dashboard-title">
-
               <div>
-
-                <span className="eyebrow">
-                  REFLINK WORKSPACE
-                </span>
-
-                <h2>
-                  {role} Dashboard
-                </h2>
-
-                <p>
-                  Welcome to your referral management workspace.
-                </p>
-
+                <span className="eyebrow">REFLINK WORKSPACE</span>
+                <h2>{role} Dashboard</h2>
+                <p>Welcome to your referral management workspace.</p>
               </div>
-
             </div>
-
             <NotificationCenter userId={profile?.auth_user_id || profile?.id} />
-
             {role === "PHC Staff" && (
-              <PHCStaffDashboard
-                onNewReferral={() => setScreen("new-referral")}
-              />
+              <PHCStaffDashboard onNewReferral={() => setScreen("new-referral")} />
             )}
-
-            {role === "Receiving Facility" && (
-              <ReceivingDashboard />
-            )}
-
-            {role === "Administrator" && (
-              <AdministratorRoute>
-                <AdminDashboard
-                  profile={profile}
-                  AnalyticsDashboard={AnalyticsDashboard}
-                  AnalysisHub={AnalysisHub}
-                  formatPatientAge={formatPatientAge}
-                  getStatusLabel={getStatusLabel}
-                />
-              </AdministratorRoute>
-            )}
-
+            {role === "Receiving Facility" && <ReceivingDashboard />}
           </main>
-
         </div>
       )}
 
