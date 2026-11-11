@@ -171,4 +171,18 @@ jobs:
           grep -Fq "IF jsonb_array_length(p_records) > 0 THEN" "$latest"
           test -s supabase/tests/staging_migration_equivalence_readonly.sql
           test -s supabase/tests/staging_post_baseline_migration_ledger_readonly.sql
+          # Preserve the full staging release-evidence suite in every commit.
+          evidence_files=(
+            supabase/tests/staging_post_baseline_migration_effect_matrix_readonly.sql
+            supabase/tests/staging_investigation_registration_unauthenticated_negative.sql
+            supabase/tests/staging_authenticated_role_missing_identity_negative.sql
+            supabase/tests/staging_unassigned_authenticated_identity_negative.sql
+            supabase/tests/staging_unassigned_profile_confidentiality_rls.sql
+            supabase/tests/staging_administrator_analytics_positive.sql
+            supabase/tests/staging_migration_repair_data_preflight_readonly.sql
+          )
+          for evidence in "${evidence_files[@]}"; do
+            test -s "$evidence" || { echo "Missing staging release evidence: $evidence"; exit 1; }
+          done
+          echo "Staging release evidence suite present (live database tests run separately)."
           echo "Post-baseline migration source checks passed (database ledger verification remains separate)."
