@@ -22,6 +22,7 @@ const files = [
   'supabase/tests/staging_admin_reporting_rpc_role_matrix.sql',
   'supabase/tests/staging_admin_predicate_and_print_audit_role_matrix.sql',
   'supabase/tests/staging_clinical_fixture_readiness_readonly.sql',
+  'supabase/tests/staging_auth_profile_consistency_readonly.sql',
   'scripts/staging-authenticated-referral-access.mjs',
   'docs/REFLINK_STAGING_MIGRATION_LEDGER_REPAIR_RUNBOOK_20261111.md',
   'docs/REFLINK_STAGING_REAL_AUTH_ACCEPTANCE_20261111.md',
