@@ -1668,9 +1668,49 @@ const handleSignIn = async () => {
         confirmPassword: "",
       });
 
-      setPasswordMessage(
-        "Password changed successfully. Your new password is now active."
-      );
+      // The Edge Function has already changed the password. Revalidate the
+      // authenticated identity and database role before opening a workspace.
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData?.user) {
+        setPasswordMessage("Password changed successfully. Please sign in again with your new password.");
+        setRole(null);
+        setProfile(null);
+        setScreen("login");
+        return;
+      }
+
+      const { data: refreshedProfile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, full_name, role, facility_id, must_change_password")
+        .eq("id", authData.user.id)
+        .single();
+      if (profileError || !refreshedProfile || refreshedProfile.must_change_password) {
+        setPasswordMessage("Password changed successfully. Please sign in again to verify your account.");
+        setRole(null);
+        setProfile(null);
+        setScreen("login");
+        return;
+      }
+
+      const nextRole = {
+        administrator: "Administrator",
+        phc_staff: "PHC Staff",
+        receiving_staff: "Receiving Facility",
+      }[String(refreshedProfile.role || "").trim().toLowerCase()];
+      if (!nextRole) {
+        setPasswordMessage("Password changed successfully, but your workspace role needs administrator review.");
+        setRole(null);
+        setProfile(null);
+        setScreen("login");
+        return;
+      }
+
+      setProfile({ ...refreshedProfile, auth_user_id: authData.user.id });
+      setRole(nextRole);
+      setDashboardView("overview");
+      setDashboardFilter("all");
+      setPasswordMessage("");
+      setScreen("dashboard");
     } catch (error) {
       console.error("PASSWORD CHANGE ERROR:", error);
       setPasswordError(
