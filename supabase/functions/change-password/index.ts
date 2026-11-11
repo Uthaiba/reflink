@@ -2,13 +2,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://reflink-ten.vercel.app",
+  "https://reflink-yobe.vercel.app",
+  "https://reflink-fwyo99chg-uthaibas-projects.vercel.app",
   "http://localhost:5173",
 ];
 
 function allowedOrigins(): Set<string> {
   const configured = Deno.env.get("REFLINK_ALLOWED_ORIGINS");
   return new Set(
-    (configured ? configured.split(",") : DEFAULT_ALLOWED_ORIGINS)
+    [...DEFAULT_ALLOWED_ORIGINS, ...(configured ? configured.split(",") : [])]
       .map((value) => value.trim())
       .filter(Boolean),
   );
