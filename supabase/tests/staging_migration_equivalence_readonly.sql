@@ -15,6 +15,11 @@ WITH checks AS (
         EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='public.referrals'::regclass
           AND conname='referrals_offline_submission_key_required' AND convalidated),
         'Offline retry key CHECK exists and is validated'
+ UNION ALL SELECT 'investigation_bucket_private_and_bounded',
+        EXISTS (SELECT 1 FROM storage.buckets WHERE id='referral-investigation-results'
+          AND public IS FALSE AND file_size_limit = 10485760
+          AND allowed_mime_types @> ARRAY['application/pdf','image/jpeg','image/png']::text[]),
+        'Investigation bucket must be private with 10 MiB file cap and supported clinical formats'
  UNION ALL SELECT 'investigation_storage_no_client_mutation_policy',
         NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects'
           AND cmd IN ('UPDATE','DELETE','ALL')),
