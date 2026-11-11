@@ -40,6 +40,15 @@ WITH checks AS (
           AND with_check LIKE '%referring_user_id%'
           AND with_check LIKE '%receiving_facility_id%'),
         'Upload policy checks referral author or receiving facility participant'
+ UNION ALL SELECT 'profile_role_escalation_trigger_guard',
+        EXISTS (SELECT 1 FROM pg_trigger t
+          WHERE t.tgrelid='public.profiles'::regclass
+          AND t.tgname='guard_profile_security_fields' AND NOT t.tgisinternal
+          AND (t.tgtype & 16) = 16
+          AND pg_get_functiondef(t.tgfoid) LIKE '%NEW.role IS DISTINCT FROM OLD.role%'
+          AND pg_get_functiondef(t.tgfoid) LIKE '%NEW.facility_id IS DISTINCT FROM OLD.facility_id%'
+          AND pg_get_functiondef(t.tgfoid) LIKE '%Only administrators can change protected profile fields%'),
+        'Self-profile updates cannot alter role or facility without administrator authorization'
  UNION ALL SELECT 'referrals_authenticated_no_direct_update',
         NOT has_table_privilege('authenticated','public.referrals','UPDATE'),
         'Authenticated clients cannot bypass guarded referral mutation via direct UPDATE'
