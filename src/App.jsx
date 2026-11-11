@@ -3045,6 +3045,11 @@ provisional_diagnosis: "",
     setMessage("");
     setLoading(true);
 
+    // Preserve the server-created referral identity when a later attachment step fails.
+    // Never treat a partial submission as a failed referral insert.
+    let persistedReferral = null;
+    let attachmentProcessingStarted = false;
+
     try {
 
       const {
@@ -3232,6 +3237,7 @@ provisional_diagnosis: "",
 
 
       let insertedReferral = existingReferral;
+      if (existingReferral) persistedReferral = existingReferral;
 
       if (!insertedReferral) {
         const { data, error: referralError } = await supabase
@@ -3258,9 +3264,11 @@ provisional_diagnosis: "",
           }
         } else {
           insertedReferral = data;
+          persistedReferral = data;
         }
       }
 
+      attachmentProcessingStarted = true;
       let savedInvestigationRecords = selectedInvestigations.map(({ result_file, ...item }) => item);
       if (insertedReferral?.id) {
         for (let i = 0; i < selectedInvestigations.length; i += 1) {
@@ -3350,6 +3358,20 @@ provisional_diagnosis: "",
       setSelectedInvestigations([]);
 
     } catch (err) {
+
+      if (persistedReferral && attachmentProcessingStarted) {
+        // Keep the form, attachments, and offline client ID intact for clinical reconciliation.
+        // Do not automatically reinsert or reupload files: a previous upload may have succeeded.
+        setSavedReferralInfo({
+          referralNumber: persistedReferral.referral_number,
+          patientIdentifier: form.patient_identifier,
+        });
+        setError(
+          `Referral ${persistedReferral.referral_number} was saved, but investigation attachment processing could not be confirmed. Do not submit this referral again. Open the existing referral, check its investigation files, and contact an administrator to reconcile missing files before proceeding.`
+        );
+        console.error("Referral attachment reconciliation required:", err?.code || err?.name || "unknown error");
+        return;
+      }
 
       console.error(
         "Referral creation error:",
