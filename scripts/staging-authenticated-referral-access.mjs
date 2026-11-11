@@ -69,6 +69,27 @@ if (!PHC.profile.facility_id || !RECEIVING.profile.facility_id ||
     RECEIVING.profile.facility_id === OUTSIDER.profile.facility_id) {
   throw new Error('Fixtures require separate receiving and outsider facilities');
 }
+// Validate the facility assignment and status before any referral assertions.
+// A mismatched PHC profile could otherwise produce a misleading green test.
+const facilityIds = [...new Set([
+  PHC.profile.facility_id, RECEIVING.profile.facility_id,
+  OUTSIDER.profile.facility_id,
+])];
+const { data: facilities, error: facilityError } = await ADMIN.api.from('facilities')
+  .select('id,facility_type,is_active').in('id', facilityIds);
+if (facilityError || !facilities || facilities.length !== facilityIds.length) {
+  throw new Error('Unable to validate all clinical fixture facilities');
+}
+const byId = new Map(facilities.map((facility) => [facility.id, facility]));
+if (facilityIds.some((id) => byId.get(id)?.is_active === false)) {
+  throw new Error('Clinical fixture includes an inactive facility');
+}
+if (byId.get(PHC.profile.facility_id)?.facility_type !== 'primary_health_centre') {
+  throw new Error('PHC staff fixture must belong to a primary health centre');
+}
+if (byId.get(RECEIVING.profile.facility_id)?.facility_type !== 'general_hospital') {
+  throw new Error('Receiving staff fixture must belong to a general hospital');
+}
 const referralId = env.REFLINK_STAGING_REFERRAL_ID;
 const fetchReferral = async (name) => {
   const { data, error } = await actors[name].api.from('referrals')
