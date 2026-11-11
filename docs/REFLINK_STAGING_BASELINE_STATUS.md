@@ -266,3 +266,13 @@ No rows were inserted or modified during this readiness check. No production res
 - Health: no findings.
 - Synthetic staging identity baseline remains empty: 0 Auth users, 0 profiles, 0 facilities.
 - No database rows, grants, indexes, Edge Function code/secrets, Auth settings, or production resources were changed during this five-gate check.
+
+
+## Controlled synthetic identity bootstrap runbook — 11 November 2026
+
+- Added `docs/REFLINK_STAGING_IDENTITY_BOOTSTRAP_RUNBOOK.md` for the authorized project owner to create the first staging Auth user through Supabase Dashboard > Authentication > Users, then create its matching administrator profile and three synthetic facilities through the staging SQL Editor.
+- The runbook uses the actual Auth-issued UUID, creates no Auth records through SQL, preserves RLS/triggers, requires a forced password change, and directs all subsequent PHC/receiving/unrelated test-user provisioning through the existing JWT-verified `create-user` Edge Function.
+- Added explicit preflight, verification, CORS stop condition, role/facility acceptance sequence, cleanup and evidence requirements.
+- The procedure is documented only; no Auth user, profile or facility was created. The synthetic staging baseline remains empty pending owner execution.
+- Verified the latest prior commit `fdab1f0f5e6aac4f9386337c0ffe1bbe71a5c3e1` has quality-gate run #296 completed successfully with all three jobs passing (frontend lint/build, Edge Function type check and migration integrity). The new runbook commit is documentation-only; its own workflow status must be checked separately.
+- No production resources were modified.
