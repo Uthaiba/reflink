@@ -3285,7 +3285,7 @@ provisional_diagnosis: "",
           );
         }
         if (savedInvestigationRecords.length) {
-          const { error: resultMetaError } = await supabase.from("referrals").update({ investigation_records: savedInvestigationRecords }).eq("id", insertedReferral.id);
+          const { error: resultMetaError } = await supabase.rpc("register_referral_investigation_files", { p_referral_id: insertedReferral.id, p_records: savedInvestigationRecords });
           if (resultMetaError) throw resultMetaError;
         }
       }
