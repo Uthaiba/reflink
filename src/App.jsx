@@ -3283,8 +3283,8 @@ provisional_diagnosis: "",
           savedInvestigationRecords = savedInvestigationRecords.map((item, itemIndex) =>
             itemIndex === i ? { ...item, result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size } : item
           );
-        }
-        if (savedInvestigationRecords.length) {
+          // Register each successful upload immediately so a later upload failure
+          // does not leave earlier files without referral metadata.
           const { error: resultMetaError } = await supabase.rpc("register_referral_investigation_files", { p_referral_id: insertedReferral.id, p_records: savedInvestigationRecords });
           if (resultMetaError) throw resultMetaError;
         }
