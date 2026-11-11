@@ -40,6 +40,12 @@ WITH checks AS (
           AND with_check LIKE '%referring_user_id%'
           AND with_check LIKE '%receiving_facility_id%'),
         'Upload policy checks referral author or receiving facility participant'
+ UNION ALL SELECT 'clinical_tables_rls_enabled',
+        (SELECT count(*) = 4 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+          WHERE c.relrowsecurity AND
+            ((n.nspname='public' AND c.relname IN ('referrals','profiles','referral_notifications'))
+             OR (n.nspname='storage' AND c.relname='objects'))),
+        'RLS remains enabled on referrals, profiles, notifications and storage objects'
  UNION ALL SELECT 'profile_role_escalation_trigger_guard',
         EXISTS (SELECT 1 FROM pg_trigger t
           WHERE t.tgrelid='public.profiles'::regclass
