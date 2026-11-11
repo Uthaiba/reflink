@@ -35,6 +35,20 @@ WITH checks AS (
           AND with_check LIKE '%referring_user_id%'
           AND with_check LIKE '%receiving_facility_id%'),
         'Upload policy checks referral author or receiving facility participant'
+ UNION ALL SELECT 'referrals_authenticated_no_direct_update',
+        NOT has_table_privilege('authenticated','public.referrals','UPDATE'),
+        'Authenticated clients cannot bypass guarded referral mutation via direct UPDATE'
+ UNION ALL SELECT 'referrals_anonymous_no_access',
+        NOT has_table_privilege('anon','public.referrals','SELECT,INSERT,UPDATE,DELETE'),
+        'Anonymous clients have no referral table privileges'
+ UNION ALL SELECT 'notification_log_participant_policy',
+        EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='referral_notifications'
+          AND policyname='Referral participants can view notification log'
+          AND cmd='SELECT' AND roles::text LIKE '%authenticated%'
+          AND qual LIKE '%is_administrator()%'
+          AND qual LIKE '%referring_user_id%'
+          AND qual LIKE '%receiving_facility_id%'),
+        'Notification log read policy checks administrator or referral participant'
  UNION ALL SELECT 'investigation_registration_function_guards',
         EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
           WHERE n.nspname='public' AND p.proname='register_referral_investigation_files'
