@@ -23,6 +23,22 @@ const url = new URL(env.REFLINK_STAGING_URL);
 if (url.hostname !== 'rcskuzmvyugbanygizri.supabase.co') {
   throw new Error('Refusing non-synthetic-staging Supabase project');
 }
+// Never allow a service-role or secret key into a user-facing acceptance runner.
+const suppliedKey = env.REFLINK_STAGING_ANON_KEY;
+if (suppliedKey.startsWith('sb_secret_') || suppliedKey.startsWith('sb_service_')) {
+  throw new Error('Refusing Supabase secret/service-role key');
+}
+if (suppliedKey.split('.').length === 3) {
+  let claims;
+  try {
+    claims = JSON.parse(Buffer.from(suppliedKey.split('.')[1], 'base64url').toString('utf8'));
+  } catch {
+    throw new Error('Invalid JWT-shaped Supabase key');
+  }
+  if (claims.role !== 'anon') throw new Error('Only anon JWT keys are permitted');
+} else if (!suppliedKey.startsWith('sb_publishable_')) {
+  throw new Error('Expected staging publishable or anon key');
+}
 if (!/^[0-9a-f-]{36}$/i.test(env.REFLINK_STAGING_REFERRAL_ID)) {
   throw new Error('Expected UUID referral fixture ID');
 }
