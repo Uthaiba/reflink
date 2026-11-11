@@ -155,3 +155,20 @@ jobs:
           grep -Fq "ALTER PUBLICATION supabase_realtime ADD TABLE public.referral_notifications" "${files[14]}"
           grep -Fq "channel" "${files[10]}"
           echo "Migration integrity checks passed."
+
+          # Post-baseline migrations must not silently disappear from the quality gate.
+          post_baseline=(supabase/migrations/20261111*.sql)
+          test "${#post_baseline[@]}" -ge 13
+          for version in 160000 163000 170000 173000 180000 183000 184500 190000 191500 193000 194500 200000 201500; do
+            matches=(supabase/migrations/20261111"${version}"_*.sql)
+            test "${#matches[@]}" -eq 1
+            test -s "${matches[0]}"
+          done
+          latest=supabase/migrations/20261111201500_require_complete_investigation_file_descriptors.sql
+          grep -Fq "Incomplete investigation file descriptor" "$latest"
+          grep -Fq "Registered investigation file metadata cannot be modified" "$latest"
+          grep -Fq "IS DISTINCT FROM 'array'" "$latest"
+          grep -Fq "IF jsonb_array_length(p_records) > 0 THEN" "$latest"
+          test -s supabase/tests/staging_migration_equivalence_readonly.sql
+          test -s supabase/tests/staging_post_baseline_migration_ledger_readonly.sql
+          echo "Post-baseline migration source checks passed (database ledger verification remains separate)."
