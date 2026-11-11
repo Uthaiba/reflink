@@ -62,6 +62,10 @@ WITH checks AS (
  UNION ALL SELECT 'investigation_registration_anon_denied',
         NOT has_function_privilege('anon','public.register_referral_investigation_files(uuid,jsonb)','EXECUTE'),
         'Anonymous callers cannot register investigation metadata'
+ UNION ALL SELECT 'admin_analytics_runtime_role_guard',
+        position('IF NOT public.is_current_user_administrator() THEN' in
+          pg_get_functiondef('public.get_referral_analytics_summary()'::regprocedure)) > 0,
+        'Analytics function itself rejects non-administrator callers'
  UNION ALL SELECT 'admin_analytics_anon_denied',
         NOT has_function_privilege('anon','public.get_referral_analytics_summary()','EXECUTE'),
         'Anonymous callers cannot invoke analytics'
