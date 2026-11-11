@@ -1,3 +1,4 @@
+import NotificationCenter from "../notifications/NotificationCenter.jsx";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase.js";
 import AdminPublicHealthReporting from "./AdminPublicHealthReporting.jsx";
@@ -12,6 +13,8 @@ function AdminDashboard({
   AnalysisHub,
   formatPatientAge,
   getStatusLabel,
+  onChangePassword,
+  onSignOut,
 }) {
   const [view, setView] = useState("home");
 
@@ -2729,6 +2732,8 @@ function AdminDashboard({
             />
           </div>
           <div className="admin-topbar-actions">
+            <button type="button" className="secondary-button" onClick={onChangePassword}>Change Password</button>
+            <button type="button" className="secondary-button" onClick={onSignOut}>Sign Out</button>
             <span className={`admin-live-status ${adminSystemStatus === "Operational" ? "is-ok" : "is-attention"}`}><i /> {adminSystemStatus}</span>
             <button type="button" className="admin-icon-button" title="Refresh dashboard" onClick={() => { loadFacilities(); loadUsers(); loadReferrals(); }}>↻</button>
             <button type="button" className="admin-topbar-user" aria-label="Administrator account">
@@ -2749,6 +2754,7 @@ function AdminDashboard({
         </nav>
 
         <div className="admin-modern-main">
+          <NotificationCenter userId={profile?.auth_user_id || profile?.id} />
           <div className="admin-modern-heading">
             <div>
               <span className="eyebrow">ADMINISTRATION / OVERVIEW</span>
