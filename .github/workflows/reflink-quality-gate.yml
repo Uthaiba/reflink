@@ -36,6 +36,9 @@ jobs:
       - name: Run Oxlint
         run: npm run lint
 
+      - name: Syntax-check real-Auth staging acceptance runner (no credentials)
+        run: node --check scripts/staging-authenticated-referral-access.mjs
+
       - name: Build production bundle
         run: npm run build
 
