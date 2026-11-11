@@ -180,6 +180,9 @@ jobs:
             supabase/tests/staging_unassigned_profile_confidentiality_rls.sql
             supabase/tests/staging_administrator_analytics_positive.sql
             supabase/tests/staging_migration_repair_data_preflight_readonly.sql
+            supabase/tests/staging_exposed_security_definer_inventory_readonly.sql
+            supabase/tests/staging_privileged_rpc_unassigned_identity_negative.sql
+            supabase/tests/staging_admin_reporting_rpc_role_matrix.sql
           )
           for evidence in "${evidence_files[@]}"; do
             test -s "$evidence" || { echo "Missing staging release evidence: $evidence"; exit 1; }
