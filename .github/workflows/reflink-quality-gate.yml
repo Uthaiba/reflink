@@ -183,6 +183,7 @@ jobs:
             supabase/tests/staging_exposed_security_definer_inventory_readonly.sql
             supabase/tests/staging_privileged_rpc_unassigned_identity_negative.sql
             supabase/tests/staging_admin_reporting_rpc_role_matrix.sql
+            supabase/tests/staging_admin_predicate_and_print_audit_role_matrix.sql
           )
           for evidence in "${evidence_files[@]}"; do
             test -s "$evidence" || { echo "Missing staging release evidence: $evidence"; exit 1; }
