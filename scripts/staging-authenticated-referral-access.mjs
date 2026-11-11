@@ -90,6 +90,9 @@ if (byId.get(PHC.profile.facility_id)?.facility_type !== 'primary_health_centre'
 if (byId.get(RECEIVING.profile.facility_id)?.facility_type !== 'general_hospital') {
   throw new Error('Receiving staff fixture must belong to a general hospital');
 }
+if (byId.get(OUTSIDER.profile.facility_id)?.facility_type !== 'general_hospital') {
+  throw new Error('Unrelated receiving staff must belong to a separate general hospital');
+}
 const referralId = env.REFLINK_STAGING_REFERRAL_ID;
 const fetchReferral = async (name) => {
   const { data, error } = await actors[name].api.from('referrals')
