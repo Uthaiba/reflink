@@ -60,7 +60,7 @@ try {
   const { data: existing, error: existingError } = await phc.from('referrals')
     .select('id').eq('is_test', true)
     .eq('referring_user_id', sender.profile.id)
-    .eq('receiving_facility_id', recipient.profile.facility.id).limit(2);
+    .eq('receiving_facility_id', recipient.profile.facility_id).limit(2);
   if (existingError) throw new Error('Cannot inspect existing synthetic referrals');
   if (existing?.length) {
     console.log('Existing synthetic referral fixture found. ID: ' + existing[0].id);
