@@ -4,6 +4,9 @@ import { supabase } from "./lib/supabase.js";
 import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
 import AnalyticsDashboard from "./components/dashboards/AnalyticsDashboard.jsx";
 import AnalysisHub from "./components/dashboards/AnalysisHub.jsx";
+import NotificationCenter from "./components/notifications/NotificationCenter.jsx";
+import OfflineDraftVault from "./components/offline/OfflineDraftVault.jsx";
+import CounterReferralForm from "./components/CounterReferralForm.jsx";
 import "./App.css";
 import "./reflink-theme-professional.css";
 import "./admin-dashboard-modern.css";
@@ -1553,24 +1556,6 @@ const handleSignIn = async () => {
   }
 };
 
-  /* =========================================================
-     TEST SUPABASE CONNECTION
-     ========================================================= */
-
-  useEffect(() => {
-    const testSupabase = async () => {
-      const { data, error } = await supabase
-        .from("facilities")
-        .select("*")
-        .limit(1);
-
-      console.log("Supabase data:", data);
-      console.log("Supabase error:", error);
-    };
-
-    testSupabase();
-  }, []);
-
 
   useEffect(() => {
     const {
@@ -1667,11 +1652,15 @@ const handleSignIn = async () => {
     setPasswordSaving(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "change-password",
+        { body: { password: newPassword } }
+      );
 
       if (error) throw error;
+      if (!data?.success) {
+        throw new Error(data?.error || "Unable to change your password.");
+      }
 
       setPasswordForm({
         currentPassword: "",
@@ -1679,23 +1668,49 @@ const handleSignIn = async () => {
         confirmPassword: "",
       });
 
-      try {
-        await supabase
-          .from("profiles")
-          .update({
-            must_change_password: false,
-          })
-          .eq("id", profile?.id || "");
-      } catch (profileUpdateError) {
-        console.warn(
-          "PASSWORD FLAG UPDATE SKIPPED:",
-          profileUpdateError
-        );
+      // The Edge Function has already changed the password. Revalidate the
+      // authenticated identity and database role before opening a workspace.
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData?.user) {
+        setPasswordMessage("Password changed successfully. Please sign in again with your new password.");
+        setRole(null);
+        setProfile(null);
+        setScreen("login");
+        return;
       }
 
-      setPasswordMessage(
-        "Password changed successfully. Your new password is now active."
-      );
+      const { data: refreshedProfile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, full_name, role, facility_id, must_change_password")
+        .eq("id", authData.user.id)
+        .single();
+      if (profileError || !refreshedProfile || refreshedProfile.must_change_password) {
+        setPasswordMessage("Password changed successfully. Please sign in again to verify your account.");
+        setRole(null);
+        setProfile(null);
+        setScreen("login");
+        return;
+      }
+
+      const nextRole = {
+        administrator: "Administrator",
+        phc_staff: "PHC Staff",
+        receiving_staff: "Receiving Facility",
+      }[String(refreshedProfile.role || "").trim().toLowerCase()];
+      if (!nextRole) {
+        setPasswordMessage("Password changed successfully, but your workspace role needs administrator review.");
+        setRole(null);
+        setProfile(null);
+        setScreen("login");
+        return;
+      }
+
+      setProfile({ ...refreshedProfile, auth_user_id: authData.user.id });
+      setRole(nextRole);
+      setDashboardView("overview");
+      setDashboardFilter("all");
+      setPasswordMessage("");
+      setScreen("dashboard");
     } catch (error) {
       console.error("PASSWORD CHANGE ERROR:", error);
       setPasswordError(
@@ -2445,104 +2460,63 @@ const handleSignIn = async () => {
           DASHBOARD
           ===================================================== */}
 
-      {screen === "dashboard" && (
+      {screen === "dashboard" && role === "Administrator" && (
+        <AdministratorRoute>
+          <AdminDashboard
+            profile={profile}
+            AnalyticsDashboard={AnalyticsDashboard}
+            AnalysisHub={AnalysisHub}
+            formatPatientAge={formatPatientAge}
+            getStatusLabel={getStatusLabel}
+            onChangePassword={() => {
+              setPasswordError("");
+              setPasswordMessage("");
+              setPasswordForm({
+                currentPassword: "",
+                newPassword: "",
+                confirmPassword: "",
+              });
+              setScreen("change-password");
+            }}
+            onSignOut={logout}
+          />
+        </AdministratorRoute>
+      )}
+
+      {screen === "dashboard" && role !== "Administrator" && (
         <div className="dashboard-page">
-
           <header className="dashboard-header">
-
             <div className="brand">
-
-              <div className="brand-mark">
-                R
-              </div>
-
+              <div className="brand-mark">R</div>
               <div>
                 <h1>REFLINK</h1>
-
-                <p>
-  {profile?.full_name
-    ? `${profile.full_name} • ${role}`
-    : role}
-</p>
+                <p>{profile?.full_name ? `${profile.full_name} • ${role}` : role}</p>
               </div>
-
             </div>
-
             <div className="dashboard-header-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => {
-                  setPasswordError("");
-                  setPasswordMessage("");
-                  setPasswordForm({
-                    currentPassword: "",
-                    newPassword: "",
-                    confirmPassword: "",
-                  });
-                  setScreen("change-password");
-                }}
-              >
-                Change Password
-              </button>
-
-              <button
-                type="button"
-                className="logout-button"
-                onClick={logout}
-              >
-                Sign Out
-              </button>
+              <button type="button" className="secondary-button" onClick={() => {
+                setPasswordError("");
+                setPasswordMessage("");
+                setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+                setScreen("change-password");
+              }}>Change Password</button>
+              <button type="button" className="logout-button" onClick={logout}>Sign Out</button>
             </div>
-
           </header>
-
           <main className="dashboard">
-
             <div className="dashboard-title">
-
               <div>
-
-                <span className="eyebrow">
-                  REFLINK WORKSPACE
-                </span>
-
-                <h2>
-                  {role} Dashboard
-                </h2>
-
-                <p>
-                  Welcome to your referral management workspace.
-                </p>
-
+                <span className="eyebrow">REFLINK WORKSPACE</span>
+                <h2>{role} Dashboard</h2>
+                <p>Welcome to your referral management workspace.</p>
               </div>
-
             </div>
-
+            <NotificationCenter userId={profile?.auth_user_id || profile?.id} />
             {role === "PHC Staff" && (
-              <PHCStaffDashboard
-                onNewReferral={() => setScreen("new-referral")}
-              />
+              <PHCStaffDashboard onNewReferral={() => setScreen("new-referral")} />
             )}
-
-            {role === "Receiving Facility" && (
-              <ReceivingDashboard />
-            )}
-
-            {role === "Administrator" && (
-              <AdministratorRoute>
-                <AdminDashboard
-                  profile={profile}
-                  AnalyticsDashboard={AnalyticsDashboard}
-                  AnalysisHub={AnalysisHub}
-                  formatPatientAge={formatPatientAge}
-                  getStatusLabel={getStatusLabel}
-                />
-              </AdministratorRoute>
-            )}
-
+            {role === "Receiving Facility" && <ReceivingDashboard />}
           </main>
-
         </div>
       )}
 
@@ -2581,6 +2555,7 @@ const handleSignIn = async () => {
           <main className="dashboard">
 
             <NewReferralForm
+              profile={profile}
               onBack={() => setScreen("dashboard")}
             />
 
@@ -2795,7 +2770,7 @@ function InvestigationResultEditor({ item, onChange, onFileChange }) {
   );
 }
 
-function NewReferralForm({ onBack }) {
+function NewReferralForm({ onBack, profile }) {
 
   const [form, setForm] = useState({
   patient_identifier: "",
@@ -2854,6 +2829,8 @@ provisional_diagnosis: "",
   const [selectedInvestigations, setSelectedInvestigations] = useState([]);
   const [printDraft, setPrintDraft] = useState(null);
   const [savedReferralInfo, setSavedReferralInfo] = useState(null);
+  const [offlineClientId, setOfflineClientId] = useState(() => globalThis.crypto.randomUUID());
+  const [isRestoredOfflineDraft, setIsRestoredOfflineDraft] = useState(false);
 
   useEffect(() => {
     loadFacilities();
@@ -2869,15 +2846,6 @@ provisional_diagnosis: "",
       .eq("is_active", true)
       .order("name");
 
-    console.log(
-      "FACILITIES FROM SUPABASE:",
-      data
-    );
-
-    console.log(
-      "FACILITIES ERROR:",
-      error
-    );
 
     if (error) {
       setError(
@@ -3067,10 +3035,20 @@ provisional_diagnosis: "",
 
     e.preventDefault();
 
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setError("You are offline. This referral has not been submitted. Save it in Encrypted offline drafts below, then restore and submit when you are connected.");
+      return;
+    }
+
     setError("");
     setSavedReferralInfo(null);
     setMessage("");
     setLoading(true);
+
+    // Preserve the server-created referral identity when a later attachment step fails.
+    // Never treat a partial submission as a failed referral insert.
+    let persistedReferral = null;
+    let attachmentProcessingStarted = false;
 
     try {
 
@@ -3107,16 +3085,43 @@ provisional_diagnosis: "",
         );
       }
 
+      if (profile.role !== "phc_staff") {
+        throw new Error(
+          "Only an authorised PHC staff account can submit a referral. Please contact your REFLINK administrator if you believe this is an error."
+        );
+      }
+
       if (!profile.facility_id) {
         throw new Error(
           "Your account has not been assigned to a healthcare facility yet."
         );
       }
 
-      const referralNumber =
-        generateReferralNumber();
+      // Revalidate the authenticated user's PHC role and facility on every
+      // submission, including drafts restored after a period offline.
+
+      // A stable client ID survives retries and is stored inside encrypted offline drafts.
+      // The database's unique partial index on offline_client_id is the final duplicate guard.
+      const { data: existingReferral, error: existingReferralError } = await supabase
+        .from("referrals")
+        .select("id, referral_number")
+        .eq("offline_client_id", offlineClientId)
+        .eq("referring_user_id", user.id)
+        .maybeSingle();
+
+      if (existingReferralError) throw existingReferralError;
+      if (existingReferral && selectedInvestigations.some((item) => Boolean(item.result_file))) {
+        throw new Error(`This draft was already submitted as ${existingReferral.referral_number}. To prevent duplicate investigation uploads, locate the saved referral and verify its attachments before retrying.`);
+      }
+      if (existingReferral) {
+        throw new Error(`This draft was already submitted as ${existingReferral.referral_number}. No duplicate was created. Locate the existing referral and verify its status before taking further action.`);
+      }
+
+      const referralNumber = generateReferralNumber();
 
       const referralPayload = {
+        offline_client_id: offlineClientId,
+        sync_source: isRestoredOfflineDraft ? "offline" : "online",
   referral_number:
     referralNumber,
 
@@ -3230,39 +3235,40 @@ provisional_diagnosis: "",
           "sent",
       };
 
-      console.log(
-        "AUTH USER:",
-        user.id
-      );
 
-      console.log(
-        "PROFILE:",
-        profile
-      );
+      let insertedReferral = existingReferral;
+      if (existingReferral) persistedReferral = existingReferral;
 
-      console.log(
-        "REFERRAL PAYLOAD:",
-        referralPayload
-      );
+      if (!insertedReferral) {
+        const { data, error: referralError } = await supabase
+          .from("referrals")
+          .insert(referralPayload)
+          .select("id, referral_number")
+          .single();
 
-      const {
-        data: insertedReferral,
-        error: referralError,
-      } = await supabase
-        .from("referrals")
-        .insert(referralPayload)
-        .select("id")
-        .single();
-
-      if (referralError) {
-        console.error(
-          "REFERRAL INSERT ERROR:",
-          referralError
-        );
-
-        throw referralError;
+        if (referralError) {
+          // A concurrent retry may win the unique-index race. Re-read only
+          // this user's matching client ID; never update an existing referral.
+          if (referralError.code === "23505") {
+            const { data: retryMatch, error: retryLookupError } = await supabase
+              .from("referrals")
+              .select("id, referral_number")
+              .eq("offline_client_id", offlineClientId)
+              .eq("referring_user_id", user.id)
+              .maybeSingle();
+            if (retryLookupError || !retryMatch) throw referralError;
+            throw new Error(`This draft was already submitted as ${retryMatch.referral_number}. No duplicate was created. Locate the existing referral and verify its status before taking further action.`);
+          } else {
+            console.error("REFERRAL INSERT ERROR:", referralError);
+            throw referralError;
+          }
+        } else {
+          insertedReferral = data;
+          persistedReferral = data;
+        }
       }
 
+      attachmentProcessingStarted = true;
       let savedInvestigationRecords = selectedInvestigations.map(({ result_file, ...item }) => item);
       if (insertedReferral?.id) {
         for (let i = 0; i < selectedInvestigations.length; i += 1) {
@@ -3277,9 +3283,9 @@ provisional_diagnosis: "",
           savedInvestigationRecords = savedInvestigationRecords.map((item, itemIndex) =>
             itemIndex === i ? { ...item, result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size } : item
           );
-        }
-        if (savedInvestigationRecords.length) {
-          const { error: resultMetaError } = await supabase.from("referrals").update({ investigation_records: savedInvestigationRecords }).eq("id", insertedReferral.id);
+          // Register each successful upload immediately so a later upload failure
+          // does not leave earlier files without referral metadata.
+          const { error: resultMetaError } = await supabase.rpc("register_referral_investigation_files", { p_referral_id: insertedReferral.id, p_records: savedInvestigationRecords });
           if (resultMetaError) throw resultMetaError;
         }
       }
@@ -3310,6 +3316,8 @@ provisional_diagnosis: "",
         `Referral saved successfully. Patient: ${form.patient_identifier || "Not recorded"} • REFLINK ID: ${referralNumber}`
       );
 
+      setOfflineClientId(globalThis.crypto.randomUUID());
+      setIsRestoredOfflineDraft(false);
       setForm({
   patient_identifier: "",
   patient_age_months: "",
@@ -3350,6 +3358,20 @@ provisional_diagnosis: "",
       setSelectedInvestigations([]);
 
     } catch (err) {
+
+      if (persistedReferral && attachmentProcessingStarted) {
+        // Keep the form, attachments, and offline client ID intact for clinical reconciliation.
+        // Do not automatically reinsert or reupload files: a previous upload may have succeeded.
+        setSavedReferralInfo({
+          referralNumber: persistedReferral.referral_number,
+          patientIdentifier: form.patient_identifier,
+        });
+        setError(
+          `Referral ${persistedReferral.referral_number} was saved, but investigation attachment processing could not be confirmed. Do not submit this referral again. Open the existing referral, check its investigation files, and contact an administrator to reconcile missing files before proceeding.`
+        );
+        console.error("Referral attachment reconciliation required:", err?.code || err?.name || "unknown error");
+        return;
+      }
 
       console.error(
         "Referral creation error:",
@@ -3441,6 +3463,31 @@ provisional_diagnosis: "",
           {error}
         </div>
       )}
+
+      <OfflineDraftVault
+        userId={profile?.auth_user_id || profile?.id}
+        draft={{
+          form,
+          diagnosisEntries,
+          selectedInvestigationCategories,
+          selectedInvestigations: selectedInvestigations.map(({ result_file, ...item }) => item),
+          offlineClientId,
+          isRestoredOfflineDraft,
+        }}
+        hasAttachments={selectedInvestigations.some((item) => Boolean(item.result_file))}
+        onRestore={(savedDraft) => {
+          if (savedDraft?.form) setForm(savedDraft.form);
+          if (typeof savedDraft?.offlineClientId === "string" && savedDraft.offlineClientId) setOfflineClientId(savedDraft.offlineClientId);
+          setIsRestoredOfflineDraft(true);
+          if (Array.isArray(savedDraft?.diagnosisEntries)) setDiagnosisEntries(savedDraft.diagnosisEntries);
+          if (Array.isArray(savedDraft?.selectedInvestigationCategories)) setSelectedInvestigationCategories(savedDraft.selectedInvestigationCategories);
+          if (Array.isArray(savedDraft?.selectedInvestigations)) setSelectedInvestigations(savedDraft.selectedInvestigations);
+          setSavedReferralInfo(null);
+          setPrintDraft(null);
+          setError("");
+          setMessage("");
+        }}
+      />
 
       <form onSubmit={handleSubmit}>
 
@@ -4155,7 +4202,8 @@ function PHCStaffDashboard({ onNewReferral }) {
           discharged_at,
 
           referring_facility_id,
-          receiving_facility_id
+          receiving_facility_id,
+          counter_referral:counter_referrals(*)
         `)
         .eq(
           "referring_facility_id",
@@ -4172,10 +4220,6 @@ function PHCStaffDashboard({ onNewReferral }) {
         throw referralError;
       }
 
-      console.log(
-        "PHC REFERRALS:",
-        data
-      );
 
       setReferrals(data || []);
     } catch (err) {
@@ -4254,21 +4298,11 @@ function PHCStaffDashboard({ onNewReferral }) {
               filter:
                 `referring_facility_id=eq.${profile.facility_id}`,
             },
-            (payload) => {
-              console.log(
-                "PHC REALTIME REFERRAL UPDATE:",
-                payload
-              );
-
+            () => {
               loadMyReferrals();
             }
           )
-          .subscribe((status) => {
-            console.log(
-              "PHC REALTIME STATUS:",
-              status
-            );
-          });
+          .subscribe();
       } catch (err) {
         console.error(
           "PHC REALTIME ERROR:",
@@ -5078,6 +5112,19 @@ function PHCStaffDashboard({ onNewReferral }) {
                   : "Not discharged"
               }
             </p>
+            
+            {selectedReferral.counter_referral && (
+              <section className="dashboard-card counter-referral-feedback">
+                <span className="eyebrow">CLOSED-LOOP REFERRAL</span>
+                <h3>Counter-referral feedback received</h3>
+                <p><strong>Final diagnosis:</strong> {selectedReferral.counter_referral.final_diagnosis || "Not recorded"}</p>
+                <p><strong>Treatment provided:</strong> {selectedReferral.counter_referral.treatment_provided || "Not recorded"}</p>
+                <p><strong>Outcome:</strong> {String(selectedReferral.counter_referral.outcome || "Not recorded").replace(/_/g, " ")}</p>
+                <p><strong>Follow-up instructions:</strong> {selectedReferral.counter_referral.follow_up_instructions || "Not recorded"}</p>
+                {selectedReferral.counter_referral.referred_further_to && <p><strong>Further referral destination:</strong> {selectedReferral.counter_referral.referred_further_to}</p>}
+                {selectedReferral.counter_referral.additional_notes && <p><strong>Additional notes:</strong> {selectedReferral.counter_referral.additional_notes}</p>}
+              </section>
+            )}
 
             <hr />
 
@@ -5468,7 +5515,8 @@ function ReceivingDashboard() {
               state,
               lga,
               is_active
-            )
+            ),
+            counter_referral:counter_referrals(*)
           `)
           .eq(
             "receiving_facility_id",
@@ -5485,10 +5533,6 @@ function ReceivingDashboard() {
           throw referralError;
         }
 
-        console.log(
-          "INCOMING REFERRALS:",
-          data
-        );
 
         setReferrals(
           data || []
@@ -5659,6 +5703,10 @@ function ReceivingDashboard() {
       }
 
       setError("");
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
+        }
+
       setMessage("");
 
       setActionLoading(
@@ -5721,8 +5769,9 @@ function ReceivingDashboard() {
             "id",
             selectedInpatientReferral.id
           )
+          .eq("status", "admitted")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
@@ -5773,6 +5822,10 @@ function ReceivingDashboard() {
       }
 
       setError("");
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
+        }
+
       setMessage("");
 
       setActionLoading(
@@ -5838,8 +5891,9 @@ function ReceivingDashboard() {
             "id",
             selectedInpatientReferral.id
           )
+          .eq("status", "admitted")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
@@ -5882,6 +5936,10 @@ function ReceivingDashboard() {
     async (referralId) => {
 
       setError("");
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
+        }
+
       setMessage("");
       setActionLoading(
         referralId
@@ -5907,8 +5965,9 @@ function ReceivingDashboard() {
             "id",
             referralId
           )
+          .eq("status", "sent")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
@@ -5948,6 +6007,10 @@ function ReceivingDashboard() {
     async (referralId) => {
 
       setError("");
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
+        }
+
       setMessage("");
       setActionLoading(
         referralId
@@ -5973,8 +6036,9 @@ function ReceivingDashboard() {
             "id",
             referralId
           )
+          .eq("status", "acknowledged")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
@@ -6012,6 +6076,10 @@ function ReceivingDashboard() {
 
 const handleStartAssessment = async (referralId) => {
   setError("");
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
+        }
+
   setMessage("");
   setActionLoading(referralId);
 
@@ -6025,8 +6093,9 @@ const handleStartAssessment = async (referralId) => {
         status: "under_assessment",
       })
       .eq("id", referralId)
+      .eq("status", "patient_arrived")
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error("START ASSESSMENT ERROR:", error);
@@ -6066,6 +6135,10 @@ const handleStartAssessment = async (referralId) => {
       }
 
       setError("");
+        if (!data) {
+          throw new Error("This referral has changed since it was loaded. Refresh and review the current status before retrying.");
+        }
+
       setMessage("");
 
       setActionLoading(
@@ -6193,8 +6266,9 @@ const handleStartAssessment = async (referralId) => {
             "id",
             selectedReferral.id
           )
+          .eq("status", "under_assessment")
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) {
           throw error;
@@ -7367,6 +7441,25 @@ const handleStartAssessment = async (referralId) => {
                   <strong> Under Assessment</strong>.
                 </p>
               </div>
+            )}
+
+            {selectedReferral.status === "discharged" && !selectedReferral.counter_referral && (
+              <CounterReferralForm
+                referral={selectedReferral}
+                onCompleted={(updatedReferral) => {
+                  setSelectedReferral(updatedReferral);
+                  loadIncomingReferrals();
+                }}
+              />
+            )}
+
+            {selectedReferral.counter_referral && (
+              <section className="dashboard-card counter-referral-feedback">
+                <span className="eyebrow">CLOSED-LOOP REFERRAL</span>
+                <h3>Counter-referral already recorded</h3>
+                <p><strong>Final diagnosis:</strong> {selectedReferral.counter_referral.final_diagnosis || "Not recorded"}</p>
+                <p><strong>Outcome:</strong> {String(selectedReferral.counter_referral.outcome || "Not recorded").replace(/_/g, " ")}</p>
+              </section>
             )}
 
             <button

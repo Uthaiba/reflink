@@ -1,0 +1,242 @@
+name: REFLINK Quality Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+      - "reflink/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reflink-quality-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-quality:
+    name: Frontend lint and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Audit locked dependencies (block high and critical advisories)
+        run: npm audit --audit-level=high
+
+      - name: Run Oxlint
+        run: npm run lint
+
+      - name: Syntax-check real-Auth staging acceptance runner (no credentials)
+        run: node --check scripts/staging-authenticated-referral-access.mjs
+
+      - name: Syntax-check staging synthetic account provisioning runner (no credentials)
+        run: node --check scripts/staging-provision-synthetic-clinical-users.mjs
+
+      - name: Syntax-check staging synthetic referral fixture runner (no credentials)
+        run: node --check scripts/staging-create-synthetic-referral.mjs
+
+      - name: Verify staging fixture facility mapping (offline)
+        shell: bash
+        run: |
+          grep -Fq "recipient.profile.facility_id" scripts/staging-create-synthetic-referral.mjs
+          ! grep -Fq "recipient.profile.facility.id" scripts/staging-create-synthetic-referral.mjs
+          grep -Fq "REFLINK_STAGING_FIXTURE_CONFIRM" scripts/staging-create-synthetic-referral.mjs
+          grep -Fq "is_test: true" scripts/staging-create-synthetic-referral.mjs
+
+      - name: Guard staging Auth acceptance fail-closed controls (offline)
+        shell: bash
+        run: |
+          grep -Fq "new Set(identityEmails).size !== 4" scripts/staging-authenticated-referral-access.mjs
+          grep -Fq "url.protocol !== 'https:'" scripts/staging-authenticated-referral-access.mjs
+          grep -Fq "url.pathname !== '/'" scripts/staging-authenticated-referral-access.mjs
+          grep -Fq "fixture.is_test !== true" scripts/staging-authenticated-referral-access.mjs
+          grep -Fq "target.pathname !== '/'" scripts/staging-create-synthetic-referral.mjs
+          grep -Fq "existing.length !== 1" scripts/staging-create-synthetic-referral.mjs
+
+      - name: Verify account provisioner staging safety (offline)
+        shell: bash
+        run: |
+          grep -Fq "target.protocol !== 'https:'" scripts/staging-provision-synthetic-clinical-users.mjs
+          grep -Fq "target.pathname !== '/'" scripts/staging-provision-synthetic-clinical-users.mjs
+          grep -Fq "profile.facility_id !== null" scripts/staging-provision-synthetic-clinical-users.mjs
+          grep -Fq "REFLINK_STAGING_PROVISION_CONFIRM" scripts/staging-provision-synthetic-clinical-users.mjs
+
+      - name: Verify master-plan evidence inventory (offline, no secrets)
+        run: node scripts/reflink-release-evidence-gate.mjs
+
+      - name: Verify release gate fails closed without approvals
+        shell: bash
+        run: |
+          if node scripts/reflink-release-evidence-gate.mjs --require-release-ready; then
+            echo 'SECURITY FAILURE: release gate accepted missing approvals' >&2
+            exit 1
+          fi
+          echo 'Release gate correctly refuses unapproved promotion.'
+
+      - name: Build production bundle
+        run: npm run build
+
+  edge-function-quality:
+    name: Supabase Edge Function type check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check Edge Functions
+        run: |
+          deno check supabase/functions/create-user/index.ts
+          deno check supabase/functions/change-password/index.ts
+
+  migration-integrity:
+    name: Supabase migration integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify staged migration files and exclude production data imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            supabase/migrations/20261110063521_reconstruct_production_schema_in_staging.sql
+            supabase/migrations/20261110063620_configure_private_referral_storage_and_realtime.sql
+            supabase/migrations/20261110063704_add_staging_foreign_key_indexes_and_secure_views.sql
+            supabase/migrations/20261110063756_optimize_rls_auth_context_evaluation.sql
+            supabase/migrations/20261110063844_merge_equivalent_permissive_rls_policies.sql
+            supabase/migrations/20261110063912_pin_security_definer_search_paths.sql
+            supabase/migrations/20261110063935_explicitly_deny_client_access_to_internal_ledgers.sql
+            supabase/migrations/20261110065403_harden_concurrent_referral_print_auditing.sql
+            supabase/migrations/20261110065634_guard_forced_password_change_flag.sql
+            supabase/migrations/20261110134607_minimize_phi_in_audit_ledger.sql
+            supabase/migrations/20261110134826_add_idempotent_referral_notification_queue.sql
+            supabase/migrations/20261110135058_restrict_notification_trigger_function.sql
+            supabase/migrations/20261110135145_add_privacy_preserving_public_health_aggregate.sql
+            supabase/migrations/20261110135512_exclude_referral_identifiers_from_audit.sql
+            supabase/migrations/20261110142053_publish_referral_notifications_to_realtime.sql
+          )
+          for file in "${files[@]}"; do
+            test -s "$file"
+          done
+          test -s supabase/functions/create-user/index.ts
+          test -s supabase/functions/change-password/index.ts
+          test -s src/components/notifications/NotificationCenter.jsx
+          test -s src/components/notifications/NotificationCenter.css
+          test -s src/components/offline/OfflineDraftVault.jsx
+          test -s src/components/offline/OfflineDraftVault.css
+          test -s src/lib/offlineDraftVault.js
+          grep -Fq 'supabase.functions.invoke(' src/App.jsx
+          grep -Fq '"change-password"' src/App.jsx
+          grep -Fq 'NotificationCenter' src/App.jsx
+          grep -Fq 'referral_notifications' src/components/notifications/NotificationCenter.jsx
+          grep -Fq 'postgres_changes' src/components/notifications/NotificationCenter.jsx
+          grep -Fq 'PBKDF2' src/lib/offlineDraftVault.js
+          grep -Fq 'AES-GCM' src/lib/offlineDraftVault.js
+          grep -Fq 'indexedDB.open' src/lib/offlineDraftVault.js
+          grep -Fq 'navigator.onLine' src/App.jsx
+          grep -Fq 'OfflineDraftVault' src/App.jsx
+          grep -Fq 'profile={profile}' src/App.jsx
+          grep -Fq 'offline_client_id: offlineClientId' src/App.jsx
+          grep -Fq 'profile.role !== "phc_staff"' src/App.jsx
+          grep -Fq '.eq("offline_client_id", offlineClientId)' src/App.jsx
+          grep -Fq 'referralError.code === "23505"' src/App.jsx
+          grep -Fq 'sync_source: isRestoredOfflineDraft ? "offline" : "online"' src/App.jsx
+          ! grep -Fq 'localStorage' src/lib/offlineDraftVault.js
+
+          # Ignore INSERT statements inside PL/pgSQL function bodies. These are
+          # application runtime operations, not migration-time production data imports.
+          python3 - "${files[0]}" <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          sql = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+          sql_without_dollar_bodies = re.sub(
+              r"(\$[A-Za-z_][A-Za-z0-9_]*\$|\$\$).*?\1",
+              "",
+              sql,
+              flags=re.DOTALL,
+          )
+          if re.search(
+              r"^[ \t]*(?:INSERT\s+INTO|COPY\s+)",
+              sql_without_dollar_bodies,
+              flags=re.IGNORECASE | re.MULTILINE,
+          ):
+              raise SystemExit(
+                  "Baseline migration contains a top-level data import statement."
+              )
+          PY
+
+          grep -Fq 'ALTER VIEW public.referral_analytics SET (security_invoker = true)' "${files[2]}"
+          grep -Fq 'ALTER VIEW public.referral_analytics_summary SET (security_invoker = true)' "${files[2]}"
+          grep -Fq "ALTER FUNCTION public.is_administrator() SET search_path = '';" "${files[5]}"
+          grep -Fq "pg_advisory_xact_lock" "${files[7]}"
+          grep -Fq "CREATE UNIQUE INDEX IF NOT EXISTS referral_print_events_referral_print_number_uidx" "${files[7]}"
+          grep -Fq "NEW.must_change_password IS DISTINCT FROM OLD.must_change_password" "${files[8]}"
+          grep -Fq "to_jsonb(NEW) - sensitive_fields" "${files[9]}"
+          grep -Fq "patient_identifier" "${files[9]}"
+          grep -Fq "ON CONFLICT (idempotency_key) DO NOTHING" "${files[10]}"
+          grep -Fq "REVOKE ALL ON FUNCTION public.enqueue_referral_dashboard_notification() FROM authenticated" "${files[11]}"
+          grep -Fq "HAVING count(*) >= 5" "${files[12]}"
+          grep -Fq "REVOKE ALL ON public.public_health_monthly_aggregate FROM authenticated" "${files[12]}"
+          grep -Fq "offline_client_id" "${files[13]}"
+          grep -Fq "referral_number" "${files[13]}"
+          grep -Fq "ALTER PUBLICATION supabase_realtime ADD TABLE public.referral_notifications" "${files[14]}"
+          grep -Fq "channel" "${files[10]}"
+          echo "Migration integrity checks passed."
+
+          # Post-baseline migrations must not silently disappear from the quality gate.
+          post_baseline=(supabase/migrations/20261111*.sql)
+          test "${#post_baseline[@]}" -ge 13
+          for version in 160000 163000 170000 173000 180000 183000 184500 190000 191500 193000 194500 200000 201500; do
+            matches=(supabase/migrations/20261111"${version}"_*.sql)
+            test "${#matches[@]}" -eq 1
+            test -s "${matches[0]}"
+          done
+          latest=supabase/migrations/20261111201500_require_complete_investigation_file_descriptors.sql
+          grep -Fq "Incomplete investigation file descriptor" "$latest"
+          grep -Fq "Registered investigation file metadata cannot be modified" "$latest"
+          grep -Fq "IS DISTINCT FROM 'array'" "$latest"
+          grep -Fq "IF jsonb_array_length(p_records) > 0 THEN" "$latest"
+          test -s supabase/tests/staging_migration_equivalence_readonly.sql
+          test -s supabase/tests/staging_post_baseline_migration_ledger_readonly.sql
+          # Preserve the full staging release-evidence suite in every commit.
+          evidence_files=(
+            supabase/tests/staging_post_baseline_migration_effect_matrix_readonly.sql
+            supabase/tests/staging_investigation_registration_unauthenticated_negative.sql
+            supabase/tests/staging_authenticated_role_missing_identity_negative.sql
+            supabase/tests/staging_unassigned_authenticated_identity_negative.sql
+            supabase/tests/staging_unassigned_profile_confidentiality_rls.sql
+            supabase/tests/staging_administrator_analytics_positive.sql
+            supabase/tests/staging_migration_repair_data_preflight_readonly.sql
+            supabase/tests/staging_exposed_security_definer_inventory_readonly.sql
+            supabase/tests/staging_privileged_rpc_unassigned_identity_negative.sql
+            supabase/tests/staging_admin_reporting_rpc_role_matrix.sql
+            supabase/tests/staging_admin_predicate_and_print_audit_role_matrix.sql
+          )
+          for evidence in "${evidence_files[@]}"; do
+            test -s "$evidence" || { echo "Missing staging release evidence: $evidence"; exit 1; }
+          done
+          echo "Staging release evidence suite present (live database tests run separately)."
+          echo "Post-baseline migration source checks passed (database ledger verification remains separate)."
