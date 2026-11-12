@@ -11,6 +11,8 @@ const required = ['URL', 'ANON_KEY', 'PHC_EMAIL', 'PHC_PASSWORD',
 const missing = required.filter((k) => !env[k]);
 if (missing.length) throw new Error('Missing staging configuration: ' + missing.join(', '));
 const target = new URL(env.REFLINK_STAGING_URL);
+if (target.username || target.password || target.search || target.hash || target.pathname !== '/')
+  throw new Error('Staging URL must be the exact project origin');
 if (target.protocol !== 'https:' || target.hostname !== 'rcskuzmvyugbanygizri.supabase.co')
   throw new Error('Refusing any project other than REFLINK synthetic staging');
 const key = env.REFLINK_STAGING_ANON_KEY;
@@ -63,6 +65,7 @@ try {
     .eq('receiving_facility_id', recipient.profile.facility_id).limit(2);
   if (existingError) throw new Error('Cannot inspect existing synthetic referrals');
   if (existing?.length) {
+    if (existing.length !== 1) throw new Error('Multiple synthetic fixtures found; manual review required');
     console.log('Existing synthetic referral fixture found. ID: ' + existing[0].id);
     console.log('No new referral inserted. Review existing fixture before acceptance.');
   } else if (env.REFLINK_STAGING_FIXTURE_CONFIRM !== 'YES_STAGING_ONLY') {
