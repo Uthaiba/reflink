@@ -37,3 +37,9 @@ node scripts/staging-authenticated-referral-access.mjs
 The scripts require a real staging administrator account and private passwords. They have **not** been run with credentials in this verification session. Never put passwords in command-line arguments or commit them.
 
 **Release decision: NO-GO.** This is a safety gate, not a failure of the overall REFLINK transformation. Continue nonproduction engineering and evidence collection without changing production.
+
+## Dependency audit — confirmed in CI #486
+The new blocking `npm audit --audit-level=high` gate correctly failed on two vulnerable locked dependencies:
+- `source-map-js@1.2.1`, high severity, indexed source-map offsets event-loop DoS, [GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q).
+- `vite@8.2.1`, high severity, advisories [GHSA-698v-4r3x-3vcv](https://github.com/advisories/GHSA-698v-4r3x-3vcv), [GHSA-r825-w8mm-5pxw](https://github.com/advisories/GHSA-r825-w8mm-5pxw), [GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm), [GHSA-9jrq-w75r-8gcw](https://github.com/advisories/GHSA-9jrq-w75r-8gcw), [GHSA-rq7h-c2jc-7f22](https://github.com/advisories/GHSA-rq7h-c2jc-7f22), [GHSA-vfpm-58rq-9qcg](https://github.com/advisories/GHSA-vfpm-58rq-9qcg).
+GitHub Actions #486: migration integrity and Edge Function checks **passed**; frontend job **failed intentionally at npm audit**, so downstream lint/build were skipped. Run `npm audit fix` in a controlled dependency-update branch, inspect package and lockfile diffs, then require the entire quality gate to pass. Do not disable the audit gate or treat previous green CI as current release clearance.
