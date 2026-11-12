@@ -64,7 +64,13 @@ for (const [name, role] of [
   actors[name] = { api, profile };
 }
 const { PHC, RECEIVING, OUTSIDER, ADMIN } = actors;
-if (new Set(Object.values(actors).map(({ profile }) => profile.id)).size !== 4) {\n  throw new Error('All clinical test actors must use distinct Auth identities');\n}\nif (ADMIN.profile.facility_id !== null) {\n  throw new Error('Administrator test actor must be platform-wide, not facility-assigned');\n}\nif (!PHC.profile.facility_id || !RECEIVING.profile.facility_id ||
+if (new Set(Object.values(actors).map(({ profile }) => profile.id)).size !== 4) {
+  throw new Error('All clinical test actors must use distinct Auth identities');
+}
+if (ADMIN.profile.facility_id !== null) {
+  throw new Error('Administrator test actor must be platform-wide, not facility-assigned');
+}
+if (!PHC.profile.facility_id || !RECEIVING.profile.facility_id ||
     !OUTSIDER.profile.facility_id ||
     RECEIVING.profile.facility_id === OUTSIDER.profile.facility_id) {
   throw new Error('Fixtures require separate receiving and outsider facilities');
@@ -125,6 +131,9 @@ if (await fetchReferral('OUTSIDER')) {
 }
 const { error: adminError } = await ADMIN.api.rpc('get_referral_analytics_summary');
 if (adminError) throw new Error('Administrator analytics RPC rejected');
-for (const name of ['PHC', 'RECEIVING', 'OUTSIDER']) {\n  const { error } = await actors[name].api.rpc('get_referral_analytics_summary');\n  if (!error) throw new Error(`SECURITY FAILURE: ${name} analytics RPC succeeded`);\n}
+for (const name of ['PHC', 'RECEIVING', 'OUTSIDER']) {
+  const { error } = await actors[name].api.rpc('get_referral_analytics_summary');
+  if (!error) throw new Error(`SECURITY FAILURE: ${name} analytics RPC succeeded`);
+}
 console.log('PASS: real Auth sign-in, profile roles, referral visibility, facility isolation and analytics authorization');
 for (const actor of Object.values(actors)) await actor.api.auth.signOut();
