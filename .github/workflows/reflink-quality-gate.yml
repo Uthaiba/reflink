@@ -56,6 +56,16 @@ jobs:
           grep -Fq "REFLINK_STAGING_FIXTURE_CONFIRM" scripts/staging-create-synthetic-referral.mjs
           grep -Fq "is_test: true" scripts/staging-create-synthetic-referral.mjs
 
+      - name: Guard staging Auth acceptance fail-closed controls (offline)
+        shell: bash
+        run: |
+          grep -Fq "new Set(identityEmails).size !== 4" scripts/staging-authenticated-referral-access.mjs
+          grep -Fq "url.protocol !== 'https:'" scripts/staging-authenticated-referral-access.mjs
+          grep -Fq "url.pathname !== '/'" scripts/staging-authenticated-referral-access.mjs
+          grep -Fq "fixture.is_test !== true" scripts/staging-authenticated-referral-access.mjs
+          grep -Fq "target.pathname !== '/'" scripts/staging-create-synthetic-referral.mjs
+          grep -Fq "existing.length !== 1" scripts/staging-create-synthetic-referral.mjs
+
       - name: Verify master-plan evidence inventory (offline, no secrets)
         run: node scripts/reflink-release-evidence-gate.mjs
 
