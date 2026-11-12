@@ -4,7 +4,7 @@
 SELECT p.proname AS function_name,
        pg_get_function_identity_arguments(p.oid) AS arguments,
        has_function_privilege('authenticated',p.oid,'EXECUTE') AS authenticated_can_execute,
-       (pg_get_functiondef(p.oid) ~* 'auth\\.uid\\(|is_administrator\\(|is_current_user_administrator\\(|administrator|phc_staff|receiving_staff') AS has_auth_guard_reference,
+       (pg_get_functiondef(p.oid) ILIKE ANY (ARRAY['%auth.uid(%','%is_administrator(%','%is_current_user_administrator(%','%administrator%','%phc_staff%','%receiving_staff%'])) AS has_auth_guard_reference,
        (pg_get_functiondef(p.oid) ~* 'RAISE EXCEPTION') AS raises_exception,
        CASE WHEN p.proname='is_administrator' THEN 'Review boolean identity predicate and RLS dependencies'
             WHEN p.proname LIKE 'get_admin_%' OR p.proname LIKE 'get_facility_user_%' OR p.proname='get_referral_analytics_summary'
