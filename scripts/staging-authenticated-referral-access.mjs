@@ -126,7 +126,10 @@ if (!senderView || senderView.referring_user_id !== PHC.profile.id ||
 for (const name of ['RECEIVING']) {
   if (!(await fetchReferral(name))) throw new Error(`${name}: expected referral not visible`);
 }
-if (await fetchReferral('ADMIN')) {\n  throw new Error('SECURITY FAILURE: analytics-only administrator can read patient-level referral');\n}\nif (await fetchReferral('OUTSIDER')) {
+if (await fetchReferral('ADMIN')) {
+  throw new Error('SECURITY FAILURE: analytics-only administrator can read patient-level referral');
+}
+if (await fetchReferral('OUTSIDER')) {
   throw new Error('SECURITY FAILURE: unrelated facility can read referral');
 }
 // Confirm clinical identities cannot enumerate unrelated user profiles.
