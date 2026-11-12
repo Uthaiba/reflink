@@ -50,3 +50,11 @@ This is evidence of the tested controls only, not a complete proof of schema equ
 - Post-deployment database counts: **4 facilities, 1 profile, 1 Auth user, 0 referrals**.
 - The deployment is confirmed, but **authenticated positive/negative behavior tests have not run**. No synthetic Auth users were provisioned.
 - Production function and production database were not modified.
+
+## Clinical fixture readiness gate — 2026-11-12
+Executed existing repository test `supabase/tests/staging_clinical_fixture_readiness_readonly.sql` against staging, without changing records. Result: `NOT_READY`.
+- Active PHCs: **2**; active hospitals: **2**; administrator profiles: **1**.
+- PHC staff profiles: **0**; receiving staff profiles: **0**; distinct receiving staff facilities: **0**.
+- Synthetic referrals: **0**; non-test referrals: **0**.
+- No additional fixture SQL file was created: the existing readiness test was reused.
+- To complete acceptance, use authenticated administrator provisioning through the deployed staging `create-user` v5 function with privately held synthetic credentials. Never commit credentials, bypass Auth, or claim runtime success without test results.
