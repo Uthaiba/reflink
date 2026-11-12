@@ -72,3 +72,11 @@ Executed the existing read-only `supabase/tests/staging_post_baseline_migration_
 - The 13 checks cover investigation Storage policy removal and participant access, offline idempotency and validated constraint, notification participant access, investigation registration guards, and analytics execution privileges.
 - This is cumulative final-state evidence only, not proof that intermediate migrations ran or exact source-to-catalog equivalence. **No migration repair or historical SQL replay performed.**
 - Full backup recovery validation and independent source-to-catalog review remain release gates.
+
+## Consolidated staging verification batch — 2026-11-12
+- CI #464 completed **SUCCESS** for `7248f0115c32ab228a4f79dfc57676377a7e51ae`.
+- Executed `staging_post_baseline_migration_ledger_readonly.sql`: **13/13 missing** migration versions; no ledger writes.
+- Executed `staging_migration_repair_data_preflight_readonly.sql`: **PASS** data-integrity preflight; 0 referrals, 1 profile, 4 facilities, 0 duplicate/invalid offline keys.
+- Corrected invalid PostgreSQL regular-expression syntax in `staging_exposed_security_definer_inventory_readonly.sql` (commit `00b603a39b3f0531f2cd2db5532a4d411c144887`); executed corrected query successfully. It enumerates **14** authenticated-callable public SECURITY DEFINER functions for manual privilege/authorization review. Heuristic guard-reference flags are **not** proof of secure function behavior.
+- Executed four existing rollback-protected SQL negative tests without SQL errors: `staging_authenticated_role_missing_identity_negative.sql`, `staging_unassigned_authenticated_identity_negative.sql`, `staging_unassigned_profile_confidentiality_rls.sql`, `staging_privileged_rpc_unassigned_identity_negative.sql`. Tool returned no NOTICE output; execution success is not equivalent to real Auth end-to-end acceptance.
+- **Remaining release blockers:** approved synthetic clinical Auth accounts and referral fixture; actual authenticated E2E acceptance; independent exact migration equivalence; full restorable backup rehearsal; release approval. No production changes or migration repair.
