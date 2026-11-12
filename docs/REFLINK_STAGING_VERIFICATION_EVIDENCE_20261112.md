@@ -58,3 +58,9 @@ Executed existing repository test `supabase/tests/staging_clinical_fixture_readi
 - Synthetic referrals: **0**; non-test referrals: **0**.
 - No additional fixture SQL file was created: the existing readiness test was reused.
 - To complete acceptance, use authenticated administrator provisioning through the deployed staging `create-user` v5 function with privately held synthetic credentials. Never commit credentials, bypass Auth, or claim runtime success without test results.
+
+## CI recovery and migration ledger recheck — 2026-11-12
+- GitHub Actions PR quality gate **#456** failed due to a literal escaped newline in the staging Auth acceptance runner. Corrected in commit `329dda83695e6a9661a88ecee8a4f056fc0db02c`.
+- GitHub Actions PR quality gate **#458** completed **SUCCESS**; independently checked all three jobs: frontend lint/production build, Supabase Edge Function type check, and migration integrity.
+- Queried the staging migration ledger for the 13 unrecorded source versions. **None** of those 13 versions are recorded. This is a history mismatch, **not proof** that their effects are absent.
+- Ledger repair and historical migration replay remain **blocked** pending independent final-effect equivalence review and full recovery readiness. No migration ledger writes performed.
