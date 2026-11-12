@@ -1,0 +1,49 @@
+name: REFLINK Lockfile Security Repair
+
+on:
+  push:
+    branches:
+      - reflink/staging-baseline-reconstruction-20261110
+    paths:
+      - .github/workflows/reflink-lockfile-security-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair-lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Resolve advisories within existing package constraints
+        run: |
+          npm audit fix --package-lock-only --no-fund
+          npm ci
+          npm audit --audit-level=high
+          npm run lint
+          npm run build
+          node --check scripts/staging-authenticated-referral-access.mjs
+          node --check scripts/staging-provision-synthetic-clinical-users.mjs
+          node --check scripts/staging-create-synthetic-referral.mjs
+      - name: Commit reviewed-scope lockfile-only repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- package.json
+          git diff --exit-code -- . ':!package-lock.json'
+          if git diff --quiet -- package-lock.json; then
+            echo "No lockfile changes required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- package-lock.json
+          git commit -m "fix(deps): resolve audited lockfile vulnerabilities"
+          git push origin HEAD:reflink/staging-baseline-reconstruction-20261110
