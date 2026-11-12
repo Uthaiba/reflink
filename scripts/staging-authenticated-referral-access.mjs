@@ -58,13 +58,13 @@ for (const [name, role] of [
   if (authError || !login.user) throw new Error(`${name}: authentication failed`);
   const { data: profile, error: profileError } = await api.from('profiles')
     .select('id,role,facility_id').eq('id', login.user.id).single();
-  if (profileError || !profile || profile.role !== role) {
+  if (profileError || !profile || profile.id !== login.user.id || profile.role !== role) {
     throw new Error(`${name}: profile or role mismatch`);
   }
   actors[name] = { api, profile };
 }
 const { PHC, RECEIVING, OUTSIDER, ADMIN } = actors;
-if (!PHC.profile.facility_id || !RECEIVING.profile.facility_id ||
+if (new Set(Object.values(actors).map(({ profile }) => profile.id)).size !== 4) {\n  throw new Error('All clinical test actors must use distinct Auth identities');\n}\nif (ADMIN.profile.facility_id !== null) {\n  throw new Error('Administrator test actor must be platform-wide, not facility-assigned');\n}\nif (!PHC.profile.facility_id || !RECEIVING.profile.facility_id ||
     !OUTSIDER.profile.facility_id ||
     RECEIVING.profile.facility_id === OUTSIDER.profile.facility_id) {
   throw new Error('Fixtures require separate receiving and outsider facilities');
@@ -81,7 +81,7 @@ if (facilityError || !facilities || facilities.length !== facilityIds.length) {
   throw new Error('Unable to validate all clinical fixture facilities');
 }
 const byId = new Map(facilities.map((facility) => [facility.id, facility]));
-if (facilityIds.some((id) => byId.get(id)?.is_active === false)) {
+if (facilityIds.some((id) => byId.get(id)?.is_active !== true)) {
   throw new Error('Clinical fixture includes an inactive facility');
 }
 if (byId.get(PHC.profile.facility_id)?.facility_type !== 'primary_health_centre') {
@@ -125,7 +125,6 @@ if (await fetchReferral('OUTSIDER')) {
 }
 const { error: adminError } = await ADMIN.api.rpc('get_referral_analytics_summary');
 if (adminError) throw new Error('Administrator analytics RPC rejected');
-const { error: outsiderError } = await OUTSIDER.api.rpc('get_referral_analytics_summary');
-if (!outsiderError) throw new Error('SECURITY FAILURE: outsider analytics RPC succeeded');
+for (const name of ['PHC', 'RECEIVING', 'OUTSIDER']) {\n  const { error } = await actors[name].api.rpc('get_referral_analytics_summary');\n  if (!error) throw new Error(`SECURITY FAILURE: ${name} analytics RPC succeeded`);\n}
 console.log('PASS: real Auth sign-in, profile roles, referral visibility, facility isolation and analytics authorization');
 for (const actor of Object.values(actors)) await actor.api.auth.signOut();
