@@ -7,8 +7,10 @@ const required = ['URL','ANON_KEY','ADMIN_EMAIL','ADMIN_PASSWORD',
   'OUTSIDER_EMAIL','OUTSIDER_PASSWORD'].map((name) => 'REFLINK_STAGING_' + name);
 const missing = required.filter((name) => !e[name]);
 if (missing.length) throw new Error('Missing configuration: ' + missing.join(', '));
-if (new URL(e.REFLINK_STAGING_URL).hostname !== 'rcskuzmvyugbanygizri.supabase.co')
-  throw new Error('Only REFLINK synthetic staging is permitted');
+const target = new URL(e.REFLINK_STAGING_URL);
+if (target.protocol !== 'https:' || target.hostname !== 'rcskuzmvyugbanygizri.supabase.co' ||
+    target.username || target.password || target.search || target.hash || target.pathname !== '/')
+  throw new Error('Only the exact REFLINK synthetic staging origin is permitted');
 const key = e.REFLINK_STAGING_ANON_KEY;
 if (key.startsWith('sb_secret_') || key.startsWith('sb_service_'))
   throw new Error('Refusing secret/service-role key');
@@ -33,12 +35,15 @@ try {
   });
   if (authError || !login.user) throw new Error('Administrator sign-in failed');
   const { data: profile, error: profileError } = await api.from('profiles')
-    .select('role').eq('id', login.user.id).single();
-  if (profileError || profile?.role !== 'administrator')
+    .select('id,role,facility_id').eq('id', login.user.id).single();
+  if (profileError || profile?.id !== login.user.id ||
+      profile?.role !== 'administrator' || profile.facility_id !== null)
     throw new Error('Authenticated user is not a staging administrator');
   const { data: facilities, error: facilityError } = await api.from('facilities')
     .select('id,name,facility_type,is_active').in('name', actors.map((a) => a[2]));
-  if (facilityError || facilities?.length !== 3) throw new Error('Required staging facilities missing');
+  if (facilityError || facilities?.length !== 3 ||
+      new Set(facilities.map((f) => f.name)).size !== 3)
+    throw new Error('Required staging facilities missing or ambiguous');
   const prepared = actors.map(([tag,role,name,type]) => {
     const facility = facilities.find((f) => f.name === name);
     if (!facility || facility.facility_type !== type || facility.is_active !== true)
