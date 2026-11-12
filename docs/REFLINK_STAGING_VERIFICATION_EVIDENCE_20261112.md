@@ -35,3 +35,10 @@ This is evidence of the tested controls only, not a complete proof of schema equ
 5. Re-run CI and the read-only staging gate after approved changes; no production merge/deployment without explicit release authorization.
 
 **No staging SQL writes or production changes were made during this verification.**
+
+## Controlled synthetic fixture change — 2026-11-12
+- Added one synthetic staging-only general hospital: `REFLINK TEST RECEIVING D` (UUID `c3480dd1-06e9-4c41-971b-197b0a4f048e`), active, state Yobe, fictional Test LGA D.
+- Insert was guarded against duplicate facility names. Verified **4 facilities total: 2 PHCs and 2 general hospitals**.
+- Referral count remained **0**. No Auth users, profiles, referrals, migrations or production data were changed in this step.
+- This controlled fixture change is later than the read-only baseline above. The initial statement that no staging writes were made applies only to the earlier verification phase.
+- Remaining: approved synthetic Auth account provisioning and referral fixture creation, authenticated access suite, migration ledger reconciliation and full recovery verification.
