@@ -42,3 +42,11 @@ This is evidence of the tested controls only, not a complete proof of schema equ
 - Referral count remained **0**. No Auth users, profiles, referrals, migrations or production data were changed in this step.
 - This controlled fixture change is later than the read-only baseline above. The initial statement that no staging writes were made applies only to the earlier verification phase.
 - Remaining: approved synthetic Auth account provisioning and referral fixture creation, authenticated access suite, migration ledger reconciliation and full recovery verification.
+
+## Staging Edge Function deployment — 2026-11-12
+- Repository commit `4da9e369d97f9c6c060e571395c46add7244b6fc` passed GitHub Actions quality gate run **#450**.
+- Deployed `supabase/functions/create-user/index.ts` to **staging only**, Supabase Edge Function `create-user` **version 5**, status **ACTIVE**, JWT verification **enabled**.
+- Fetched deployed function and confirmed the new role/facility validation messages exist in its source.
+- Post-deployment database counts: **4 facilities, 1 profile, 1 Auth user, 0 referrals**.
+- The deployment is confirmed, but **authenticated positive/negative behavior tests have not run**. No synthetic Auth users were provisioned.
+- Production function and production database were not modified.
