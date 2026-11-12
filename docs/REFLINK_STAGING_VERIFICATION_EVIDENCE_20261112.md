@@ -64,3 +64,11 @@ Executed existing repository test `supabase/tests/staging_clinical_fixture_readi
 - GitHub Actions PR quality gate **#458** completed **SUCCESS**; independently checked all three jobs: frontend lint/production build, Supabase Edge Function type check, and migration integrity.
 - Queried the staging migration ledger for the 13 unrecorded source versions. **None** of those 13 versions are recorded. This is a history mismatch, **not proof** that their effects are absent.
 - Ledger repair and historical migration replay remain **blocked** pending independent final-effect equivalence review and full recovery readiness. No migration ledger writes performed.
+
+## Post-baseline migration effect matrix — 2026-11-12
+Executed the existing read-only `supabase/tests/staging_post_baseline_migration_effect_matrix_readonly.sql` on staging.
+- **13/13 final-effect checks PASS**.
+- **0/13 migration versions recorded** in `supabase_migrations.schema_migrations`.
+- The 13 checks cover investigation Storage policy removal and participant access, offline idempotency and validated constraint, notification participant access, investigation registration guards, and analytics execution privileges.
+- This is cumulative final-state evidence only, not proof that intermediate migrations ran or exact source-to-catalog equivalence. **No migration repair or historical SQL replay performed.**
+- Full backup recovery validation and independent source-to-catalog review remain release gates.
