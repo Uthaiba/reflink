@@ -1,0 +1,37 @@
+# REFLINK staging verification evidence — 2026-11-12
+
+Scope: Supabase staging project `rcskuzmvyugbanygizri` only. Production project `uwwzbljufqbzkjflpnll` was not accessed or modified.
+
+## Read-only live staging inventory
+- 14 public base tables
+- 25 public functions
+- 10 non-internal public triggers
+- 23 public foreign-key constraints
+- 3 facilities
+- 1 Auth user
+- 1 profile
+- 0 referrals
+- 22 migration-ledger entries
+
+## Executed staging gate
+Source: `supabase/tests/staging_migration_equivalence_readonly.sql` on branch `reflink/staging-baseline-reconstruction-20261110`.
+
+**Result: 16 PASS, 1 FAIL.** The sole failing control is `migration_ledger_current`, which checks for version `20261111201500`. All other gate controls passed, including RLS, investigation storage policy, anonymous access denial, administrator analytics guard, offline idempotency and role escalation guard.
+
+This is evidence of the tested controls only, not a complete proof of schema equivalence or a substitute for authenticated end-to-end testing.
+
+## Operator-local backup rehearsal (user-provided results)
+- Custom-format staging archive `reflink-staging.dump` was created locally and `pg_restore --list` succeeded.
+- Full restore into local PostgreSQL 18.6 stopped on unavailable `supabase_vault` extension.
+- Public-schema-only restore stopped when a foreign key referenced absent `auth.users`.
+- The partial local restore contained 14 public tables, 25 functions, 10 triggers, **0 foreign keys**. Estimated rows: 3 facilities, 1 profile, 0 referrals.
+- **Recovery status: partial rehearsal only; full restorable Supabase backup not verified.** The archive is on the user's local machine, not in the repository.
+
+## Release blockers / next actions
+1. Obtain Supabase-compatible full restore verification, or formally record the unresolved recovery risk.
+2. Independently review final effects of all 13 unrecorded source migrations; do not replay historical migrations or repair the ledger until equivalence and recovery gates are approved.
+3. Provision synthetic-only staging facilities and Auth users using controlled procedures; no real patient records.
+4. Run authenticated PHC, receiving staff, outsider, and administrator positive/negative referral lifecycle tests.
+5. Re-run CI and the read-only staging gate after approved changes; no production merge/deployment without explicit release authorization.
+
+**No staging SQL writes or production changes were made during this verification.**
