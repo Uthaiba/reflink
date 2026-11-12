@@ -48,6 +48,14 @@ jobs:
       - name: Syntax-check staging synthetic referral fixture runner (no credentials)
         run: node --check scripts/staging-create-synthetic-referral.mjs
 
+      - name: Verify staging fixture facility mapping (offline)
+        shell: bash
+        run: |
+          grep -Fq "recipient.profile.facility_id" scripts/staging-create-synthetic-referral.mjs
+          ! grep -Fq "recipient.profile.facility.id" scripts/staging-create-synthetic-referral.mjs
+          grep -Fq "REFLINK_STAGING_FIXTURE_CONFIRM" scripts/staging-create-synthetic-referral.mjs
+          grep -Fq "is_test: true" scripts/staging-create-synthetic-referral.mjs
+
       - name: Verify master-plan evidence inventory (offline, no secrets)
         run: node scripts/reflink-release-evidence-gate.mjs
 
