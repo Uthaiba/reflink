@@ -20,7 +20,8 @@ if (missing.length) {
 }
 const env = process.env;
 const url = new URL(env.REFLINK_STAGING_URL);
-if (url.hostname !== 'rcskuzmvyugbanygizri.supabase.co') {
+if (url.protocol !== 'https:' || url.hostname !== 'rcskuzmvyugbanygizri.supabase.co' ||
+    url.username || url.password || url.search || url.hash || url.pathname !== '/') {
   throw new Error('Refusing non-synthetic-staging Supabase project');
 }
 // Never allow a service-role or secret key into a user-facing acceptance runner.
@@ -39,8 +40,13 @@ if (suppliedKey.split('.').length === 3) {
 } else if (!suppliedKey.startsWith('sb_publishable_')) {
   throw new Error('Expected staging publishable or anon key');
 }
-if (!/^[0-9a-f-]{36}$/i.test(env.REFLINK_STAGING_REFERRAL_ID)) {
+if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(env.REFLINK_STAGING_REFERRAL_ID)) {
   throw new Error('Expected UUID referral fixture ID');
+}
+const identityEmails = ['PHC', 'RECEIVING', 'OUTSIDER', 'ADMIN']
+  .map((name) => env[`REFLINK_STAGING_${name}_EMAIL`].trim().toLowerCase());
+if (new Set(identityEmails).size !== 4) {
+  throw new Error('All four staging test actors require distinct email addresses');
 }
 const client = () => createClient(env.REFLINK_STAGING_URL, env.REFLINK_STAGING_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -101,7 +107,8 @@ if (byId.get(OUTSIDER.profile.facility_id)?.facility_type !== 'general_hospital'
 }
 const referralId = env.REFLINK_STAGING_REFERRAL_ID;
 // Never run access assertions against a real patient referral, even in staging.
-// Validate the fixture through the PHC sender session. Administrator analytics\n// permission must not be mistaken for permission to read patient-level records.
+// Validate the fixture through the PHC sender session. Administrator analytics
+// permission must not be mistaken for permission to read patient-level records.
 const { data: fixture, error: fixtureError } = await PHC.api.from('referrals')
   .select('id,is_test,referring_user_id,referring_facility_id,receiving_facility_id')
   .eq('id', referralId).maybeSingle();
