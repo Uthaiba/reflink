@@ -80,3 +80,14 @@ Executed the existing read-only `supabase/tests/staging_post_baseline_migration_
 - Corrected invalid PostgreSQL regular-expression syntax in `staging_exposed_security_definer_inventory_readonly.sql` (commit `00b603a39b3f0531f2cd2db5532a4d411c144887`); executed corrected query successfully. It enumerates **14** authenticated-callable public SECURITY DEFINER functions for manual privilege/authorization review. Heuristic guard-reference flags are **not** proof of secure function behavior.
 - Executed four existing rollback-protected SQL negative tests without SQL errors: `staging_authenticated_role_missing_identity_negative.sql`, `staging_unassigned_authenticated_identity_negative.sql`, `staging_unassigned_profile_confidentiality_rls.sql`, `staging_privileged_rpc_unassigned_identity_negative.sql`. Tool returned no NOTICE output; execution success is not equivalent to real Auth end-to-end acceptance.
 - **Remaining release blockers:** approved synthetic clinical Auth accounts and referral fixture; actual authenticated E2E acceptance; independent exact migration equivalence; full restorable backup rehearsal; release approval. No production changes or migration repair.
+
+## Additional staging SQL authorization tests — 2026-11-12
+- Latest previous evidence commit `f31b5d9cbf967055f0ee311a20bf42ccb70eb3c8` passed GitHub CI #470.
+- Executed four further existing staging SQL tests successfully (no SQL exception):
+  1. `staging_investigation_registration_unauthenticated_negative.sql`
+  2. `staging_administrator_analytics_positive.sql`
+  3. `staging_admin_reporting_rpc_role_matrix.sql` (six administrator reporting RPCs, negative and positive simulated identities)
+  4. `staging_admin_predicate_and_print_audit_role_matrix.sql`
+- Total in these two consecutive batches: **8 SQL authorization test scripts executed successfully**. Four scripts use simulated database JWT claims and do not demonstrate real Auth sign-in behavior.
+- Existing migration final-effect matrix remains 13/13 PASS, but all 13 versions remain unrecorded. No migration ledger modifications.
+- No production writes, clinical data changes, or Auth provisioning.
