@@ -129,11 +129,29 @@ for (const name of ['RECEIVING', 'ADMIN']) {
 if (await fetchReferral('OUTSIDER')) {
   throw new Error('SECURITY FAILURE: unrelated facility can read referral');
 }
+// Confirm clinical identities cannot enumerate unrelated user profiles.
+for (const name of ['PHC', 'RECEIVING', 'OUTSIDER']) {
+  const actor = actors[name];
+  const { data: foreignProfiles, error: profileReadError } = await actor.api
+    .from('profiles').select('id').eq('id', ADMIN.profile.id);
+  if (profileReadError) throw new Error(name + ': profile confidentiality query failed');
+  if (foreignProfiles?.length) {
+    throw new Error('SECURITY FAILURE: ' + name + ' can read administrator profile');
+  }
+}
+// Referral notifications can contain contact information and provider metadata.
+// An unrelated facility must not see any notification linked to this referral.
+const { data: leakedNotifications, error: notificationError } = await OUTSIDER.api
+  .from('referral_notifications').select('id').eq('referral_id', referralId);
+if (notificationError) throw new Error('Outsider notification isolation query failed');
+if (leakedNotifications?.length) {
+  throw new Error('SECURITY FAILURE: unrelated facility can read referral notifications');
+}
 const { error: adminError } = await ADMIN.api.rpc('get_referral_analytics_summary');
 if (adminError) throw new Error('Administrator analytics RPC rejected');
 for (const name of ['PHC', 'RECEIVING', 'OUTSIDER']) {
   const { error } = await actors[name].api.rpc('get_referral_analytics_summary');
   if (!error) throw new Error(`SECURITY FAILURE: ${name} analytics RPC succeeded`);
 }
-console.log('PASS: real Auth sign-in, profile roles, referral visibility, facility isolation and analytics authorization');
+console.log('PASS: real Auth sign-in, profile roles, referral visibility, facility isolation, profile privacy, notification isolation and analytics authorization');
 for (const actor of Object.values(actors)) await actor.api.auth.signOut();
