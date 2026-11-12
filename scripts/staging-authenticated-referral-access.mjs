@@ -101,8 +101,8 @@ if (byId.get(OUTSIDER.profile.facility_id)?.facility_type !== 'general_hospital'
 }
 const referralId = env.REFLINK_STAGING_REFERRAL_ID;
 // Never run access assertions against a real patient referral, even in staging.
-// Validate the fixture through the admin session before testing other roles.
-const { data: fixture, error: fixtureError } = await ADMIN.api.from('referrals')
+// Validate the fixture through the PHC sender session. Administrator analytics\n// permission must not be mistaken for permission to read patient-level records.
+const { data: fixture, error: fixtureError } = await PHC.api.from('referrals')
   .select('id,is_test,referring_user_id,referring_facility_id,receiving_facility_id')
   .eq('id', referralId).maybeSingle();
 if (fixtureError || !fixture || fixture.is_test !== true ||
@@ -123,10 +123,10 @@ if (!senderView || senderView.referring_user_id !== PHC.profile.id ||
     senderView.receiving_facility_id !== RECEIVING.profile.facility_id) {
   throw new Error('Synthetic referral fixture does not match PHC/receiving accounts');
 }
-for (const name of ['RECEIVING', 'ADMIN']) {
+for (const name of ['RECEIVING']) {
   if (!(await fetchReferral(name))) throw new Error(`${name}: expected referral not visible`);
 }
-if (await fetchReferral('OUTSIDER')) {
+if (await fetchReferral('ADMIN')) {\n  throw new Error('SECURITY FAILURE: analytics-only administrator can read patient-level referral');\n}\nif (await fetchReferral('OUTSIDER')) {
   throw new Error('SECURITY FAILURE: unrelated facility can read referral');
 }
 // Confirm clinical identities cannot enumerate unrelated user profiles.
