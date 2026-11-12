@@ -126,6 +126,31 @@ Deno.serve(async (req: Request) => {
       return response({ success: false, error: "Invalid facility identifier." }, 400, origin);
     }
 
+    // Enforce the role/facility relationship before creating an Auth identity.
+    // Administrators are platform-wide and must not be assigned to a facility.
+    if (role === "administrator" && facilityId !== null) {
+      return response({ success: false, error: "Administrators cannot be assigned to a facility." }, 400, origin);
+    }
+    if (role !== "administrator") {
+      if (!facilityId) {
+        return response({ success: false, error: "Clinical staff must be assigned to an active facility." }, 400, origin);
+      }
+      const { data: facility, error: facilityError } = await adminClient
+        .from("facilities")
+        .select("id, facility_type, is_active")
+        .eq("id", facilityId)
+        .maybeSingle();
+      if (facilityError || !facility || facility.is_active !== true) {
+        return response({ success: false, error: "An active facility is required." }, 400, origin);
+      }
+      const requiredType = role === "phc_staff"
+        ? "primary_health_centre"
+        : "general_hospital";
+      if (facility.facility_type !== requiredType) {
+        return response({ success: false, error: "The facility type does not match the clinical staff role." }, 400, origin);
+      }
+    }
+
     const { data: created, error: createError } =
       await adminClient.auth.admin.createUser({
         email,
