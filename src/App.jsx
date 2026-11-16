@@ -5879,6 +5879,7 @@ function ReceivingDashboard() {
             "id",
             referralId
           )
+          .eq("status", "sent")
           .select()
           .single();
 
@@ -5945,6 +5946,7 @@ function ReceivingDashboard() {
             "id",
             referralId
           )
+          .eq("status", "acknowledged")
           .select()
           .single();
 
@@ -5997,6 +5999,7 @@ const handleStartAssessment = async (referralId) => {
         status: "under_assessment",
       })
       .eq("id", referralId)
+      .eq("status", "patient_arrived")
       .select()
       .single();
 
