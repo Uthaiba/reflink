@@ -5188,6 +5188,16 @@ function ReceivingDashboard() {
         .upload(path, file, { upsert: false, contentType: file.type });
       if (uploadError) throw uploadError;
       uploaded = true;
+      const { data: latest, error: latestError } = await supabase
+        .from("referrals")
+        .select("investigation_records")
+        .eq("id", selectedReferral.id)
+        .single();
+      if (latestError) throw latestError;
+      const latestRecords = getInvestigationRecords(latest).map(normalizeInvestigationRecord);
+      if (JSON.stringify(latestRecords) !== JSON.stringify(current)) {
+        throw new Error("STALE_INVESTIGATION_ATTACHMENT");
+      }
       const updated = current.map((item, itemIndex) =>
         itemIndex === index
           ? { ...item, result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size }
@@ -5206,7 +5216,11 @@ function ReceivingDashboard() {
       ));
       setMessage("Investigation result document saved successfully.");
     } catch (err) {
-      console.error("INVESTIGATION FILE UPLOAD ERROR:", err?.message || "Upload failed");
+      if (err?.message === "STALE_INVESTIGATION_ATTACHMENT") {
+        console.warn("Investigation attachment update blocked due to stale record.");
+      } else {
+        console.error("INVESTIGATION FILE UPLOAD ERROR:", err?.message || "Upload failed");
+      }
       if (uploaded) {
         // A timed-out metadata response may have committed. Never remove a
         // potentially referenced clinical attachment without verifying state.
