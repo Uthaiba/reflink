@@ -5179,7 +5179,7 @@ function ReceivingDashboard() {
       return;
     }
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const path = `${selectedReferral.id}/${Date.now()}-${index}-${safeName}`;
+    const path = `${selectedReferral.id}/${crypto.randomUUID()}-${index}-${safeName}`;
     setActionLoading(`${selectedReferral.id}-investigation-file-${index}`);
     let uploaded = false;
     try {
