@@ -5183,66 +5183,51 @@ function ReceivingDashboard() {
     finally { setActionLoading(null); }
   };
 
-  const handleInvestigationResultChange = async (
-    index,
-    patch
-  ) => {
+  const handleInvestigationResultChange = async (index, patch) => {
     if (!selectedReferral) return;
 
     const currentInvestigations = getInvestigationRecords(
       selectedReferral
     ).map(normalizeInvestigationRecord);
 
+    if (!currentInvestigations[index]) {
+      setError("Investigation record no longer exists. Refresh the referral.");
+      return;
+    }
+
     const updatedInvestigations = currentInvestigations.map(
       (item, itemIndex) =>
-        itemIndex === index
-          ? {
-              ...item,
-              ...patch,
-            }
-          : item
+        itemIndex === index ? { ...item, ...patch } : item
     );
 
-    const updatedReferral = {
-      ...selectedReferral,
-      investigation_records: updatedInvestigations,
-    };
-
-    setSelectedReferral(updatedReferral);
-    setReferrals((previous) =>
-      previous.map((item) =>
-        item.id === selectedReferral.id
-          ? updatedReferral
-          : item
-      )
-    );
-
-    setActionLoading(
-      `${selectedReferral.id}-investigation-${index}`
-    );
+    setError("");
+    setMessage("");
+    setActionLoading(`${selectedReferral.id}-investigation-${index}`);
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("referrals")
-        .update({
-          investigation_records: updatedInvestigations,
-        })
-        .eq("id", selectedReferral.id);
+        .update({ investigation_records: updatedInvestigations })
+        .eq("id", selectedReferral.id)
+        .select("id, investigation_records")
+        .single();
 
       if (error) throw error;
 
-      setMessage(
-        `${updatedInvestigations[index].investigation} result updated to ${getInvestigationResultLabel(resultStatus)}.`
+      const savedReferral = {
+        ...selectedReferral,
+        investigation_records: data.investigation_records,
+      };
+      setSelectedReferral(savedReferral);
+      setReferrals((previous) =>
+        previous.map((item) =>
+          item.id === selectedReferral.id ? savedReferral : item
+        )
       );
+      setMessage("Investigation result saved successfully.");
     } catch (err) {
-      console.error(
-        "INVESTIGATION RESULT UPDATE ERROR:",
-        err
-      );
-      setError(
-        err.message ||
-          "Unable to update investigation result."
-      );
+      console.error("INVESTIGATION RESULT UPDATE ERROR:", err?.message || "Save failed");
+      setError("Unable to save investigation result. The previous saved value is unchanged. Refresh the referral before retrying.");
     } finally {
       setActionLoading(null);
     }
