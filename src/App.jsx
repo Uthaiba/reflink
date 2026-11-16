@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabase.js";
 import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
+import ConnectivityNotice from "./components/ConnectivityNotice.jsx";
 import AnalyticsDashboard from "./components/dashboards/AnalyticsDashboard.jsx";
 import AnalysisHub from "./components/dashboards/AnalysisHub.jsx";
 import "./App.css";
@@ -3371,6 +3372,7 @@ provisional_diagnosis: "",
 
   return (
     <div className="dashboard-card referral-form-card">
+      <ConnectivityNotice />
 
       <div className="form-header">
 
@@ -6382,6 +6384,7 @@ const handleStartAssessment = async (referralId) => {
 
   return (
     <>
+      <ConnectivityNotice />
 
       <div className="dashboard-actions">
 
