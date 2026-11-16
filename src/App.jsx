@@ -5810,6 +5810,7 @@ function ReceivingDashboard() {
             "id",
             selectedInpatientReferral.id
           )
+          .eq("status", "admitted")
           .select()
           .single();
 
@@ -6168,6 +6169,7 @@ const handleStartAssessment = async (referralId) => {
             "id",
             selectedReferral.id
           )
+          .eq("status", "under_assessment")
           .select()
           .single();
 
