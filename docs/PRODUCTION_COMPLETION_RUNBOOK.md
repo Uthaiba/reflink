@@ -19,6 +19,12 @@ Use with MASTER_PLAN_AUDIT_2026-11-16.md and CLINICAL_PRODUCTION_ACCEPTANCE_GATE
   by the proposed database trigger.
 - R-PHI uses verified staging aggregate RPCs only. Operational clinical exports are
   labeled separately, paginated with an explicit bound, and protect formula prefixes.
+- Optional AES-GCM encrypted device drafts use a separate passphrase, PBKDF2
+  key derivation, authenticated owner/expiry metadata, a 24-hour lifetime and
+  allowlisted restoration. File contents and file descriptors are excluded.
+- Referral submission uses a stable client UUID and checks for a prior save before
+  insertion and after uncertain responses. The existing production unique index
+  on non-null offline_client_id was verified by catalog inspection.
 - Hosted production and staging have not received these changes.
 
 ## Important boundaries
@@ -90,6 +96,34 @@ does not guarantee safety across multiple tables, dates or repeated releases.
 Review external sharing, longitudinal comparisons and data-quality denominators.
 No autonomous clinical AI feature or regulatory compliance claim is included.
 
+## Encrypted device drafts and controlled submission
+
+The source implements explicit save/restore/delete actions in the PHC form.
+`VITE_ENCRYPTED_DRAFTS_ENABLED=true` enables the panel only after device/privacy
+review. It is disabled by default. Drafts are encrypted with AES-256-GCM and a
+PBKDF2-SHA256 key (310,000 iterations), unique salt and IV. The passphrase/key is
+not persisted, and passphrase fields are cleared after each action. Authentication
+to the server still uses the existing account and RLS, never the draft passphrase.
+
+Storage holds ciphertext plus opaque account/draft IDs, salt/IV and expiry
+metadata. Expiry is authenticated and checked before decryption. Expired local
+drafts are removed when accessed; there is no promise of physical erasure from
+browser backups or unattended removal while the browser is closed. Device-clock
+tampering and XSS remain risks requiring assessment. Passphrase loss cannot be
+recovered by this frontend.
+
+This supports an already opened application tab, not a full installable offline
+PWA. There is no automatic background submission. Restored data is allowlisted,
+requires clinical review, and is manually submitted under a stable client ID.
+Duplicate checks use only that opaque ID and referring-user ID; clinical JSON is
+not placed in request URLs. A saved match is a reference for verification, not a
+newly submitted or printable clinical record. Patient identifiers from an edited
+form must not be attributed to an earlier saved referral.
+
+Full browser/device isolation, quota failures, multi-tab behavior, offline login,
+encryption review, restore/retry workflows and synchronization testing remain
+release gates.
+
 ## Production release prerequisites
 
 - Final reviewed commit passes frontend and synthetic database workflows.
@@ -126,7 +160,7 @@ The transformation is not complete. Remaining verified gates include:
 - authenticated full referral/counter-referral/notification lifecycle tests;
 - approved population-independent indicators, cross-report disclosure review,
   trend/geographic visualizations and a controlled AI reporting integration;
-- encrypted expiring offline drafts, idempotent sync and reviewed interoperability;
+- browser/device verification of encrypted drafts, full controlled sync/PWA support and reviewed interoperability;
 - restore rehearsal, performance/security assessment, clinical approval and deployment.
 
 These cannot be marked complete from source changes or synthetic CI alone.

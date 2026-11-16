@@ -1,6 +1,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
+import EncryptedDraftPanel from "./components/EncryptedDraftPanel.jsx";
+import { restoreDraftData } from "./lib/encryptedDrafts.js";
+import { createReferralOnce } from "./lib/referralSubmission.js";
 import { initialInvestigationRecords, saveInvestigation, uploadInitialInvestigationFiles } from "./lib/investigationUpdates.js";
 const atomicInvestigationUpdatesEnabled = import.meta.env.VITE_ATOMIC_INVESTIGATIONS_ENABLED === "true";
 import { changeAccountPassword, resolvePasswordChangeMode } from "./lib/passwordChange.js";
@@ -2608,6 +2611,7 @@ const handleSignIn = async () => {
           <main className="dashboard">
 
             <NewReferralForm
+              ownerId={profile?.id}
               onBack={() => setScreen("dashboard")}
             />
 
@@ -2822,7 +2826,10 @@ function InvestigationResultEditor({ item, onChange, onFileChange }) {
   );
 }
 
-function NewReferralForm({ onBack }) {
+function NewReferralForm({ onBack, ownerId }) {
+  const clientSubmissionId = useRef(crypto.randomUUID());
+  const submissionInFlight = useRef(false);
+  const [fromDeviceDraft, setFromDeviceDraft] = useState(false);
 
   const [form, setForm] = useState({
   patient_identifier: "",
@@ -3092,9 +3099,12 @@ provisional_diagnosis: "",
   const handleSubmit = async (e) => {
 
     e.preventDefault();
+    if (submissionInFlight.current) return;
+    submissionInFlight.current = true;
 
     setError("");
     setSavedReferralInfo(null);
+    setPrintDraft(null);
     setMessage("");
     setLoading(true);
 
@@ -3259,23 +3269,9 @@ provisional_diagnosis: "",
           "sent",
       };
 
-      const {
-        data: insertedReferral,
-        error: referralError,
-      } = await supabase
-        .from("referrals")
-        .insert(referralPayload)
-        .select("id")
-        .single();
-
-      if (referralError) {
-        console.error(
-          "REFERRAL INSERT ERROR:",
-          referralError
-        );
-
-        throw referralError;
-      }
+      const insertedReferral = await createReferralOnce(
+        supabase, referralPayload, clientSubmissionId.current, fromDeviceDraft
+      );
 
       // Referral is already persisted at this point. A failed optional
       // attachment upload must not be reported as a failed referral.
@@ -3349,6 +3345,8 @@ provisional_diagnosis: "",
   receiving_facility_id: "",
 });
 
+      clientSubmissionId.current = crypto.randomUUID();
+      setFromDeviceDraft(false);
       setDiagnosisEntries([]);
       setDiagnosisDraft({
         status: "",
@@ -3360,10 +3358,7 @@ provisional_diagnosis: "",
 
     } catch (err) {
 
-      console.error(
-        "Referral creation error:",
-        err
-      );
+
 
       setError(
         err.message ||
@@ -3372,6 +3367,7 @@ provisional_diagnosis: "",
 
     } finally {
 
+      submissionInFlight.current = false;
       setLoading(false);
 
     }
@@ -3451,6 +3447,25 @@ provisional_diagnosis: "",
           {error}
         </div>
       )}
+
+      {import.meta.env.VITE_ENCRYPTED_DRAFTS_ENABLED === "true" && <EncryptedDraftPanel
+        ownerId={ownerId} draftId={clientSubmissionId.current} disabled={loading}
+        getDraft={() => ({
+          form, clientSubmissionId: clientSubmissionId.current, diagnosisEntries,
+          categories: selectedInvestigationCategories,
+          investigations: initialInvestigationRecords(selectedInvestigations),
+        })}
+        restoreDraft={(data) => {
+          const restored = restoreDraftData(data, form);
+          setForm(restored.form);
+          setDiagnosisEntries(restored.diagnosisEntries);
+          setSelectedInvestigationCategories(restored.categories);
+          setSelectedInvestigations(restored.investigations);
+          clientSubmissionId.current = restored.clientSubmissionId;
+          setFromDeviceDraft(true);
+          setError(""); setMessage(""); setSavedReferralInfo(null); setPrintDraft(null);
+        }}
+      />}
 
       <form onSubmit={handleSubmit}>
 
