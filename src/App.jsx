@@ -6271,13 +6271,14 @@ const handleStartAssessment = async (referralId) => {
         // This is a preflight check, not an atomic concurrency guarantee.
         const { data: currentAssessment, error: assessmentReadError } = await supabase
           .from("referrals")
-          .select("status, assessment_completed_at")
+          .select("status, assessment_findings, final_diagnosis, diagnosis_category, diagnosis_status, treatment_provided, procedures_performed, clinical_feedback, disposition, assessment_completed_at")
           .eq("id", selectedReferral.id)
           .single();
         if (assessmentReadError) throw assessmentReadError;
         if (currentAssessment.status !== "under_assessment" ||
-            (currentAssessment.assessment_completed_at || null) !==
-              (selectedReferral.assessment_completed_at || null)) {
+            ["assessment_findings", "final_diagnosis", "diagnosis_category", "diagnosis_status", "treatment_provided", "procedures_performed", "clinical_feedback", "disposition", "assessment_completed_at"].some(
+              (field) => (currentAssessment[field] ?? null) !== (selectedReferral[field] ?? null)
+            )) {
           throw new Error("ASSESSMENT_CHANGED");
         }
 
