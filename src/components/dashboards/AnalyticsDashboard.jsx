@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase.js";
+import { summarizeReferrals } from "../../lib/referralAnalytics.js";
 
 /* =======================================================
    REFLINK ANALYTICS DASHBOARD
@@ -36,7 +37,7 @@ function AnalyticsDashboard() {
       for (let offset = 0; offset <= maxRows; offset += pageSize) {
         const { data, error } = await supabase
           .from("referrals")
-          .select("id, diagnosis_category, final_diagnosis, status")
+          .select("id, is_test, diagnosis_category, final_diagnosis, status")
           .eq("is_test", false)
           .order("id", { ascending: true })
           .range(offset, offset + pageSize - 1);
@@ -50,77 +51,7 @@ function AnalyticsDashboard() {
         if (page.length < pageSize) break;
       }
 
-      const total = referrals.length;
-
-      const categoryMap = {};
-      referrals.forEach((referral) => {
-        const category =
-          String(referral.diagnosis_category || "").trim() ||
-          "Unclassified";
-
-        categoryMap[category] =
-          (categoryMap[category] || 0) + 1;
-      });
-
-      const categories = Object.entries(categoryMap)
-        .map(([name, count]) => ({
-          name,
-          count,
-          percentage:
-            total > 0
-              ? Number(((count / total) * 100).toFixed(1))
-              : 0,
-        }))
-        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-
-      const classified = referrals.filter(
-        (referral) =>
-          String(referral.diagnosis_category || "").trim()
-      ).length;
-
-      const unclassified = total - classified;
-
-      const completed = referrals.filter((referral) =>
-        ["completed", "discharged"].includes(referral.status)
-      ).length;
-
-      /*
-       * We intentionally use final_diagnosis for this metric because
-       * it represents the receiving facility's documented clinical
-       * conclusion. No text-pattern filtering is applied; only
-       * explicitly marked test records are excluded.
-       */
-      const diagnosisMap = {};
-
-      referrals
-        .filter(
-          (referral) =>
-            String(referral.final_diagnosis || "").trim() &&
-            String(referral.diagnosis_category || "").trim()
-        )
-        .forEach((referral) => {
-          const diagnosis =
-            String(referral.final_diagnosis).trim();
-
-          diagnosisMap[diagnosis] =
-            (diagnosisMap[diagnosis] || 0) + 1;
-        });
-
-      const diagnoses = Object.entries(diagnosisMap)
-        .map(([condition, count]) => ({
-          condition,
-          count,
-          percentage:
-            total > 0
-              ? Number(((count / total) * 100).toFixed(1))
-              : 0,
-        }))
-        .sort(
-          (a, b) =>
-            b.count - a.count ||
-            a.condition.localeCompare(b.condition)
-        )
-        .slice(0, 10);
+      const { total, classified, unclassified, completed, categories, diagnoses } = summarizeReferrals(referrals);
 
       setAnalytics({
         loading: false,
