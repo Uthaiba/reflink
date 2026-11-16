@@ -276,3 +276,18 @@ See [Password change contract](PASSWORD_CHANGE_RECOVERY.md).
 This addresses the documented frontend mismatch at source level. Authenticated
 staging/browser testing and server-side forced-password enforcement remain open.
 The original audit above remains a snapshot of baseline 5082fa0.
+
+## Continuation: atomic updates and aggregate reporting source
+
+The continuation now includes an atomic investigation changeset, private operation
+ledger, direct-write guard, explicit result drafts and checked PHC attachment
+registration. Isolated PostgreSQL CI passed concurrent edit, idempotency,
+authorization, rollback and legacy/direct-write contracts on commit 62d5b4b.
+The changeset has NOT been applied to hosted projects, and new mutation capability
+is disabled until a reviewed staging rehearsal.
+
+R-PHI now has a dedicated aggregate-only administrator view using the verified
+staging monthly RPC contracts. Operational AnalysisHub reporting remains separate,
+with bounded pagination, CSV formula neutralization and correct missing-age
+classification. Refer to PRODUCTION_COMPLETION_RUNBOOK.md for configuration,
+release/rollback instructions and the remaining master-plan acceptance gates.

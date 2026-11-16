@@ -81,6 +81,7 @@ def test_authorization_and_closed_records():
         actor = identity()
         ref, expected, _ = referral(actor,status)
         save(actor,ref,expected,{"result_value":"Synthetic"},ok=False)
+        run(context(actor)+"UPDATE referrals SET status='sent' WHERE id="+literal(ref),False)
 
 def test_patch_validation_and_rollback():
     actor = identity()
@@ -116,6 +117,17 @@ def test_phc_attachment_registration():
     save(actor,ref,expected,{"result_status":"positive"},ok=False)
     saved=save(actor,ref,expected,patch)
     assert saved["status"]=="saved"
+    # Wrong owners and descriptor mismatches cannot register another object.
+    ref2, expected2, _ = referral(actor,status="sent")
+    run("UPDATE referrals SET referring_facility_id="+literal(origin)+" WHERE id="+literal(ref2))
+    badpath=ref2+"/"+uid()+".pdf"
+    run("INSERT INTO storage.objects VALUES ('referral-investigation-results',"+literal(badpath)+","+
+        literal(uid())+","+literal(json.dumps({"size":5,"mimetype":"application/pdf"}))+");")
+    badpatch={**patch,"result_file_path":badpath}
+    save(actor,ref2,expected2,badpatch,ok=False)
+    run("UPDATE storage.objects SET owner_id="+literal(actor[0])+" WHERE name="+literal(badpath))
+    save(actor,ref2,expected2,{**badpatch,"result_file_size":6},ok=False)
+    assert count(ref2)==0
     # A fresh key cannot replace an already registered PHC document.
     save(actor,ref,saved["investigation_records"],patch,ok=False)
 
