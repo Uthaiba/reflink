@@ -1555,25 +1555,6 @@ const handleSignIn = async () => {
   }
 };
 
-  /* =========================================================
-     TEST SUPABASE CONNECTION
-     ========================================================= */
-
-  useEffect(() => {
-    const testSupabase = async () => {
-      const { data, error } = await supabase
-        .from("facilities")
-        .select("*")
-        .limit(1);
-
-      console.log("Supabase data:", data);
-      console.log("Supabase error:", error);
-    };
-
-    testSupabase();
-  }, []);
-
-
   useEffect(() => {
     const {
       data: { subscription },
@@ -4171,11 +4152,6 @@ function PHCStaffDashboard({ onNewReferral }) {
         throw referralError;
       }
 
-      console.log(
-        "PHC REFERRALS:",
-        data
-      );
-
       setReferrals(data || []);
     } catch (err) {
       console.error(
@@ -4254,11 +4230,8 @@ function PHCStaffDashboard({ onNewReferral }) {
                 `referring_facility_id=eq.${profile.facility_id}`,
             },
             (payload) => {
-              console.log(
-                "PHC REALTIME REFERRAL UPDATE:",
-                payload
-              );
-
+              // Re-fetch through the authorized query; never log realtime payloads.
+              void payload;
               loadMyReferrals();
             }
           )
