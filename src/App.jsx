@@ -5768,6 +5768,7 @@ function ReceivingDashboard() {
             "id",
             selectedInpatientReferral.id
           )
+          .eq("status", "admitted")
           .select()
           .single();
 
