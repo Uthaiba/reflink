@@ -5162,25 +5162,57 @@ function ReceivingDashboard() {
 
   const handleInvestigationFileUpload = async (index, file) => {
     if (!selectedReferral || !file) return;
-    if (file.size > 10 * 1024 * 1024) { setError("Investigation result file must not exceed 10 MB."); return; }
-    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp", "text/plain", "text/csv"];
-    if (file.type && !allowed.includes(file.type)) { setError("Unsupported investigation result file type."); return; }
+    setError("");
+    setMessage("");
     const current = getInvestigationRecords(selectedReferral).map(normalizeInvestigationRecord);
+    if (!current[index]) {
+      setError("Investigation record no longer exists. Refresh before uploading.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Investigation result file must not exceed 10 MB.");
+      return;
+    }
+    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp", "text/plain", "text/csv"];
+    if (!allowed.includes(file.type)) {
+      setError("Unsupported or unrecognized investigation result file type.");
+      return;
+    }
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const path = `${selectedReferral.id}/${Date.now()}-${index}-${safeName}`;
     setActionLoading(`${selectedReferral.id}-investigation-file-${index}`);
+    let uploaded = false;
     try {
-      const { error: uploadError } = await supabase.storage.from("referral-investigation-results").upload(path, file, { upsert: false, contentType: file.type || undefined });
+      const { error: uploadError } = await supabase.storage
+        .from("referral-investigation-results")
+        .upload(path, file, { upsert: false, contentType: file.type });
       if (uploadError) throw uploadError;
-      const updated = current.map((item, itemIndex) => itemIndex === index ? { ...item, result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size } : item);
-      const { error } = await supabase.from("referrals").update({ investigation_records: updated }).eq("id", selectedReferral.id);
+      uploaded = true;
+      const updated = current.map((item, itemIndex) =>
+        itemIndex === index
+          ? { ...item, result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size }
+          : item
+      );
+      const { data, error } = await supabase.from("referrals")
+        .update({ investigation_records: updated })
+        .eq("id", selectedReferral.id)
+        .select("id, investigation_records")
+        .single();
       if (error) throw error;
-      const updatedReferral = { ...selectedReferral, investigation_records: updated };
+      const updatedReferral = { ...selectedReferral, investigation_records: data.investigation_records };
       setSelectedReferral(updatedReferral);
-      setReferrals((previous) => previous.map((item) => item.id === selectedReferral.id ? updatedReferral : item));
-      setMessage(`${updated[index].investigation} result document uploaded successfully.`);
-    } catch (err) { console.error("INVESTIGATION FILE UPLOAD ERROR:", err); setError(err.message || "Unable to upload investigation result."); }
-    finally { setActionLoading(null); }
+      setReferrals((previous) => previous.map((item) =>
+        item.id === selectedReferral.id ? updatedReferral : item
+      ));
+      setMessage("Investigation result document saved successfully.");
+    } catch (err) {
+      console.error("INVESTIGATION FILE UPLOAD ERROR:", err?.message || "Upload failed");
+      setError(uploaded
+        ? "File uploaded, but its clinical record was not updated. Do not upload again until the referral and attachments have been checked."
+        : "Investigation document upload failed. No successful upload was confirmed.");
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleInvestigationResultChange = async (index, patch) => {
