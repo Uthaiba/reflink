@@ -7,6 +7,7 @@ import AnalysisHub from "./components/dashboards/AnalysisHub.jsx";
 import "./App.css";
 import "./reflink-theme-professional.css";
 import "./admin-dashboard-modern.css";
+import "./reflink-clinical-accessibility.css";
 
 function formatPatientAge(ageInMonths) {
   const months = Number(ageInMonths);
