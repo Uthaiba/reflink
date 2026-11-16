@@ -3056,6 +3056,10 @@ provisional_diagnosis: "",
     setLoading(true);
 
     try {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        throw new Error("Device is offline. Referral was not submitted. Follow the approved facility referral procedure and retry when connected.");
+      }
+
 
       const {
         data: {
