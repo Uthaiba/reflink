@@ -59,3 +59,14 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Connectivity warning remains visible without color-only signaling. */
+.reflink-connectivity-notice {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 2px solid #995b00;
+  border-radius: 0.75rem;
+  background: #fff5d6;
+  color: #392600;
+  line-height: 1.5;
+}
