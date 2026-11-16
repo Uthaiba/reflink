@@ -3232,21 +3232,6 @@ provisional_diagnosis: "",
           "sent",
       };
 
-      console.log(
-        "AUTH USER:",
-        user.id
-      );
-
-      console.log(
-        "PROFILE:",
-        profile
-      );
-
-      console.log(
-        "REFERRAL PAYLOAD:",
-        referralPayload
-      );
-
       const {
         data: insertedReferral,
         error: referralError,
@@ -3265,7 +3250,11 @@ provisional_diagnosis: "",
         throw referralError;
       }
 
+      // Referral is already persisted at this point. A failed optional
+      // attachment upload must not be reported as a failed referral.
+      let attachmentWarning = "";
       let savedInvestigationRecords = selectedInvestigations.map(({ result_file, ...item }) => item);
+      try {
       if (insertedReferral?.id) {
         for (let i = 0; i < selectedInvestigations.length; i += 1) {
           const file = selectedInvestigations[i]?.result_file;
@@ -3284,6 +3273,13 @@ provisional_diagnosis: "",
           const { error: resultMetaError } = await supabase.from("referrals").update({ investigation_records: savedInvestigationRecords }).eq("id", insertedReferral.id);
           if (resultMetaError) throw resultMetaError;
         }
+      }
+      } catch (attachmentError) {
+        // Preserve the referral ID and warn the clinician explicitly.
+        // An attachment may have uploaded before metadata failed: do not retry
+        // blindly without checking the receiving record.
+        attachmentWarning = " Some investigation attachments may not have been saved. Check the referral record before retrying uploads.";
+        console.error("REFERRAL ATTACHMENT ERROR:", attachmentError?.message || "Upload failed");
       }
 
       const referringFacility = facilities.find(
@@ -3309,7 +3305,7 @@ provisional_diagnosis: "",
       setPrintDraft(savedReferral);
 
       setMessage(
-        `Referral saved successfully. Patient: ${form.patient_identifier || "Not recorded"} • REFLINK ID: ${referralNumber}`
+        `Referral saved. REFLINK ID: ${referralNumber}.${attachmentWarning}`
       );
 
       setForm({
