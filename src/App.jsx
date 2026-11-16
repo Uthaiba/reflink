@@ -5713,6 +5713,21 @@ function ReceivingDashboard() {
       );
 
       try {
+        // Compare the form's original clinical record with the latest database
+        // state before saving. A database transaction is still needed for
+        // fully atomic concurrent-edit protection.
+        const { data: latestInpatient, error: inpatientReadError } = await supabase
+          .from("referrals")
+          .select("admission_at, ward_unit, admission_diagnosis, clinical_progress, inpatient_treatment, discharge_diagnosis, condition_at_discharge, discharge_medications, follow_up_plan, discharged_at, status")
+          .eq("id", selectedInpatientReferral.id)
+          .single();
+        if (inpatientReadError) throw inpatientReadError;
+        if (latestInpatient.status !== "admitted" ||
+            ["admission_at", "ward_unit", "admission_diagnosis", "clinical_progress", "inpatient_treatment", "discharge_diagnosis", "condition_at_discharge", "discharge_medications", "follow_up_plan", "discharged_at"].some(
+              (field) => (latestInpatient[field] ?? null) !== (selectedInpatientReferral[field] ?? null)
+            )) {
+          throw new Error("INPATIENT_RECORD_CHANGED");
+        }
 
         if (
           !admissionForm.ward_unit.trim()
@@ -5794,8 +5809,9 @@ function ReceivingDashboard() {
         );
 
         setError(
-          err.message ||
-          "Unable to save admission information."
+          err?.message === "INPATIENT_RECORD_CHANGED"
+            ? "The inpatient record has changed since this form was opened. Refresh and review the latest documentation before saving."
+            : (err.message || "Unable to save admission information.")
         );
 
       } finally {
@@ -5828,6 +5844,21 @@ function ReceivingDashboard() {
       );
 
       try {
+        // Compare the form's original clinical record with the latest database
+        // state before saving. A database transaction is still needed for
+        // fully atomic concurrent-edit protection.
+        const { data: latestInpatient, error: inpatientReadError } = await supabase
+          .from("referrals")
+          .select("admission_at, ward_unit, admission_diagnosis, clinical_progress, inpatient_treatment, discharge_diagnosis, condition_at_discharge, discharge_medications, follow_up_plan, discharged_at, status")
+          .eq("id", selectedInpatientReferral.id)
+          .single();
+        if (inpatientReadError) throw inpatientReadError;
+        if (latestInpatient.status !== "admitted" ||
+            ["admission_at", "ward_unit", "admission_diagnosis", "clinical_progress", "inpatient_treatment", "discharge_diagnosis", "condition_at_discharge", "discharge_medications", "follow_up_plan", "discharged_at"].some(
+              (field) => (latestInpatient[field] ?? null) !== (selectedInpatientReferral[field] ?? null)
+            )) {
+          throw new Error("INPATIENT_RECORD_CHANGED");
+        }
 
         if (
           !admissionForm.discharge_diagnosis.trim()
@@ -5912,8 +5943,9 @@ function ReceivingDashboard() {
         );
 
         setError(
-          err.message ||
-          "Unable to discharge patient."
+          err?.message === "INPATIENT_RECORD_CHANGED"
+            ? "The inpatient record has changed since this form was opened. Refresh and review the latest documentation before saving."
+            : (err.message || "Unable to discharge patient.")
         );
 
       } finally {
