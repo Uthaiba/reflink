@@ -1,6 +1,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabase.js";
+import { inspectInvestigationAttachment } from "./lib/investigationAttachmentRecovery.js";
 import { validateInvestigationFile, validateInvestigationFileContent, createInvestigationFilePath } from "./lib/investigationAttachments.js";
 import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
 import ConnectivityNotice from "./components/ConnectivityNotice.jsx";
@@ -5171,15 +5172,21 @@ function ReceivingDashboard() {
     }
     let path;
     setActionLoading(`${selectedReferral.id}-investigation-file-${index}`);
-    let uploaded = false;
+    let uploadAttempted = false;
     try {
-      await validateInvestigationFileContent(file);
+      try {
+        await validateInvestigationFileContent(file);
+      } catch {
+        setError("Investigation document was not uploaded. Check that it is non-empty, no larger than 10 MB, and has a supported format matching its contents.");
+        return;
+      }
       path = createInvestigationFilePath(selectedReferral.id, file);
+      // A lost storage response can hide a successful upload.
+      uploadAttempted = true;
       const { error: uploadError } = await supabase.storage
         .from("referral-investigation-results")
         .upload(path, file, { upsert: false, contentType: file.type });
       if (uploadError) throw uploadError;
-      uploaded = true;
       const { data: latest, error: latestError } = await supabase
         .from("referrals")
         .select("investigation_records")
@@ -5213,28 +5220,18 @@ function ReceivingDashboard() {
       } else {
         console.error("INVESTIGATION FILE UPLOAD ERROR:", err?.message || "Upload failed");
       }
-      if (uploaded) {
-        // A timed-out metadata response may have committed. Never remove a
-        // potentially referenced clinical attachment without verifying state.
-        const { data: saved, error: verifyError } = await supabase
-          .from("referrals")
-          .select("investigation_records")
-          .eq("id", selectedReferral.id)
-          .single();
-        if (verifyError) {
-          setError("Attachment outcome could not be verified. Do not retry until an administrator reconciles the referral and file.");
+      if (uploadAttempted) {
+        const recovery = await inspectInvestigationAttachment(
+          () => supabase.from("referrals").select("investigation_records")
+            .eq("id", selectedReferral.id).single(),
+          path
+        );
+        if (recovery === "referenced") {
+          setError("Attachment appears saved in the referral, but confirmation failed. Refresh and verify it before retrying.");
+        } else if (recovery === "unreferenced") {
+          setError("The uploaded attachment is not currently referenced by the referral. No file was deleted. Ask an administrator to reconcile the upload before retrying.");
         } else {
-          const referenced = getInvestigationRecords(saved).some(
-            (item) => item.result_file_path === path
-          );
-          if (referenced) {
-            setError("Attachment appears saved in the referral, but confirmation failed. Refresh and verify it before retrying.");
-          } else {
-            // A concurrent metadata write can reference this path immediately
-            // after our read. Do not delete a clinical attachment based on a
-            // non-atomic reference check; reconcile orphan files separately.
-            setError("The uploaded attachment is not currently referenced by the referral. No file was deleted. Ask an administrator to reconcile the upload before retrying.");
-          }
+          setError("Attachment outcome could not be verified. Do not retry until an administrator reconciles the referral and file.");
         }
       } else {
         setError("Investigation document upload failed. No successful upload was confirmed.");
