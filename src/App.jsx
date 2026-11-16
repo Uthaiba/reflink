@@ -6235,6 +6235,20 @@ const handleStartAssessment = async (referralId) => {
 
         }
 
+        // Do not overwrite clinical documentation from a stale assessment form.
+        // This is a preflight check, not an atomic concurrency guarantee.
+        const { data: currentAssessment, error: assessmentReadError } = await supabase
+          .from("referrals")
+          .select("status, assessment_completed_at")
+          .eq("id", selectedReferral.id)
+          .single();
+        if (assessmentReadError) throw assessmentReadError;
+        if (currentAssessment.status !== "under_assessment" ||
+            (currentAssessment.assessment_completed_at || null) !==
+              (selectedReferral.assessment_completed_at || null)) {
+          throw new Error("ASSESSMENT_CHANGED");
+        }
+
         const {
           data,
           error,
@@ -6362,8 +6376,9 @@ const handleStartAssessment = async (referralId) => {
         );
 
         setError(
-          err.message ||
-          "Unable to save clinical assessment."
+          err?.message === "ASSESSMENT_CHANGED"
+            ? "This referral assessment has changed since you opened it. Refresh and review the latest clinical documentation before saving."
+            : (err.message || "Unable to save clinical assessment.")
         );
 
       } finally {
