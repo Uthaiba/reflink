@@ -25,25 +25,31 @@ function AnalyticsDashboard() {
     }));
 
     try {
-      const { data, error } = await supabase
-        .from("referrals")
-        .select(`
-          id,
-          referral_number,
-          diagnosis_category,
-          diagnosis_status,
-          final_diagnosis,
-          provisional_diagnosis,
-          status,
-          created_at,
-          is_test
-        `)
-        .eq("is_test", false)
-        .order("created_at", { ascending: false });
+      // Supabase/PostgREST can cap each response. Fetch all accessible rows
+      // rather than silently treating the first page as the entire population.
+      // A bounded limit makes incomplete statistics explicit until a
+      // server-side aggregate reporting endpoint is available.
+      const pageSize = 500;
+      const maxRows = 10000;
+      const referrals = [];
 
-      if (error) throw error;
+      for (let offset = 0; offset <= maxRows; offset += pageSize) {
+        const { data, error } = await supabase
+          .from("referrals")
+          .select("id, diagnosis_category, final_diagnosis, status")
+          .eq("is_test", false)
+          .order("id", { ascending: true })
+          .range(offset, offset + pageSize - 1);
 
-      const referrals = data || [];
+        if (error) throw error;
+        const page = data || [];
+        if (offset + page.length > maxRows) {
+          throw new Error("Reporting limit exceeded. Use an approved server-side aggregate report.");
+        }
+        referrals.push(...page);
+        if (page.length < pageSize) break;
+      }
+
       const total = referrals.length;
 
       const categoryMap = {};
@@ -190,7 +196,7 @@ function AnalyticsDashboard() {
 
         <div className="stats-grid">
           <div className="stat-card">
-            <span>Production Referrals</span>
+            <span>Accessible Referrals</span>
             <strong>{analytics.total}</strong>
           </div>
 
@@ -267,7 +273,7 @@ function AnalyticsDashboard() {
         {analytics.loading ? (
           <p>Loading category analytics...</p>
         ) : analytics.categories.length === 0 ? (
-          <p>No production referral data available.</p>
+          <p>No accessible non-test referral data available.</p>
         ) : (
           <div
             style={{
