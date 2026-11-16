@@ -1,0 +1,61 @@
+/* REFLINK mobile clinical workspace improvements.
+   Layout only: no clinical data is cached or modified. */
+@media (max-width: 767px) {
+  .dashboard-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .dashboard-actions > button,
+  .dashboard-actions > .primary-button,
+  .dashboard-actions > .secondary-button {
+    min-height: 44px;
+    max-width: 100%;
+  }
+
+  .dashboard-card {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-card input,
+  .dashboard-card select,
+  .dashboard-card textarea {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .dashboard-card table {
+    width: 100%;
+  }
+
+  .dashboard-card th,
+  .dashboard-card td {
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Keyboard users must see a strong focus indicator even on custom buttons. */
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid #175f9c;
+  outline-offset: 3px;
+}
+
+/* Preserve legibility for users who request stronger contrast. */
+@media (prefers-contrast: more) {
+  .dashboard-card {
+    border-color: currentColor;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
