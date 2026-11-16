@@ -5372,6 +5372,11 @@ function ReceivingDashboard() {
           );
         }
 
+        // UI guard complements (but does not replace) database RLS.
+        if (profile.role !== "receiving_staff") {
+          throw new Error("Receiving-clinician access is required.");
+        }
+
         if (
           !profile.facility_id
         ) {
@@ -5483,11 +5488,6 @@ function ReceivingDashboard() {
         if (referralError) {
           throw referralError;
         }
-
-        console.log(
-          "INCOMING REFERRALS:",
-          data
-        );
 
         setReferrals(
           data || []
