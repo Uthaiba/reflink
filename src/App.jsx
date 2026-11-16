@@ -1,6 +1,7 @@
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
+import { changeAccountPassword, resolvePasswordChangeMode } from "./lib/passwordChange.js";
 import { getLegacyDiagnosisStatus } from "./lib/diagnosisRecords.js";
 import { inspectInvestigationAttachment } from "./lib/investigationAttachmentRecovery.js";
 import { validateInvestigationFile, validateInvestigationFileContent, createInvestigationFilePath } from "./lib/investigationAttachments.js";
@@ -1422,6 +1423,9 @@ function App() {
   const [passwordError, setPasswordError] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordOutcome, setPasswordOutcome] = useState(null);
+  const passwordChangeInFlight = useRef(false);
+  const passwordChangeLocked = ["confirmed", "account_pending", "unknown"].includes(passwordOutcome);
 
   /* =========================================================
    LOGIN / AUTHENTICATION
@@ -1523,6 +1527,7 @@ const handleSignIn = async () => {
     setRole(applicationRole);
 
     if (userProfile.must_change_password) {
+      setPasswordOutcome(null);
       setPasswordError("");
       setPasswordMessage(
         "Your account was created with a temporary password. Please set your own password before continuing."
@@ -1562,7 +1567,16 @@ const handleSignIn = async () => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setRole(null);
+        setProfile(null);
+        setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+        setScreen("login");
+      }
       if (event === "PASSWORD_RECOVERY") {
+        setRole(null);
+        setProfile(null);
+        setPasswordOutcome(null);
         setPasswordError("");
         setPasswordMessage("");
         setPasswordForm({
@@ -1617,6 +1631,7 @@ const handleSignIn = async () => {
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
+    if (passwordChangeInFlight.current || passwordChangeLocked) return;
     setPasswordError("");
     setPasswordMessage("");
 
@@ -1650,44 +1665,29 @@ const handleSignIn = async () => {
       return;
     }
 
+    passwordChangeInFlight.current = true;
     setPasswordSaving(true);
-
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-
-      if (error) throw error;
-
-      setPasswordForm({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      });
-
-      try {
-        await supabase
-          .from("profiles")
-          .update({
-            must_change_password: false,
-          })
-          .eq("id", profile?.id || "");
-      } catch (profileUpdateError) {
-        console.warn(
-          "PASSWORD FLAG UPDATE SKIPPED:",
-          profileUpdateError
-        );
+      const mode = resolvePasswordChangeMode(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_PASSWORD_CHANGE_MODE
+      );
+      const result = await changeAccountPassword(supabase, newPassword, mode);
+      setPasswordOutcome(result.status);
+      if (result.status === "confirmed") {
+        setProfile((previous) => previous?.id === result.userId
+          ? { ...previous, must_change_password: false } : null);
+        setPasswordMessage("Password and account status confirmed. Sign out, then sign in with your new password.");
+      } else if (result.status === "account_pending") {
+        setPasswordError("Your password changed, but account access could not be confirmed. Do not submit another password change. Sign out and sign in with the new password; contact an administrator if access remains blocked.");
+      } else if (result.status === "unknown") {
+        setPasswordError("The password-change outcome could not be confirmed. Do not retry here. Sign out and verify your new password, or use password recovery.");
+      } else {
+        setPasswordError("Password change was not started. Check your connection and sign-in session. If this continues, contact an administrator.");
       }
-
-      setPasswordMessage(
-        "Password changed successfully. Your new password is now active."
-      );
-    } catch (error) {
-      console.error("PASSWORD CHANGE ERROR:", error);
-      setPasswordError(
-        error?.message || "Unable to change your password."
-      );
     } finally {
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      passwordChangeInFlight.current = false;
       setPasswordSaving(false);
     }
   };
@@ -2353,6 +2353,7 @@ const handleSignIn = async () => {
 
               <input
                 type="password"
+                disabled={passwordSaving || passwordChangeLocked}
                 value={passwordForm.newPassword}
                 onChange={(e) =>
                   setPasswordForm((previous) => ({
@@ -2370,6 +2371,7 @@ const handleSignIn = async () => {
 
               <input
                 type="password"
+                disabled={passwordSaving || passwordChangeLocked}
                 value={passwordForm.confirmPassword}
                 onChange={(e) =>
                   setPasswordForm((previous) => ({
@@ -2384,13 +2386,13 @@ const handleSignIn = async () => {
               />
 
               {passwordError && (
-                <div className="login-error">
+                <div className="login-error" role="alert">
                   {passwordError}
                 </div>
               )}
 
               {passwordMessage && (
-                <div className="success-message">
+                <div className="success-message" role="status">
                   {passwordMessage}
                 </div>
               )}
@@ -2398,7 +2400,7 @@ const handleSignIn = async () => {
               <button
                 type="submit"
                 className="primary-button full-width"
-                disabled={passwordSaving}
+                disabled={passwordSaving || passwordChangeLocked}
               >
                 {passwordSaving
                   ? "Updating Password..."
@@ -2409,15 +2411,18 @@ const handleSignIn = async () => {
             <button
               type="button"
               className="back-button"
+              disabled={passwordSaving}
               onClick={() => {
+                if (profile?.must_change_password || passwordChangeLocked || !role) {
+                  logout();
+                  return;
+                }
                 setPasswordError("");
                 setPasswordMessage("");
-                setScreen(
-                  role ? "dashboard" : "login"
-                );
+                setScreen("dashboard");
               }}
             >
-              ← Back
+              {profile?.must_change_password || passwordChangeLocked || !role ? "Sign Out" : "← Back"}
             </button>
 
             <p className="demo-note">
@@ -2459,6 +2464,7 @@ const handleSignIn = async () => {
                 type="button"
                 className="secondary-button"
                 onClick={() => {
+                  setPasswordOutcome(null);
                   setPasswordError("");
                   setPasswordMessage("");
                   setPasswordForm({

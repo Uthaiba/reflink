@@ -264,3 +264,15 @@ plan and synthetic tests. This audit does not authorize a production migration.
 
 These references guide review; advisor output alone does not prove an exploit or
 that a function should be converted to invoker semantics.
+
+## Continuation: password recovery source implementation
+
+The next repository increment adds a capability-aware password service and wires it
+into the existing change-password screen. It confirms affected account/flag state,
+handles partial and uncertain responses without fallback writes, clears password
+inputs and blocks the Back action from bypassing a required change.
+See [Password change contract](PASSWORD_CHANGE_RECOVERY.md).
+
+This addresses the documented frontend mismatch at source level. Authenticated
+staging/browser testing and server-side forced-password enforcement remain open.
+The original audit above remains a snapshot of baseline 5082fa0.
