@@ -5237,6 +5237,19 @@ function ReceivingDashboard() {
     setActionLoading(`${selectedReferral.id}-investigation-${index}`);
 
     try {
+      // Compare the current database version before saving. This reduces
+      // stale-tab overwrites but is not an atomic concurrency guarantee.
+      const { data: latest, error: readError } = await supabase
+        .from("referrals")
+        .select("investigation_records")
+        .eq("id", selectedReferral.id)
+        .single();
+      if (readError) throw readError;
+      const latestRecords = getInvestigationRecords(latest).map(normalizeInvestigationRecord);
+      if (JSON.stringify(latestRecords) !== JSON.stringify(currentInvestigations)) {
+        throw new Error("STALE_INVESTIGATION_RECORD");
+      }
+
       const { data, error } = await supabase
         .from("referrals")
         .update({ investigation_records: updatedInvestigations })
@@ -5259,7 +5272,9 @@ function ReceivingDashboard() {
       setMessage("Investigation result saved successfully.");
     } catch (err) {
       console.error("INVESTIGATION RESULT UPDATE ERROR:", err?.message || "Save failed");
-      setError("Unable to save investigation result. The previous saved value is unchanged. Refresh the referral before retrying.");
+      setError(err?.message === "STALE_INVESTIGATION_RECORD"
+        ? "Another clinician has changed the investigation record. Refresh the referral and review their changes before editing."
+        : "Unable to save investigation result. The previous saved value is unchanged. Refresh the referral before retrying.");
     } finally {
       setActionLoading(null);
     }
