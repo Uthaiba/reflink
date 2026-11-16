@@ -5238,12 +5238,10 @@ function ReceivingDashboard() {
           if (referenced) {
             setError("Attachment appears saved in the referral, but confirmation failed. Refresh and verify it before retrying.");
           } else {
-            const { error: cleanupError } = await supabase.storage
-              .from("referral-investigation-results")
-              .remove([path]);
-            setError(cleanupError
-              ? "The attachment is not referenced by the referral, and automatic cleanup failed. Ask an administrator to reconcile it."
-              : "The attachment was not recorded. The unreferenced upload was removed; refresh before trying again.");
+            // A concurrent metadata write can reference this path immediately
+            // after our read. Do not delete a clinical attachment based on a
+            // non-atomic reference check; reconcile orphan files separately.
+            setError("The uploaded attachment is not currently referenced by the referral. No file was deleted. Ask an administrator to reconcile the upload before retrying.");
           }
         }
       } else {
