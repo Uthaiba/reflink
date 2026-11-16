@@ -1,6 +1,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabase.js";
+import { getLegacyDiagnosisStatus } from "./lib/diagnosisRecords.js";
 import { inspectInvestigationAttachment } from "./lib/investigationAttachmentRecovery.js";
 import { validateInvestigationFile, validateInvestigationFileContent, createInvestigationFilePath } from "./lib/investigationAttachments.js";
 import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
@@ -3162,8 +3163,7 @@ provisional_diagnosis: "",
 
   // Keep legacy fields populated for compatibility with existing records/views.
   diagnosis_status:
-    [...new Set(diagnosisEntries.map((item) => item.status))]
-      .join(", ") || null,
+    getLegacyDiagnosisStatus(diagnosisEntries),
 
   diagnosis_category:
     [...new Set(diagnosisEntries.map((item) => item.category))]
