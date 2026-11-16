@@ -1,6 +1,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
+import { initialInvestigationRecords, saveInvestigation, uploadInitialInvestigationFiles } from "./lib/investigationUpdates.js";
+const atomicInvestigationUpdatesEnabled = import.meta.env.VITE_ATOMIC_INVESTIGATIONS_ENABLED === "true";
 import { changeAccountPassword, resolvePasswordChangeMode } from "./lib/passwordChange.js";
 import { getLegacyDiagnosisStatus } from "./lib/diagnosisRecords.js";
 import { inspectInvestigationAttachment } from "./lib/investigationAttachmentRecovery.js";
@@ -296,9 +298,27 @@ function normalizeInvestigationRecord(item) {
   };
 }
 
-function InvestigationResultCards({ investigations, editable = false, onResultChange, onFileUpload }) {
+function InvestigationResultCards({ investigations, editable = false, onResultChange, onFileUpload, expectedSnapshot }) {
+  const [drafts, setDrafts] = useState({});
+  const [saving, setSaving] = useState(null);
+  const changeDraft = (index, patch) => setDrafts((previous) => ({
+    ...previous,
+    [index]: { patch: { ...previous[index]?.patch, ...patch },
+      expected: previous[index]?.expected ?? expectedSnapshot },
+  }));
+  const saveDraft = async (index) => {
+    if (!drafts[index] || saving !== null) return;
+    setSaving(index);
+    try {
+      const saved = await onResultChange?.(index, drafts[index].patch, drafts[index].expected);
+      if (!saved) setDrafts((previous) => ({ ...previous, [index]: { ...previous[index], blocked: true } }));
+      if (saved) setDrafts((previous) => {
+        const next = { ...previous }; delete next[index]; return next;
+      });
+    } finally { setSaving(null); }
+  };
   if (!investigations.length) return <div className="empty-selection-state">No investigation was recorded.</div>;
-  const normalized = investigations.map(normalizeInvestigationRecord);
+  const normalized = investigations.map((item, index) => ({ ...normalizeInvestigationRecord(item), ...drafts[index]?.patch }));
   return (
     <div className="investigation-result-list">
       {normalized.map((item, index) => {
@@ -312,7 +332,7 @@ function InvestigationResultCards({ investigations, editable = false, onResultCh
             <div className="investigation-result-control">
               <span>{config.label}</span>
               {editable ? (
-                <select value={item.result_status} onChange={(e) => onResultChange?.(index, { result_status: e.target.value })} aria-label={`Result for ${item.investigation}`}>
+                <select disabled={saving !== null} value={item.result_status} onChange={(e) => changeDraft(index, { result_status: e.target.value })} aria-label={`Result for ${item.investigation}`}>
                   {config.statuses.map((status) => <option value={status} key={status}>{getInvestigationResultLabel(status)}</option>)}
                 </select>
               ) : <span className={`investigation-result-badge ${getInvestigationResultClass(item.result_status)}`}>{getInvestigationResultLabel(item.result_status)}</span>}
@@ -320,19 +340,27 @@ function InvestigationResultCards({ investigations, editable = false, onResultCh
             {editable && (
               <div className="investigation-result-detail-grid">
                 {config.type === "quantitative" && <>
-                  <label><span>Value</span><input value={item.result_value} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder="e.g. 32" /></label>
-                  <label><span>Unit</span><input value={item.result_unit} onChange={(e) => onResultChange?.(index, { result_unit: e.target.value })} placeholder="% / g/dL" /></label>
-                  <label><span>Reference range</span><input value={item.reference_range} onChange={(e) => onResultChange?.(index, { reference_range: e.target.value })} placeholder="Use performing laboratory range" /></label>
+                  <label><span>Value</span><input disabled={saving !== null} value={item.result_value} onChange={(e) => changeDraft(index, { result_value: e.target.value })} placeholder="e.g. 32" /></label>
+                  <label><span>Unit</span><input disabled={saving !== null} value={item.result_unit} onChange={(e) => changeDraft(index, { result_unit: e.target.value })} placeholder="% / g/dL" /></label>
+                  <label><span>Reference range</span><input disabled={saving !== null} value={item.reference_range} onChange={(e) => changeDraft(index, { reference_range: e.target.value })} placeholder="Use performing laboratory range" /></label>
                 </>}
-                {config.type === "panel" && <label className="investigation-result-notes"><span>Panel findings</span><textarea value={item.result_value} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder="Record pH, protein, glucose, blood, nitrite, leukocytes, specific gravity and other findings." rows={3} /></label>}
-                {(config.type === "qualitative" || config.type === "microbiology" || config.type === "imaging") && <label className="investigation-result-notes"><span>Result / report detail</span><textarea value={item.result_value} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder={config.type === "imaging" ? "Enter report findings and impression." : "Enter organism, finding or additional result detail."} rows={3} /></label>}
-                <label className="investigation-result-notes"><span>Clinical/laboratory note</span><textarea value={item.result_notes} onChange={(e) => onResultChange?.(index, { result_notes: e.target.value })} placeholder="Optional note" rows={2} /></label>
+                {config.type === "panel" && <label className="investigation-result-notes"><span>Panel findings</span><textarea disabled={saving !== null} value={item.result_value} onChange={(e) => changeDraft(index, { result_value: e.target.value })} placeholder="Record pH, protein, glucose, blood, nitrite, leukocytes, specific gravity and other findings." rows={3} /></label>}
+                {(config.type === "qualitative" || config.type === "microbiology" || config.type === "imaging") && <label className="investigation-result-notes"><span>Result / report detail</span><textarea disabled={saving !== null} value={item.result_value} onChange={(e) => changeDraft(index, { result_value: e.target.value })} placeholder={config.type === "imaging" ? "Enter report findings and impression." : "Enter organism, finding or additional result detail."} rows={3} /></label>}
+                <label className="investigation-result-notes"><span>Clinical/laboratory note</span><textarea disabled={saving !== null} value={item.result_notes} onChange={(e) => changeDraft(index, { result_notes: e.target.value })} placeholder="Optional note" rows={2} /></label>
               </div>
             )}
             {!editable && item.result_value && <div className="investigation-result-value"><span>Result detail</span><strong>{item.result_value}</strong>{item.result_unit && <small>{item.result_unit}</small>}{item.reference_range && <small>Reference: {item.reference_range}</small>}</div>}
+            {editable && drafts[index] && <div role="status">
+              Unsaved changes. <button type="button" className="secondary-button"
+                disabled={saving !== null || drafts[index].blocked} onClick={() => saveDraft(index)}>Save result</button>
+              <button type="button" className="secondary-button" disabled={saving !== null}
+                onClick={() => setDrafts((previous) => { const next = { ...previous }; delete next[index]; return next; })}>
+                Discard draft
+              </button>
+            </div>}
             <div className="investigation-file-row">
               <div><span>Original result</span><strong>{item.result_file_name || "No result document attached"}</strong>{item.result_file_size ? <small>{Math.round(item.result_file_size / 1024)} KB</small> : null}</div>
-              {editable && <label className="upload-result-button">📎 {item.result_file_name ? "Replace result" : "Upload result"}<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv" onChange={(e) => onFileUpload?.(index, e.target.files?.[0] || null)} /></label>}
+              {editable && <label className="upload-result-button">📎 {item.result_file_name ? "Replace result" : "Upload result"}<input type="file" disabled={saving !== null || Object.keys(drafts).length > 0} accept="application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv" onChange={(e) => onFileUpload?.(index, e.target.files?.[0] || null)} /></label>}
             </div>
           </div>
         );
@@ -1030,7 +1058,7 @@ function printReferralForm() {
   window.print();
 }
 
-function ReferralSourceDetails({ referral, editableInvestigationResults = false, onInvestigationResultChange }) {
+function ReferralSourceDetails({ referral, editableInvestigationResults = false, onInvestigationResultChange, onInvestigationFileUpload }) {
   const diagnoses = getDiagnosisRecords(referral);
   const investigations = getInvestigationRecords(referral);
 
@@ -1066,7 +1094,7 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
         (typeof item === "string" ? item : "");
 
       if (investigation) {
-        groups[category].push(investigation);
+        groups[category].push(item);
       }
 
       return groups;
@@ -1289,7 +1317,13 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
                   <InvestigationResultCards
                     investigations={items}
                     editable={editableInvestigationResults}
-                    onResultChange={(localIndex, value) => {
+                    expectedSnapshot={referral.investigation_records}
+                    onFileUpload={(localIndex, file) => {
+                      const selectedItem = items[localIndex];
+                      const globalIndex = investigations.findIndex((entry) => entry === selectedItem);
+                      if (globalIndex >= 0) return onInvestigationFileUpload?.(globalIndex, file);
+                    }}
+                    onResultChange={(localIndex, value, expected) => {
                       const categoryItems = investigations.filter(
                         (entry) =>
                           (entry?.category || "Other Investigations") === category
@@ -1300,7 +1334,7 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
                       );
 
                       if (globalIndex >= 0) {
-                        onInvestigationResultChange?.(globalIndex, value);
+                        return onInvestigationResultChange?.(globalIndex, value, expected);
                       }
                     }}
                   />
@@ -3188,7 +3222,7 @@ provisional_diagnosis: "",
     selectedInvestigationCategories,
 
   investigation_records:
-    selectedInvestigations.map(({ result_file, ...item }) => item),
+    initialInvestigationRecords(selectedInvestigations),
 
   investigations:
     selectedInvestigations
@@ -3245,33 +3279,16 @@ provisional_diagnosis: "",
       // Referral is already persisted at this point. A failed optional
       // attachment upload must not be reported as a failed referral.
       let attachmentWarning = "";
-      let savedInvestigationRecords = selectedInvestigations.map(({ result_file, ...item }) => item);
+      let savedInvestigationRecords = initialInvestigationRecords(selectedInvestigations);
       try {
-      if (insertedReferral?.id) {
-        for (let i = 0; i < selectedInvestigations.length; i += 1) {
-          const file = selectedInvestigations[i]?.result_file;
-          if (!file) continue;
-          await validateInvestigationFileContent(file);
-          const path = createInvestigationFilePath(insertedReferral.id, file);
-          const { error: uploadError } = await supabase.storage
-            .from("referral-investigation-results")
-            .upload(path, file, { upsert: false, contentType: file.type || undefined });
-          if (uploadError) throw uploadError;
-          savedInvestigationRecords = savedInvestigationRecords.map((item, itemIndex) =>
-            itemIndex === i ? { ...item, result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size } : item
-          );
-        }
-        if (savedInvestigationRecords.length) {
-          const { error: resultMetaError } = await supabase.from("referrals").update({ investigation_records: savedInvestigationRecords }).eq("id", insertedReferral.id);
-          if (resultMetaError) throw resultMetaError;
-        }
-      }
+        savedInvestigationRecords = await uploadInitialInvestigationFiles(
+          supabase, insertedReferral.id, selectedInvestigations,
+          savedInvestigationRecords, atomicInvestigationUpdatesEnabled
+        );
       } catch (attachmentError) {
-        // Preserve the referral ID and warn the clinician explicitly.
-        // An attachment may have uploaded before metadata failed: do not retry
-        // blindly without checking the receiving record.
-        attachmentWarning = " Some investigation attachments may not have been saved. Check the referral record before retrying uploads.";
-        console.error("REFERRAL ATTACHMENT ERROR:", attachmentError?.message || "Upload failed");
+        attachmentWarning = attachmentError.message === "INVESTIGATION_SERVICE_UNAVAILABLE"
+          ? " Investigation attachments were not uploaded because the verified attachment service is unavailable. Preserve the original documents and follow the facility referral procedure."
+          : " Attachment registration could not be fully confirmed. The referral remains saved. Preserve the originals and ask an administrator to reconcile the uploads before retrying.";
       }
 
       const referringFacility = facilities.find(
@@ -5167,7 +5184,9 @@ function ReceivingDashboard() {
       follow_up_plan: "",
     });
 
+  const investigationMutationInFlight = useRef(false);
   const handleInvestigationFileUpload = async (index, file) => {
+    if (!atomicInvestigationUpdatesEnabled || investigationMutationInFlight.current) return;
     if (!selectedReferral || !file) return;
     setError("");
     setMessage("");
@@ -5176,6 +5195,7 @@ function ReceivingDashboard() {
       setError("Investigation record no longer exists. Refresh before uploading.");
       return;
     }
+    investigationMutationInFlight.current = true;
     let path;
     setActionLoading(`${selectedReferral.id}-investigation-file-${index}`);
     let uploadAttempted = false;
@@ -5193,27 +5213,11 @@ function ReceivingDashboard() {
         .from("referral-investigation-results")
         .upload(path, file, { upsert: false, contentType: file.type });
       if (uploadError) throw uploadError;
-      const { data: latest, error: latestError } = await supabase
-        .from("referrals")
-        .select("investigation_records")
-        .eq("id", selectedReferral.id)
-        .single();
-      if (latestError) throw latestError;
-      const latestRecords = getInvestigationRecords(latest).map(normalizeInvestigationRecord);
-      if (JSON.stringify(latestRecords) !== JSON.stringify(current)) {
-        throw new Error("STALE_INVESTIGATION_ATTACHMENT");
-      }
-      const updated = current.map((item, itemIndex) =>
-        itemIndex === index
-          ? { ...item, result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size }
-          : item
+      const data = await saveInvestigation(
+        supabase, selectedReferral.id, selectedReferral.investigation_records, index,
+        { result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size },
+        crypto.randomUUID()
       );
-      const { data, error } = await supabase.from("referrals")
-        .update({ investigation_records: updated })
-        .eq("id", selectedReferral.id)
-        .select("id, investigation_records")
-        .single();
-      if (error) throw error;
       const updatedReferral = { ...selectedReferral, investigation_records: data.investigation_records };
       setSelectedReferral(updatedReferral);
       setReferrals((previous) => previous.map((item) =>
@@ -5243,71 +5247,33 @@ function ReceivingDashboard() {
         setError("Investigation document upload failed. No successful upload was confirmed.");
       }
     } finally {
+      investigationMutationInFlight.current = false;
       setActionLoading(null);
     }
   };
 
-  const handleInvestigationResultChange = async (index, patch) => {
-    if (!selectedReferral) return;
-
-    const currentInvestigations = getInvestigationRecords(
-      selectedReferral
-    ).map(normalizeInvestigationRecord);
-
-    if (!currentInvestigations[index]) {
-      setError("Investigation record no longer exists. Refresh the referral.");
-      return;
-    }
-
-    const updatedInvestigations = currentInvestigations.map(
-      (item, itemIndex) =>
-        itemIndex === index ? { ...item, ...patch } : item
-    );
-
+  const handleInvestigationResultChange = async (index, patch, expectedSnapshot) => {
+    if (!selectedReferral || !atomicInvestigationUpdatesEnabled || investigationMutationInFlight.current) return false;
+    investigationMutationInFlight.current = true;
     setError("");
     setMessage("");
     setActionLoading(`${selectedReferral.id}-investigation-${index}`);
-
     try {
-      // Compare the current database version before saving. This reduces
-      // stale-tab overwrites but is not an atomic concurrency guarantee.
-      const { data: latest, error: readError } = await supabase
-        .from("referrals")
-        .select("investigation_records")
-        .eq("id", selectedReferral.id)
-        .single();
-      if (readError) throw readError;
-      const latestRecords = getInvestigationRecords(latest).map(normalizeInvestigationRecord);
-      if (JSON.stringify(latestRecords) !== JSON.stringify(currentInvestigations)) {
-        throw new Error("STALE_INVESTIGATION_RECORD");
-      }
-
-      const { data, error } = await supabase
-        .from("referrals")
-        .update({ investigation_records: updatedInvestigations })
-        .eq("id", selectedReferral.id)
-        .select("id, investigation_records")
-        .single();
-
-      if (error) throw error;
-
-      const savedReferral = {
-        ...selectedReferral,
-        investigation_records: data.investigation_records,
-      };
+      const data = await saveInvestigation(supabase, selectedReferral.id,
+        expectedSnapshot, index, patch, crypto.randomUUID());
+      const savedReferral = { ...selectedReferral, investigation_records: data.investigation_records };
       setSelectedReferral(savedReferral);
-      setReferrals((previous) =>
-        previous.map((item) =>
-          item.id === selectedReferral.id ? savedReferral : item
-        )
-      );
+      setReferrals((previous) => previous.map((item) =>
+        item.id === selectedReferral.id ? savedReferral : item));
       setMessage("Investigation result saved successfully.");
-    } catch (err) {
-      console.error("INVESTIGATION RESULT UPDATE ERROR:", err?.message || "Save failed");
-      setError(err?.message === "STALE_INVESTIGATION_RECORD"
-        ? "Another clinician has changed the investigation record. Refresh the referral and review their changes before editing."
-        : "Unable to save investigation result. The previous saved value is unchanged. Refresh the referral before retrying.");
+      return true;
+    } catch (error) {
+      setError(error.message === "STALE_INVESTIGATION_RECORD"
+        ? "Another update changed this referral. Your draft is retained. Refresh and compare before saving again."
+        : "The save outcome could not be confirmed. Your draft is retained. Refresh and verify the referral before retrying.");
+      return false;
     } finally {
+      investigationMutationInFlight.current = false;
       setActionLoading(null);
     }
   };
@@ -7208,7 +7174,8 @@ const handleStartAssessment = async (referralId) => {
 
             <ReferralSourceDetails
               referral={selectedReferral}
-              editableInvestigationResults
+              editableInvestigationResults={atomicInvestigationUpdatesEnabled && !["completed", "cancelled"].includes(selectedReferral.status)}
+              onInvestigationFileUpload={handleInvestigationFileUpload}
               onInvestigationResultChange={
                 handleInvestigationResultChange
               }

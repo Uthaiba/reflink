@@ -1,0 +1,39 @@
+name: REFLINK synthetic database contracts
+on:
+  pull_request:
+    paths: ['database/**', 'tests/database/**', '.github/workflows/database-contracts.yml']
+  push:
+    branches: ['reflink/master-plan-continuation-20261116']
+    paths: ['database/**', 'tests/database/**', '.github/workflows/database-contracts.yml']
+permissions:
+  contents: read
+jobs:
+  postgres-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}
+          POSTGRES_DB: reflink_contracts
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGDATABASE: reflink_contracts
+      PGPASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Run synthetic transaction and authorization contracts
+        run: python3 tests/database/investigation_contracts.py
