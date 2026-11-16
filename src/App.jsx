@@ -5207,9 +5207,18 @@ function ReceivingDashboard() {
       setMessage("Investigation result document saved successfully.");
     } catch (err) {
       console.error("INVESTIGATION FILE UPLOAD ERROR:", err?.message || "Upload failed");
-      setError(uploaded
-        ? "File uploaded, but its clinical record was not updated. Do not upload again until the referral and attachments have been checked."
-        : "Investigation document upload failed. No successful upload was confirmed.");
+      if (uploaded) {
+        // Best-effort cleanup of an unreferenced object after metadata failure.
+        // Do not claim cleanup succeeded unless storage confirms it.
+        const { error: cleanupError } = await supabase.storage
+          .from("referral-investigation-results")
+          .remove([path]);
+        setError(cleanupError
+          ? "The investigation file uploaded, but its referral record was not saved. Automatic cleanup also failed. Ask an administrator to reconcile the attachment before retrying."
+          : "The investigation record was not saved. The uploaded file was removed; refresh the referral before trying again.");
+      } else {
+        setError("Investigation document upload failed. No successful upload was confirmed.");
+      }
     } finally {
       setActionLoading(null);
     }
