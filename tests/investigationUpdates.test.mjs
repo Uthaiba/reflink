@@ -71,3 +71,20 @@ test("files are registered sequentially and every next call uses the last confir
   assert.equal(registrations, 2);
   assert.equal(saved.filter((record) => record.result_file_path).length, 2);
 });
+
+test("a later upload failure preserves the earlier confirmed attachment snapshot", async () => {
+  const file = new File([new Uint8Array([37,80,68,70,45])], "synthetic.pdf", { type:"application/pdf" });
+  const selected=[{...expected[0],result_file:file},{...expected[0],result_file:file}];
+  let uploads=0;
+  const client={
+    storage:{from:()=>({upload:async()=>({error:++uploads===2?{}:null})})},
+    rpc:async (_,args)=>({data:{status:"saved",investigation_records:args.p_expected_records.map((item,index)=>
+      index===args.p_index?{...item,...args.p_patch}:item)},error:null}),
+  };
+  await assert.rejects(uploadInitialInvestigationFiles(client,referralId,selected,
+    initialInvestigationRecords(selected),true,randomUUID), (error) => {
+      assert.ok(error.confirmedRecords[0].result_file_path);
+      assert.equal(error.confirmedRecords[1].result_file_path,undefined);
+      return true;
+    });
+});

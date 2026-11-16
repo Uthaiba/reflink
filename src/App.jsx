@@ -304,7 +304,8 @@ function InvestigationResultCards({ investigations, editable = false, onResultCh
   const changeDraft = (index, patch) => setDrafts((previous) => ({
     ...previous,
     [index]: { patch: { ...previous[index]?.patch, ...patch },
-      expected: previous[index]?.expected ?? expectedSnapshot },
+      expected: previous[index]?.expected ?? expectedSnapshot,
+      blocked: previous[index]?.blocked ?? false },
   }));
   const saveDraft = async (index) => {
     if (!drafts[index] || saving !== null) return;
@@ -3286,6 +3287,7 @@ provisional_diagnosis: "",
           savedInvestigationRecords, atomicInvestigationUpdatesEnabled
         );
       } catch (attachmentError) {
+        if (Array.isArray(attachmentError.confirmedRecords)) savedInvestigationRecords = attachmentError.confirmedRecords;
         attachmentWarning = attachmentError.message === "INVESTIGATION_SERVICE_UNAVAILABLE"
           ? " Investigation attachments were not uploaded because the verified attachment service is unavailable. Preserve the original documents and follow the facility referral procedure."
           : " Attachment registration could not be fully confirmed. The referral remains saved. Preserve the originals and ask an administrator to reconcile the uploads before retrying.";
@@ -7172,6 +7174,9 @@ const handleStartAssessment = async (referralId) => {
               </div>
             )}
 
+            {!atomicInvestigationUpdatesEnabled && <p role="status">
+              Investigation results are currently read-only. Preserve original documents and follow the facility procedure for updates.
+            </p>}
             <ReferralSourceDetails
               referral={selectedReferral}
               editableInvestigationResults={atomicInvestigationUpdatesEnabled && !["completed", "cancelled"].includes(selectedReferral.status)}

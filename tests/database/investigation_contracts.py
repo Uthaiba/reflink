@@ -32,8 +32,8 @@ def identity(role="receiving_staff", facility=None, banned=False, expired=False)
         "INSERT INTO profiles VALUES (" + literal(actor) + "," + literal(role) + "," + literal(facility) + ");")
     return actor, session, facility
 
-def referral(actor, status="under_assessment", records=None, destination=None):
-    ref, origin = uid(), uid()
+def referral(actor, status="under_assessment", records=None, destination=None, origin=None):
+    ref, origin = uid(), origin or uid()
     records = records if records is not None else [{"investigation":"Synthetic A","result_status":"pending"}]
     destination = destination or actor[2]
     run("INSERT INTO referrals VALUES (" + literal(ref) + "," + literal(json.dumps(records)) + "::jsonb," +
@@ -118,8 +118,7 @@ def test_phc_attachment_registration():
     saved=save(actor,ref,expected,patch)
     assert saved["status"]=="saved"
     # Wrong owners and descriptor mismatches cannot register another object.
-    ref2, expected2, _ = referral(actor,status="sent")
-    run("UPDATE referrals SET referring_facility_id="+literal(origin)+" WHERE id="+literal(ref2))
+    ref2, expected2, _ = referral(actor,status="sent",origin=origin)
     badpath=ref2+"/"+uid()+".pdf"
     run("INSERT INTO storage.objects VALUES ('referral-investigation-results',"+literal(badpath)+","+
         literal(uid())+","+literal(json.dumps({"size":5,"mimetype":"application/pdf"}))+");")

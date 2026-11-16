@@ -29,6 +29,7 @@ export async function uploadInitialInvestigationFiles(client, referralId, select
   for (let index = 0; index < selected.length; index++) {
     const file = selected[index].result_file;
     if (!file) continue;
+    try {
     await validateInvestigationFileContent(file);
     const path = createInvestigationFilePath(referralId, file, uuid);
     const { error } = await client.storage.from("referral-investigation-results")
@@ -39,6 +40,10 @@ export async function uploadInitialInvestigationFiles(client, referralId, select
       result_file_type: file.type, result_file_size: file.size,
     }, uuid());
     records = saved.investigation_records;
+    } catch (error) {
+      error.confirmedRecords = records;
+      throw error;
+    }
   }
   return records;
 }
