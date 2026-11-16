@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'src/**'
+      - 'tests/**'
       - 'public/**'
       - 'index.html'
       - 'package.json'
@@ -15,6 +16,7 @@ on:
       - 'reflink/master-plan-continuation-20261116'
     paths:
       - 'src/**'
+      - 'tests/**'
       - 'public/**'
       - 'index.html'
       - 'package.json'
@@ -50,7 +52,7 @@ jobs:
         run: npm ci
       - name: Run static analysis
         run: npm run lint
-      - name: Run referral analytics regression tests
+      - name: Run regression tests
         run: npm test
       - name: Build frontend
         run: npm run build

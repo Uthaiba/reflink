@@ -1,6 +1,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabase.js";
+import { validateInvestigationFile, validateInvestigationFileContent, createInvestigationFilePath } from "./lib/investigationAttachments.js";
 import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
 import ConnectivityNotice from "./components/ConnectivityNotice.jsx";
 import AnalyticsDashboard from "./components/dashboards/AnalyticsDashboard.jsx";
@@ -2994,9 +2995,8 @@ provisional_diagnosis: "",
 
   const handleInvestigationFileSelection = (index, file) => {
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { setError("Investigation result file must not exceed 10 MB."); return; }
-    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp", "text/plain", "text/csv"];
-    if (file.type && !allowed.includes(file.type)) { setError("Unsupported investigation result file type."); return; }
+    try { validateInvestigationFile(file); }
+    catch (error) { setError(error.message); return; }
     updateInvestigationResult(index, { result_file: file, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size });
     setError("");
   };
@@ -3244,8 +3244,8 @@ provisional_diagnosis: "",
         for (let i = 0; i < selectedInvestigations.length; i += 1) {
           const file = selectedInvestigations[i]?.result_file;
           if (!file) continue;
-          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-          const path = `${insertedReferral.id}/${Date.now()}-${i}-${safeName}`;
+          await validateInvestigationFileContent(file);
+          const path = createInvestigationFilePath(insertedReferral.id, file);
           const { error: uploadError } = await supabase.storage
             .from("referral-investigation-results")
             .upload(path, file, { upsert: false, contentType: file.type || undefined });
@@ -5169,20 +5169,12 @@ function ReceivingDashboard() {
       setError("Investigation record no longer exists. Refresh before uploading.");
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setError("Investigation result file must not exceed 10 MB.");
-      return;
-    }
-    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp", "text/plain", "text/csv"];
-    if (!allowed.includes(file.type)) {
-      setError("Unsupported or unrecognized investigation result file type.");
-      return;
-    }
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const path = `${selectedReferral.id}/${crypto.randomUUID()}-${index}-${safeName}`;
+    let path;
     setActionLoading(`${selectedReferral.id}-investigation-file-${index}`);
     let uploaded = false;
     try {
+      await validateInvestigationFileContent(file);
+      path = createInvestigationFilePath(selectedReferral.id, file);
       const { error: uploadError } = await supabase.storage
         .from("referral-investigation-results")
         .upload(path, file, { upsert: false, contentType: file.type });
