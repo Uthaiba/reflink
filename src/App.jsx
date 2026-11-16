@@ -5208,14 +5208,30 @@ function ReceivingDashboard() {
     } catch (err) {
       console.error("INVESTIGATION FILE UPLOAD ERROR:", err?.message || "Upload failed");
       if (uploaded) {
-        // Best-effort cleanup of an unreferenced object after metadata failure.
-        // Do not claim cleanup succeeded unless storage confirms it.
-        const { error: cleanupError } = await supabase.storage
-          .from("referral-investigation-results")
-          .remove([path]);
-        setError(cleanupError
-          ? "The investigation file uploaded, but its referral record was not saved. Automatic cleanup also failed. Ask an administrator to reconcile the attachment before retrying."
-          : "The investigation record was not saved. The uploaded file was removed; refresh the referral before trying again.");
+        // A timed-out metadata response may have committed. Never remove a
+        // potentially referenced clinical attachment without verifying state.
+        const { data: saved, error: verifyError } = await supabase
+          .from("referrals")
+          .select("investigation_records")
+          .eq("id", selectedReferral.id)
+          .single();
+        if (verifyError) {
+          setError("Attachment outcome could not be verified. Do not retry until an administrator reconciles the referral and file.");
+        } else {
+          const referenced = getInvestigationRecords(saved).some(
+            (item) => item.result_file_path === path
+          );
+          if (referenced) {
+            setError("Attachment appears saved in the referral, but confirmation failed. Refresh and verify it before retrying.");
+          } else {
+            const { error: cleanupError } = await supabase.storage
+              .from("referral-investigation-results")
+              .remove([path]);
+            setError(cleanupError
+              ? "The attachment is not referenced by the referral, and automatic cleanup failed. Ask an administrator to reconcile it."
+              : "The attachment was not recorded. The unreferenced upload was removed; refresh before trying again.");
+          }
+        }
       } else {
         setError("Investigation document upload failed. No successful upload was confirmed.");
       }
