@@ -1,0 +1,11 @@
+.aggregate-chart { margin-block: 1.25rem; padding: 1rem; border: 1px solid #ccd8d3; border-radius: .5rem; background: #fff; color: #18372e; }
+.aggregate-chart h4 { margin-block: 0 .75rem; }
+.aggregate-chart select { display: block; min-height: 44px; max-width: 100%; margin-block: .5rem; }
+.aggregate-bars { list-style: none; padding: 0; display: grid; gap: .8rem; }
+.aggregate-bars li { display: grid; grid-template-columns: minmax(8rem, 2fr) minmax(4rem, 3fr) minmax(4rem, 1fr); gap: .75rem; align-items: center; overflow-wrap: anywhere; }
+.aggregate-bar-track { background: #edf3f0; height: .8rem; }
+.aggregate-bar-track > span { display: block; background: #0b6e5a; height: 100%; }
+.aggregate-draft { padding: 1rem; border: 1px solid #ccd8d3; margin-block: 1rem; }
+.aggregate-draft textarea { width: 100%; min-height: 20rem; font: inherit; line-height: 1.5; }
+@media (max-width: 480px) { .aggregate-bars li { grid-template-columns: 1fr; gap: .3rem; } }
+@media print { .aggregate-chart select, .aggregate-draft button { display: none; } }

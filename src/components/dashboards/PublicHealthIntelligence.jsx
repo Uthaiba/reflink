@@ -1,3 +1,6 @@
+import AggregateChart from "./AggregateChart.jsx";
+import { createAggregateDraft } from "../../lib/aggregatePresentation.js";
+import "../../aggregate-reporting.css";
 import { useRef, useState } from "react";
 import { supabase } from "../../lib/supabase.js";
 import { loadPublicHealthReport } from "../../lib/publicHealthReports.js";
@@ -40,6 +43,13 @@ export default function PublicHealthIntelligence() {
     anchor.click(); URL.revokeObjectURL(url);
   };
 
+  const downloadDraft = () => {
+    const url = URL.createObjectURL(new Blob([createAggregateDraft(report)], { type: "text/plain;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url; anchor.download = "reflink-monthly-draft-" + report.period.start + ".txt";
+    anchor.click(); URL.revokeObjectURL(url);
+  };
+
   return <section className="dashboard-card" aria-labelledby="rphi-title">
     <span className="eyebrow">R-PHI</span>
     <h2 id="rphi-title">REFLINK Public Health Intelligence</h2>
@@ -55,9 +65,16 @@ export default function PublicHealthIntelligence() {
     {!report && !error && !loading && <p>Select a calendar month to retrieve the approved aggregate reports.</p>}
     {report && <>
       <p role="status">Period: {report.period.start} to {report.period.end}. Generated: {report.generatedAt}. Current or future months may be incomplete.</p>
+      <section className="aggregate-draft" aria-labelledby="monthly-draft-title">
+        <h3 id="monthly-draft-title">Monthly report draft</h3>
+        <p>Every numeric statement identifies its source RPC, row and field. This deterministic draft requires human review; it does not infer causes, diagnose or confirm outbreaks.</p>
+        <button type="button" className="secondary-button" onClick={downloadDraft}>Download draft for review</button>
+        <details><summary>Read the traceable draft</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{createAggregateDraft(report)}</pre></details>
+      </section>
       {report.datasets.map((dataset) => <section key={dataset.key}>
         <h3>{dataset.title}</h3>
         <button type="button" className="secondary-button" onClick={() => exportAggregate(dataset)}>Download aggregate CSV</button>
+        <AggregateChart dataset={dataset} />
         {!dataset.rows.length ? <p>No aggregate rows are available for this period.</p> :
           <div className="table-wrapper"><table>
             <caption>{dataset.title}; {report.period.start} to {report.period.end}</caption>

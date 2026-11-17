@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, useEffect, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
 import { commitClinicalUpdate } from "./lib/clinicalSaveRecovery.js";
 import { assessmentFormFor, inpatientFormFor, hasClinicalFormChanges } from "./lib/clinicalFormState.js";
@@ -13,10 +13,9 @@ import { changeAccountPassword, resolvePasswordChangeMode } from "./lib/password
 import { getLegacyDiagnosisStatus } from "./lib/diagnosisRecords.js";
 import { inspectInvestigationAttachment } from "./lib/investigationAttachmentRecovery.js";
 import { validateInvestigationFile, validateInvestigationFileContent, createInvestigationFilePath } from "./lib/investigationAttachments.js";
-import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
-import ConnectivityNotice from "./components/ConnectivityNotice.jsx";
-import AnalyticsDashboard from "./components/dashboards/AnalyticsDashboard.jsx";
-import AnalysisHub from "./components/dashboards/AnalysisHub.jsx";
+const AdminDashboard = lazy(() => import("./components/dashboards/AdminDashboard.jsx"));
+const AnalyticsDashboard = lazy(() => import("./components/dashboards/AnalyticsDashboard.jsx"));
+const AnalysisHub = lazy(() => import("./components/dashboards/AnalysisHub.jsx"));
 import "./App.css";
 import "./reflink-theme-professional.css";
 import "./admin-dashboard-modern.css";
@@ -3388,7 +3387,6 @@ provisional_diagnosis: "",
 
   return (
     <div className="dashboard-card referral-form-card">
-      <ConnectivityNotice />
 
       <div className="form-header">
 
@@ -6383,7 +6381,6 @@ const handleStartAssessment = async (referralId) => {
       {(uncertainClinicalReferrals.has(selectedReferral?.id) || uncertainClinicalReferrals.has(selectedInpatientReferral?.id)) && <p role="alert" className="login-error">
         Saving is paused for this referral because a previous save could not be confirmed. Your form remains available. Review the current referral and arrange reconciliation before retrying.
       </p>}
-      <ConnectivityNotice />
 
       <div className="dashboard-actions">
 
