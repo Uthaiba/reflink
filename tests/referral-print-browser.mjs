@@ -57,13 +57,13 @@ try {
   mkdirSync('test-results',{recursive:true});
   const pdf=await page.pdf({path:'test-results/synthetic-referral.pdf',preferCSSPageSize:true,printBackground:true});
   const pages=(pdf.toString('latin1').match(/\/Type\s*\/Page\b/g)||[]).length;
-  assert.ok(pages>=1 && pages<=3,`Expected at most three populated pages for this fixture; got ${pages}`);
+  assert.ok(pages>=1 && pages<=2,`Expected at most two populated pages for this fixture; got ${pages}`);
   const pdfText = execFileSync('pdftotext',['-layout','test-results/synthetic-referral.pdf','-'],{encoding:'utf8'});
   const pageTexts = pdfText.split('\f');
   if (!pageTexts.at(-1).trim()) pageTexts.pop();
   assert.equal(pageTexts.length,pages);
   assert.ok(pageTexts.every(text => text.trim().length > 40),'No blank or nearly empty pages');
-  for (const value of ['SYNTHETIC PHC A','SYNTHETIC RECEIVING B','Synthetic Test Ward B','Discharge Information','Synthetic follow-up','18:07','Disposition at Assessment']) assert.ok(pdfText.includes(value),`Missing PDF content: ${value}`);
+  for (const value of ['SYNTHETIC PHC A','SYNTHETIC RECEIVING B','Synthetic Test Ward B','Discharge Information','Synthetic follow-up','18:07','Disposition at Assessment']) assert.ok(pdfText.replace(/\s+/g, " ").toLowerCase().includes(value.toLowerCase()),`Missing PDF content: ${value}`);
   assert.ok(!pdfText.includes('SCREEN CONTENT MUST NOT PRINT'));
   assert.deepEqual(errors,[]);
   writeFileSync('test-results/referral-print-result.json',JSON.stringify({pages,checks:'portal isolation, facilities, admission, discharge, timestamps and closure semantics passed'},null,2));

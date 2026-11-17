@@ -29,3 +29,20 @@
   .printable-referral-sheet .print-narrative-card { min-width: 0; }
   .printable-referral-sheet .print-document-footer { position: static !important; }
 }
+
+@media print {
+  .printable-referral-sheet .print-section { margin-top: 2mm !important; }
+  .printable-referral-sheet .print-section-title h2::after { display: none !important; }
+  .printable-referral-sheet .print-narrative-grid { gap: 1.5mm !important; }
+  .printable-referral-sheet .print-narrative-grid > div {
+    padding: 1.8mm !important; min-height: 0 !important;
+    break-inside: avoid !important; page-break-inside: avoid !important;
+  }
+  .printable-referral-sheet .print-grid > div { padding: 1.5mm 2mm !important; break-inside: avoid !important; }
+  .printable-referral-sheet .print-empty-state { font-size: 9pt !important; min-height: 0 !important; padding: 1.5mm !important; }
+  .printable-referral-sheet .print-brand-mark { border: 1px solid #333 !important; border-radius: 2mm; font-weight: bold; }
+  .printable-referral-sheet .print-brand-mark span { font-size: 16pt !important; }
+  .printable-referral-sheet .print-document-footer { display: block !important; text-align: left !important; }
+  .printable-referral-sheet .print-document-footer > div { display: inline-flex !important; gap: 2mm; margin-right: 4mm; }
+  .printable-referral-sheet .print-document-footer p { margin: 1mm 0 0 !important; }
+}
