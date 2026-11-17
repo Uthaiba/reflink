@@ -121,3 +121,35 @@ for case in [test_clinical_concurrency_and_replay,test_clinical_lifecycle_and_se
              test_clinical_closed_records_and_direct_bypass]:
     case()
     print(case.__name__+": passed")
+
+
+# These mutations are confined to the disposable fixture created above.
+# The preflight itself starts a READ ONLY transaction and reads catalogs only.
+def preflight():
+    return json.loads(run(open("database/checks/clinical_staging_preflight.sql").read()))
+
+def test_preflight_accepts_candidate_structure():
+    report=preflight()
+    assert report["scope"]=="catalog_only_not_release_approval"
+    assert report["blocking_checks"]==0, report
+    assert len(report["checks"])==6
+
+def test_preflight_detects_disabled_guard_and_exposed_ledger():
+    run("ALTER TABLE public.referrals DISABLE TRIGGER guard_clinical_client_writes")
+    try:
+        report=preflight()
+        assert any(item["name"]=="clinical_direct_write_guard" and not item["passed"] for item in report["checks"])
+        assert report["blocking_checks"]>0
+    finally:
+        run("ALTER TABLE public.referrals ENABLE TRIGGER guard_clinical_client_writes")
+    run("GRANT SELECT ON private.clinical_operations TO authenticated")
+    try:
+        report=preflight()
+        assert any(item["name"]=="private_ledger" and not item["passed"] for item in report["checks"])
+    finally:
+        run("REVOKE SELECT ON private.clinical_operations FROM authenticated")
+    assert preflight()["blocking_checks"]==0
+
+for case in [test_preflight_accepts_candidate_structure,test_preflight_detects_disabled_guard_and_exposed_ledger]:
+    case()
+    print(case.__name__+": passed")

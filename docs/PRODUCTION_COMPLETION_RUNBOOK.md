@@ -164,3 +164,7 @@ The transformation is not complete. Remaining verified gates include:
 - restore rehearsal, performance/security assessment, clinical approval and deployment.
 
 These cannot be marked complete from source changes or synthetic CI alone.
+
+## Clinical transaction continuation
+
+Assessment, admission and discharge now have a review-only transactional candidate and frontend adapter behind disabled VITE_ATOMIC_CLINICAL_SAVES_ENABLED. See ATOMIC_CLINICAL_SAVES.md and CLINICAL_STAGING_CHECKPOINT.md for coordinated client/backend rehearsal and the catalog-only preflight. Passing structural checks does not close authenticated release gates.
