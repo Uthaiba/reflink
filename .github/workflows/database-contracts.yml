@@ -50,7 +50,7 @@ jobs:
           for attempt in range(45):
               ready = subprocess.run([
                   "docker", "exec", "reflink-synthetic-contracts",
-                  "pg_isready", "-U", "postgres", "-d", "reflink_contracts",
+                  "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "reflink_contracts",
               ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
               if ready.returncode == 0:
                   break
