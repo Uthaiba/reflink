@@ -60,6 +60,7 @@ jobs:
           PY
       - name: Run synthetic transaction and authorization contracts
         run: |
+          python3 tests/database/baseline_archive_contracts.py
           python3 tests/database/migration_package_contracts.py
           python3 tests/database/staging_trigger_contracts.py
       - name: Remove disposable database
