@@ -1,6 +1,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
+import { confirmClinicalNavigation, registerClinicalDraft } from "./lib/clinicalDraftNavigation.js";
 import EncryptedDraftPanel from "./components/EncryptedDraftPanel.jsx";
 import { restoreDraftData } from "./lib/encryptedDrafts.js";
 import { createReferralOnce } from "./lib/referralSubmission.js";
@@ -304,6 +305,8 @@ function normalizeInvestigationRecord(item) {
 function InvestigationResultCards({ investigations, editable = false, onResultChange, onFileUpload, expectedSnapshot }) {
   const [drafts, setDrafts] = useState({});
   const [saving, setSaving] = useState(null);
+  const hasUnsavedChanges = Object.keys(drafts).length > 0;
+  useEffect(() => registerClinicalDraft(window, () => hasUnsavedChanges || saving !== null), [hasUnsavedChanges, saving]);
   const changeDraft = (index, patch) => setDrafts((previous) => ({
     ...previous,
     [index]: { patch: { ...previous[index]?.patch, ...patch },
@@ -1319,6 +1322,7 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
                   </div>
 
                   <InvestigationResultCards
+                    key={`${referral.id}:${category}`}
                     investigations={items}
                     editable={editableInvestigationResults}
                     expectedSnapshot={referral.investigation_records}
@@ -2350,7 +2354,7 @@ const handleSignIn = async () => {
 
             <button
               type="button"
-              className="back-button"
+              className="back-button" data-leave-clinical-workspace
               onClick={() => setScreen("home")}
             >
               ← Back to home
@@ -2448,7 +2452,7 @@ const handleSignIn = async () => {
 
             <button
               type="button"
-              className="back-button"
+              className="back-button" data-leave-clinical-workspace
               disabled={passwordSaving}
               onClick={() => {
                 if (profile?.must_change_password || passwordChangeLocked || !role) {
@@ -2502,6 +2506,7 @@ const handleSignIn = async () => {
                 type="button"
                 className="secondary-button"
                 onClick={() => {
+                  if (!confirmClinicalNavigation(window)) return;
                   setPasswordOutcome(null);
                   setPasswordError("");
                   setPasswordMessage("");
@@ -2518,7 +2523,7 @@ const handleSignIn = async () => {
 
               <button
                 type="button"
-                className="logout-button"
+                className="logout-button" data-leave-clinical-workspace
                 onClick={logout}
               >
                 Sign Out
@@ -2600,7 +2605,7 @@ const handleSignIn = async () => {
 
             <button
               type="button"
-              className="logout-button"
+              className="logout-button" data-leave-clinical-workspace
               onClick={logout}
             >
               Sign Out
@@ -2888,6 +2893,12 @@ provisional_diagnosis: "",
   const [selectedInvestigations, setSelectedInvestigations] = useState([]);
   const [printDraft, setPrintDraft] = useState(null);
   const [savedReferralInfo, setSavedReferralInfo] = useState(null);
+  const hasUnsavedReferral = Object.entries(form).some(([field, value]) =>
+    !["patient_age_unit", "urgency"].includes(field) && String(value ?? "").trim() !== ""
+  ) || form.urgency !== "routine" || Object.values(diagnosisDraft).some((value) => String(value).trim() !== "")
+    || diagnosisEntries.length > 0 || selectedInvestigations.length > 0 || selectedInvestigationCategories.length > 0;
+  useEffect(() => registerClinicalDraft(window, () => hasUnsavedReferral || loading), [hasUnsavedReferral, loading]);
+
 
   useEffect(() => {
     loadFacilities();
@@ -3406,7 +3417,7 @@ provisional_diagnosis: "",
 
           <button
             type="button"
-            className="back-button"
+            className="back-button" data-leave-clinical-workspace
             onClick={onBack}
           >
             ← Back
@@ -4638,7 +4649,7 @@ function PHCStaffDashboard({ onNewReferral }) {
               "all" && (
               <button
                 type="button"
-                className="back-button"
+                className="back-button" data-leave-clinical-workspace
                 onClick={() =>
                   setActiveFilter(
                     "all"
@@ -5102,7 +5113,7 @@ function PHCStaffDashboard({ onNewReferral }) {
 
             <button
               type="button"
-              className="back-button"
+              className="back-button" data-leave-clinical-workspace
               onClick={() =>
                 setSelectedReferral(
                   null
@@ -5581,6 +5592,7 @@ function ReceivingDashboard() {
      ======================================================= */
 
   const openReferralDetails = (referral) => {
+    if (!confirmClinicalNavigation(window)) return;
     setSelectedReferral(referral);
 
     setAssessmentForm({
@@ -7096,7 +7108,7 @@ const handleStartAssessment = async (referralId) => {
 
               <button
                 type="button"
-                className="back-button"
+                className="back-button" data-leave-clinical-workspace
                 onClick={() =>
                   setSelectedInpatientReferral(
                     null
@@ -7453,7 +7465,7 @@ const handleStartAssessment = async (referralId) => {
 
             <button
               type="button"
-              className="back-button"
+              className="back-button" data-leave-clinical-workspace
               onClick={() =>
                 setSelectedReferral(
                   null
