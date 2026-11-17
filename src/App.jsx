@@ -1,6 +1,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
+import { assessmentFormFor, inpatientFormFor, hasClinicalFormChanges } from "./lib/clinicalFormState.js";
 import { confirmClinicalNavigation, registerClinicalDraft } from "./lib/clinicalDraftNavigation.js";
 import EncryptedDraftPanel from "./components/EncryptedDraftPanel.jsx";
 import { restoreDraftData } from "./lib/encryptedDrafts.js";
@@ -5212,6 +5213,13 @@ function ReceivingDashboard() {
       follow_up_plan: "",
     });
 
+  const hasUnsavedReceivingForm = Boolean(
+    (selectedReferral && hasClinicalFormChanges(assessmentForm, assessmentFormFor(selectedReferral))) ||
+    (selectedInpatientReferral && hasClinicalFormChanges(admissionForm, inpatientFormFor(selectedInpatientReferral))) ||
+    ((selectedReferral || selectedInpatientReferral) && actionLoading)
+  );
+  useEffect(() => registerClinicalDraft(window, () => hasUnsavedReceivingForm), [hasUnsavedReceivingForm]);
+
   const investigationMutationInFlight = useRef(false);
   const handleInvestigationFileUpload = async (index, file) => {
     if (!atomicInvestigationUpdatesEnabled || investigationMutationInFlight.current) return;
@@ -5594,89 +5602,18 @@ function ReceivingDashboard() {
   const openReferralDetails = (referral) => {
     if (!confirmClinicalNavigation(window)) return;
     setSelectedReferral(referral);
-
-    setAssessmentForm({
-      assessment_findings:
-        referral.assessment_findings || "",
-
-      final_diagnosis:
-        referral.final_diagnosis || "",
-
-      diagnosis_category:
-        referral.diagnosis_category || "",
-
-      diagnosis_status:
-        referral.diagnosis_status || "",
-
-      treatment_provided:
-        referral.treatment_provided || "",
-
-      procedures_performed:
-        referral.procedures_performed || "",
-
-      clinical_feedback:
-        referral.clinical_feedback || "",
-
-      disposition:
-        referral.disposition || "",
-    });
+    setAssessmentForm(assessmentFormFor(referral));
   };
 
   /* =======================================================
      OPEN INPATIENT MANAGEMENT
      ======================================================= */
 
-  const openInpatientManagement =
-    (referral) => {
-
-      setSelectedInpatientReferral(
-        referral
-      );
-
-      setAdmissionForm({
-
-        admission_at:
-          referral.admission_at
-            ? referral.admission_at.slice(
-                0,
-                16
-              )
-            : "",
-
-        ward_unit:
-          referral.ward_unit ||
-          "",
-
-        admission_diagnosis:
-          referral.admission_diagnosis ||
-          referral.final_diagnosis ||
-          "",
-
-        clinical_progress:
-          referral.clinical_progress ||
-          "",
-
-        inpatient_treatment:
-          referral.inpatient_treatment ||
-          "",
-
-        discharge_diagnosis:
-          referral.discharge_diagnosis ||
-          "",
-
-        condition_at_discharge:
-          referral.condition_at_discharge ||
-          "",
-
-        discharge_medications:
-          referral.discharge_medications ||
-          "",
-
-        follow_up_plan:
-          referral.follow_up_plan ||
-          "",
-      });
-    };
+  const openInpatientManagement = (referral) => {
+    if (!confirmClinicalNavigation(window)) return;
+    setSelectedInpatientReferral(referral);
+    setAdmissionForm(inpatientFormFor(referral));
+  };
 
   /* =======================================================
      SAVE ADMISSION
@@ -6773,7 +6710,7 @@ const handleStartAssessment = async (referralId) => {
                           type="button"
                           className="primary-button"
                           onClick={() => {
-
+                            if (!confirmClinicalNavigation(window)) return;
                             setSelectedReferral(
                               referral
                             );
