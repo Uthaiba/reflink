@@ -1,0 +1,59 @@
+name: REFLINK frontend quality gate
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.*'
+      - '.github/workflows/frontend-quality-gate.yml'
+  push:
+    branches:
+      - 'reflink/master-plan-continuation-20261116'
+      - 'reflink/master-plan-review-20261117'
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.*'
+      - '.github/workflows/frontend-quality-gate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-build:
+    name: Lint and build (no deployment)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run static analysis
+        run: npm run lint
+      - name: Run regression tests
+        run: npm test
+      - name: Build frontend
+        run: npm run build
