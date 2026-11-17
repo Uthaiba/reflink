@@ -5601,6 +5601,7 @@ function ReceivingDashboard() {
 
   const openReferralDetails = (referral) => {
     if (!confirmClinicalNavigation(window)) return;
+    setSelectedInpatientReferral(null);
     setSelectedReferral(referral);
     setAssessmentForm(assessmentFormFor(referral));
   };
@@ -5611,6 +5612,7 @@ function ReceivingDashboard() {
 
   const openInpatientManagement = (referral) => {
     if (!confirmClinicalNavigation(window)) return;
+    setSelectedReferral(null);
     setSelectedInpatientReferral(referral);
     setAdmissionForm(inpatientFormFor(referral));
   };
@@ -6709,49 +6711,7 @@ const handleStartAssessment = async (referralId) => {
                         <button
                           type="button"
                           className="primary-button"
-                          onClick={() => {
-                            if (!confirmClinicalNavigation(window)) return;
-                            setSelectedReferral(
-                              referral
-                            );
-
-                            setAssessmentForm({
-
-                              assessment_findings:
-                                referral.assessment_findings ||
-                                "",
-
-                              final_diagnosis:
-                                referral.final_diagnosis ||
-                                "",
-
-                              diagnosis_category:
-                                referral.diagnosis_category ||
-                                "",
-
-                              diagnosis_status:
-                                referral.diagnosis_status ||
-                                "",
-
-                              treatment_provided:
-                                referral.treatment_provided ||
-                                "",
-
-                              procedures_performed:
-                                referral.procedures_performed ||
-                                "",
-
-                              clinical_feedback:
-                                referral.clinical_feedback ||
-                                "",
-
-                              disposition:
-                                referral.disposition ||
-                                "",
-
-                            });
-
-                          }}
+                          onClick={() => openReferralDetails(referral)}
                         >
                           Continue Clinical Assessment
                         </button>
