@@ -21,7 +21,7 @@ def uid():
 
 def setup():
     run(open("tests/database/fixture.sql").read())
-    run(open("supabase/migrations/20261117135653_atomic_investigation_updates.sql").read())
+    run(open("supabase/migrations/20261117144634_atomic_investigation_updates.sql").read())
 
 def identity(role="receiving_staff", facility=None, banned=False, expired=False):
     actor, session, facility = uid(), uid(), facility or uid()

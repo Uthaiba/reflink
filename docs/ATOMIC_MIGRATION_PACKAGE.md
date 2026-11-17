@@ -27,3 +27,7 @@ Both migrations wrap their DDL in a transaction and preserve existing referral J
 Do not delete private operation tables, uploaded objects, audit history or clinical rows to roll back. Freeze affected saves, preserve drafts and reconcile uncertain operations. A prior frontend relying on direct clinical/investigation writes is incompatible with the new guards. Any compatibility migration or restore must be rehearsed and preserve these records.
 
 See STAGING_PREFLIGHT_2026-11-17.md, STAGING_TRIGGER_COMPATIBILITY_2026-11-17.md and CLINICAL_STAGING_CHECKPOINT.md. Passing isolated tests does not certify hosted authorization, RLS or full master-plan completion.
+
+## Hosted synthetic staging installation — 17 November 2026
+
+The verified SQL was installed through the connected migration service in synthetic staging only. Its generated ledger versions are 20261117144634_atomic_investigation_updates and 20261117144653_atomic_clinical_updates. The repository files were renamed to those actual hosted identities without changing SQL content; original CLI-generated source versions above are provenance, not extra migrations to apply. Existing 22 historical staging versions were preserved. All six hosted structural checks passed, and legacy authenticated execution is revoked. Full authenticated clinical/browser verification remains pending; do not copy these versions into production or mark them applied there.

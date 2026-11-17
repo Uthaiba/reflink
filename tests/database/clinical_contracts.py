@@ -7,7 +7,7 @@ base = runpy.run_path("tests/database/investigation_contracts.py")
 run, literal, uid = base["run"], base["literal"], base["uid"]
 identity, referral, context, count = base["identity"], base["referral"], base["context"], base["count"]
 run(open("tests/database/clinical_fixture.sql").read())
-run(open("supabase/migrations/20261117135703_atomic_clinical_updates.sql").read())
+run(open("supabase/migrations/20261117144653_atomic_clinical_updates.sql").read())
 
 ASSESSMENT = ["status","assessment_findings","final_diagnosis","diagnosis_category","diagnosis_status",
               "treatment_provided","procedures_performed","clinical_feedback","disposition",
