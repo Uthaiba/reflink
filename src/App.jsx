@@ -1,12 +1,23 @@
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
+import EncryptedDraftPanel from "./components/EncryptedDraftPanel.jsx";
+import { restoreDraftData } from "./lib/encryptedDrafts.js";
+import { createReferralOnce } from "./lib/referralSubmission.js";
+import { initialInvestigationRecords, saveInvestigation, uploadInitialInvestigationFiles } from "./lib/investigationUpdates.js";
+const atomicInvestigationUpdatesEnabled = import.meta.env.VITE_ATOMIC_INVESTIGATIONS_ENABLED === "true";
+import { changeAccountPassword, resolvePasswordChangeMode } from "./lib/passwordChange.js";
+import { getLegacyDiagnosisStatus } from "./lib/diagnosisRecords.js";
+import { inspectInvestigationAttachment } from "./lib/investigationAttachmentRecovery.js";
+import { validateInvestigationFile, validateInvestigationFileContent, createInvestigationFilePath } from "./lib/investigationAttachments.js";
 import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
+import ConnectivityNotice from "./components/ConnectivityNotice.jsx";
 import AnalyticsDashboard from "./components/dashboards/AnalyticsDashboard.jsx";
 import AnalysisHub from "./components/dashboards/AnalysisHub.jsx";
 import "./App.css";
 import "./reflink-theme-professional.css";
 import "./admin-dashboard-modern.css";
+import "./reflink-clinical-accessibility.css";
 
 function formatPatientAge(ageInMonths) {
   const months = Number(ageInMonths);
@@ -290,9 +301,28 @@ function normalizeInvestigationRecord(item) {
   };
 }
 
-function InvestigationResultCards({ investigations, editable = false, onResultChange, onFileUpload }) {
+function InvestigationResultCards({ investigations, editable = false, onResultChange, onFileUpload, expectedSnapshot }) {
+  const [drafts, setDrafts] = useState({});
+  const [saving, setSaving] = useState(null);
+  const changeDraft = (index, patch) => setDrafts((previous) => ({
+    ...previous,
+    [index]: { patch: { ...previous[index]?.patch, ...patch },
+      expected: previous[index]?.expected ?? expectedSnapshot,
+      blocked: previous[index]?.blocked ?? false },
+  }));
+  const saveDraft = async (index) => {
+    if (!drafts[index] || saving !== null) return;
+    setSaving(index);
+    try {
+      const saved = await onResultChange?.(index, drafts[index].patch, drafts[index].expected);
+      if (!saved) setDrafts((previous) => ({ ...previous, [index]: { ...previous[index], blocked: true } }));
+      if (saved) setDrafts((previous) => {
+        const next = { ...previous }; delete next[index]; return next;
+      });
+    } finally { setSaving(null); }
+  };
   if (!investigations.length) return <div className="empty-selection-state">No investigation was recorded.</div>;
-  const normalized = investigations.map(normalizeInvestigationRecord);
+  const normalized = investigations.map((item, index) => ({ ...normalizeInvestigationRecord(item), ...drafts[index]?.patch }));
   return (
     <div className="investigation-result-list">
       {normalized.map((item, index) => {
@@ -306,7 +336,7 @@ function InvestigationResultCards({ investigations, editable = false, onResultCh
             <div className="investigation-result-control">
               <span>{config.label}</span>
               {editable ? (
-                <select value={item.result_status} onChange={(e) => onResultChange?.(index, { result_status: e.target.value })} aria-label={`Result for ${item.investigation}`}>
+                <select disabled={saving !== null} value={item.result_status} onChange={(e) => changeDraft(index, { result_status: e.target.value })} aria-label={`Result for ${item.investigation}`}>
                   {config.statuses.map((status) => <option value={status} key={status}>{getInvestigationResultLabel(status)}</option>)}
                 </select>
               ) : <span className={`investigation-result-badge ${getInvestigationResultClass(item.result_status)}`}>{getInvestigationResultLabel(item.result_status)}</span>}
@@ -314,19 +344,27 @@ function InvestigationResultCards({ investigations, editable = false, onResultCh
             {editable && (
               <div className="investigation-result-detail-grid">
                 {config.type === "quantitative" && <>
-                  <label><span>Value</span><input value={item.result_value} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder="e.g. 32" /></label>
-                  <label><span>Unit</span><input value={item.result_unit} onChange={(e) => onResultChange?.(index, { result_unit: e.target.value })} placeholder="% / g/dL" /></label>
-                  <label><span>Reference range</span><input value={item.reference_range} onChange={(e) => onResultChange?.(index, { reference_range: e.target.value })} placeholder="Use performing laboratory range" /></label>
+                  <label><span>Value</span><input disabled={saving !== null} value={item.result_value} onChange={(e) => changeDraft(index, { result_value: e.target.value })} placeholder="e.g. 32" /></label>
+                  <label><span>Unit</span><input disabled={saving !== null} value={item.result_unit} onChange={(e) => changeDraft(index, { result_unit: e.target.value })} placeholder="% / g/dL" /></label>
+                  <label><span>Reference range</span><input disabled={saving !== null} value={item.reference_range} onChange={(e) => changeDraft(index, { reference_range: e.target.value })} placeholder="Use performing laboratory range" /></label>
                 </>}
-                {config.type === "panel" && <label className="investigation-result-notes"><span>Panel findings</span><textarea value={item.result_value} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder="Record pH, protein, glucose, blood, nitrite, leukocytes, specific gravity and other findings." rows={3} /></label>}
-                {(config.type === "qualitative" || config.type === "microbiology" || config.type === "imaging") && <label className="investigation-result-notes"><span>Result / report detail</span><textarea value={item.result_value} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder={config.type === "imaging" ? "Enter report findings and impression." : "Enter organism, finding or additional result detail."} rows={3} /></label>}
-                <label className="investigation-result-notes"><span>Clinical/laboratory note</span><textarea value={item.result_notes} onChange={(e) => onResultChange?.(index, { result_notes: e.target.value })} placeholder="Optional note" rows={2} /></label>
+                {config.type === "panel" && <label className="investigation-result-notes"><span>Panel findings</span><textarea disabled={saving !== null} value={item.result_value} onChange={(e) => changeDraft(index, { result_value: e.target.value })} placeholder="Record pH, protein, glucose, blood, nitrite, leukocytes, specific gravity and other findings." rows={3} /></label>}
+                {(config.type === "qualitative" || config.type === "microbiology" || config.type === "imaging") && <label className="investigation-result-notes"><span>Result / report detail</span><textarea disabled={saving !== null} value={item.result_value} onChange={(e) => changeDraft(index, { result_value: e.target.value })} placeholder={config.type === "imaging" ? "Enter report findings and impression." : "Enter organism, finding or additional result detail."} rows={3} /></label>}
+                <label className="investigation-result-notes"><span>Clinical/laboratory note</span><textarea disabled={saving !== null} value={item.result_notes} onChange={(e) => changeDraft(index, { result_notes: e.target.value })} placeholder="Optional note" rows={2} /></label>
               </div>
             )}
             {!editable && item.result_value && <div className="investigation-result-value"><span>Result detail</span><strong>{item.result_value}</strong>{item.result_unit && <small>{item.result_unit}</small>}{item.reference_range && <small>Reference: {item.reference_range}</small>}</div>}
+            {editable && drafts[index] && <div role="status">
+              Unsaved changes. <button type="button" className="secondary-button"
+                disabled={saving !== null || drafts[index].blocked} onClick={() => saveDraft(index)}>Save result</button>
+              <button type="button" className="secondary-button" disabled={saving !== null}
+                onClick={() => setDrafts((previous) => { const next = { ...previous }; delete next[index]; return next; })}>
+                Discard draft
+              </button>
+            </div>}
             <div className="investigation-file-row">
               <div><span>Original result</span><strong>{item.result_file_name || "No result document attached"}</strong>{item.result_file_size ? <small>{Math.round(item.result_file_size / 1024)} KB</small> : null}</div>
-              {editable && <label className="upload-result-button">📎 {item.result_file_name ? "Replace result" : "Upload result"}<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv" onChange={(e) => onFileUpload?.(index, e.target.files?.[0] || null)} /></label>}
+              {editable && <label className="upload-result-button">📎 {item.result_file_name ? "Replace result" : "Upload result"}<input type="file" disabled={saving !== null || Object.keys(drafts).length > 0} accept="application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv" onChange={(e) => onFileUpload?.(index, e.target.files?.[0] || null)} /></label>}
             </div>
           </div>
         );
@@ -1024,7 +1062,7 @@ function printReferralForm() {
   window.print();
 }
 
-function ReferralSourceDetails({ referral, editableInvestigationResults = false, onInvestigationResultChange }) {
+function ReferralSourceDetails({ referral, editableInvestigationResults = false, onInvestigationResultChange, onInvestigationFileUpload }) {
   const diagnoses = getDiagnosisRecords(referral);
   const investigations = getInvestigationRecords(referral);
 
@@ -1060,7 +1098,7 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
         (typeof item === "string" ? item : "");
 
       if (investigation) {
-        groups[category].push(investigation);
+        groups[category].push(item);
       }
 
       return groups;
@@ -1283,7 +1321,13 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
                   <InvestigationResultCards
                     investigations={items}
                     editable={editableInvestigationResults}
-                    onResultChange={(localIndex, value) => {
+                    expectedSnapshot={referral.investigation_records}
+                    onFileUpload={(localIndex, file) => {
+                      const selectedItem = items[localIndex];
+                      const globalIndex = investigations.findIndex((entry) => entry === selectedItem);
+                      if (globalIndex >= 0) return onInvestigationFileUpload?.(globalIndex, file);
+                    }}
+                    onResultChange={(localIndex, value, expected) => {
                       const categoryItems = investigations.filter(
                         (entry) =>
                           (entry?.category || "Other Investigations") === category
@@ -1294,7 +1338,7 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
                       );
 
                       if (globalIndex >= 0) {
-                        onInvestigationResultChange?.(globalIndex, value);
+                        return onInvestigationResultChange?.(globalIndex, value, expected);
                       }
                     }}
                   />
@@ -1417,6 +1461,9 @@ function App() {
   const [passwordError, setPasswordError] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordOutcome, setPasswordOutcome] = useState(null);
+  const passwordChangeInFlight = useRef(false);
+  const passwordChangeLocked = ["confirmed", "account_pending", "unknown"].includes(passwordOutcome);
 
   /* =========================================================
    LOGIN / AUTHENTICATION
@@ -1518,6 +1565,7 @@ const handleSignIn = async () => {
     setRole(applicationRole);
 
     if (userProfile.must_change_password) {
+      setPasswordOutcome(null);
       setPasswordError("");
       setPasswordMessage(
         "Your account was created with a temporary password. Please set your own password before continuing."
@@ -1553,30 +1601,20 @@ const handleSignIn = async () => {
   }
 };
 
-  /* =========================================================
-     TEST SUPABASE CONNECTION
-     ========================================================= */
-
-  useEffect(() => {
-    const testSupabase = async () => {
-      const { data, error } = await supabase
-        .from("facilities")
-        .select("*")
-        .limit(1);
-
-      console.log("Supabase data:", data);
-      console.log("Supabase error:", error);
-    };
-
-    testSupabase();
-  }, []);
-
-
   useEffect(() => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setRole(null);
+        setProfile(null);
+        setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+        setScreen("login");
+      }
       if (event === "PASSWORD_RECOVERY") {
+        setRole(null);
+        setProfile(null);
+        setPasswordOutcome(null);
         setPasswordError("");
         setPasswordMessage("");
         setPasswordForm({
@@ -1631,6 +1669,7 @@ const handleSignIn = async () => {
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
+    if (passwordChangeInFlight.current || passwordChangeLocked) return;
     setPasswordError("");
     setPasswordMessage("");
 
@@ -1664,44 +1703,29 @@ const handleSignIn = async () => {
       return;
     }
 
+    passwordChangeInFlight.current = true;
     setPasswordSaving(true);
-
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-
-      if (error) throw error;
-
-      setPasswordForm({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      });
-
-      try {
-        await supabase
-          .from("profiles")
-          .update({
-            must_change_password: false,
-          })
-          .eq("id", profile?.id || "");
-      } catch (profileUpdateError) {
-        console.warn(
-          "PASSWORD FLAG UPDATE SKIPPED:",
-          profileUpdateError
-        );
+      const mode = resolvePasswordChangeMode(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_PASSWORD_CHANGE_MODE
+      );
+      const result = await changeAccountPassword(supabase, newPassword, mode);
+      setPasswordOutcome(result.status);
+      if (result.status === "confirmed") {
+        setProfile((previous) => previous?.id === result.userId
+          ? { ...previous, must_change_password: false } : null);
+        setPasswordMessage("Password and account status confirmed. Sign out, then sign in with your new password.");
+      } else if (result.status === "account_pending") {
+        setPasswordError("Your password changed, but account access could not be confirmed. Do not submit another password change. Sign out and sign in with the new password; contact an administrator if access remains blocked.");
+      } else if (result.status === "unknown") {
+        setPasswordError("The password-change outcome could not be confirmed. Do not retry here. Sign out and verify your new password, or use password recovery.");
+      } else {
+        setPasswordError("Password change was not started. Check your connection and sign-in session. If this continues, contact an administrator.");
       }
-
-      setPasswordMessage(
-        "Password changed successfully. Your new password is now active."
-      );
-    } catch (error) {
-      console.error("PASSWORD CHANGE ERROR:", error);
-      setPasswordError(
-        error?.message || "Unable to change your password."
-      );
     } finally {
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      passwordChangeInFlight.current = false;
       setPasswordSaving(false);
     }
   };
@@ -2367,6 +2391,7 @@ const handleSignIn = async () => {
 
               <input
                 type="password"
+                disabled={passwordSaving || passwordChangeLocked}
                 value={passwordForm.newPassword}
                 onChange={(e) =>
                   setPasswordForm((previous) => ({
@@ -2384,6 +2409,7 @@ const handleSignIn = async () => {
 
               <input
                 type="password"
+                disabled={passwordSaving || passwordChangeLocked}
                 value={passwordForm.confirmPassword}
                 onChange={(e) =>
                   setPasswordForm((previous) => ({
@@ -2398,13 +2424,13 @@ const handleSignIn = async () => {
               />
 
               {passwordError && (
-                <div className="login-error">
+                <div className="login-error" role="alert">
                   {passwordError}
                 </div>
               )}
 
               {passwordMessage && (
-                <div className="success-message">
+                <div className="success-message" role="status">
                   {passwordMessage}
                 </div>
               )}
@@ -2412,7 +2438,7 @@ const handleSignIn = async () => {
               <button
                 type="submit"
                 className="primary-button full-width"
-                disabled={passwordSaving}
+                disabled={passwordSaving || passwordChangeLocked}
               >
                 {passwordSaving
                   ? "Updating Password..."
@@ -2423,15 +2449,18 @@ const handleSignIn = async () => {
             <button
               type="button"
               className="back-button"
+              disabled={passwordSaving}
               onClick={() => {
+                if (profile?.must_change_password || passwordChangeLocked || !role) {
+                  logout();
+                  return;
+                }
                 setPasswordError("");
                 setPasswordMessage("");
-                setScreen(
-                  role ? "dashboard" : "login"
-                );
+                setScreen("dashboard");
               }}
             >
-              ← Back
+              {profile?.must_change_password || passwordChangeLocked || !role ? "Sign Out" : "← Back"}
             </button>
 
             <p className="demo-note">
@@ -2473,6 +2502,7 @@ const handleSignIn = async () => {
                 type="button"
                 className="secondary-button"
                 onClick={() => {
+                  setPasswordOutcome(null);
                   setPasswordError("");
                   setPasswordMessage("");
                   setPasswordForm({
@@ -2581,6 +2611,7 @@ const handleSignIn = async () => {
           <main className="dashboard">
 
             <NewReferralForm
+              ownerId={profile?.id}
               onBack={() => setScreen("dashboard")}
             />
 
@@ -2795,7 +2826,10 @@ function InvestigationResultEditor({ item, onChange, onFileChange }) {
   );
 }
 
-function NewReferralForm({ onBack }) {
+function NewReferralForm({ onBack, ownerId }) {
+  const clientSubmissionId = useRef(crypto.randomUUID());
+  const submissionInFlight = useRef(false);
+  const [fromDeviceDraft, setFromDeviceDraft] = useState(false);
 
   const [form, setForm] = useState({
   patient_identifier: "",
@@ -3011,9 +3045,8 @@ provisional_diagnosis: "",
 
   const handleInvestigationFileSelection = (index, file) => {
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { setError("Investigation result file must not exceed 10 MB."); return; }
-    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp", "text/plain", "text/csv"];
-    if (file.type && !allowed.includes(file.type)) { setError("Unsupported investigation result file type."); return; }
+    try { validateInvestigationFile(file); }
+    catch (error) { setError(error.message); return; }
     updateInvestigationResult(index, { result_file: file, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size });
     setError("");
   };
@@ -3066,13 +3099,20 @@ provisional_diagnosis: "",
   const handleSubmit = async (e) => {
 
     e.preventDefault();
+    if (submissionInFlight.current) return;
+    submissionInFlight.current = true;
 
     setError("");
     setSavedReferralInfo(null);
+    setPrintDraft(null);
     setMessage("");
     setLoading(true);
 
     try {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        throw new Error("Device is offline. Referral was not submitted. Follow the approved facility referral procedure and retry when connected.");
+      }
+
 
       const {
         data: {
@@ -3174,8 +3214,7 @@ provisional_diagnosis: "",
 
   // Keep legacy fields populated for compatibility with existing records/views.
   diagnosis_status:
-    [...new Set(diagnosisEntries.map((item) => item.status))]
-      .join(", ") || null,
+    getLegacyDiagnosisStatus(diagnosisEntries),
 
   diagnosis_category:
     [...new Set(diagnosisEntries.map((item) => item.category))]
@@ -3194,7 +3233,7 @@ provisional_diagnosis: "",
     selectedInvestigationCategories,
 
   investigation_records:
-    selectedInvestigations.map(({ result_file, ...item }) => item),
+    initialInvestigationRecords(selectedInvestigations),
 
   investigations:
     selectedInvestigations
@@ -3230,58 +3269,24 @@ provisional_diagnosis: "",
           "sent",
       };
 
-      console.log(
-        "AUTH USER:",
-        user.id
+      const insertedReferral = await createReferralOnce(
+        supabase, referralPayload, clientSubmissionId.current, fromDeviceDraft
       );
 
-      console.log(
-        "PROFILE:",
-        profile
-      );
-
-      console.log(
-        "REFERRAL PAYLOAD:",
-        referralPayload
-      );
-
-      const {
-        data: insertedReferral,
-        error: referralError,
-      } = await supabase
-        .from("referrals")
-        .insert(referralPayload)
-        .select("id")
-        .single();
-
-      if (referralError) {
-        console.error(
-          "REFERRAL INSERT ERROR:",
-          referralError
+      // Referral is already persisted at this point. A failed optional
+      // attachment upload must not be reported as a failed referral.
+      let attachmentWarning = "";
+      let savedInvestigationRecords = initialInvestigationRecords(selectedInvestigations);
+      try {
+        savedInvestigationRecords = await uploadInitialInvestigationFiles(
+          supabase, insertedReferral.id, selectedInvestigations,
+          savedInvestigationRecords, atomicInvestigationUpdatesEnabled
         );
-
-        throw referralError;
-      }
-
-      let savedInvestigationRecords = selectedInvestigations.map(({ result_file, ...item }) => item);
-      if (insertedReferral?.id) {
-        for (let i = 0; i < selectedInvestigations.length; i += 1) {
-          const file = selectedInvestigations[i]?.result_file;
-          if (!file) continue;
-          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-          const path = `${insertedReferral.id}/${Date.now()}-${i}-${safeName}`;
-          const { error: uploadError } = await supabase.storage
-            .from("referral-investigation-results")
-            .upload(path, file, { upsert: false, contentType: file.type || undefined });
-          if (uploadError) throw uploadError;
-          savedInvestigationRecords = savedInvestigationRecords.map((item, itemIndex) =>
-            itemIndex === i ? { ...item, result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size } : item
-          );
-        }
-        if (savedInvestigationRecords.length) {
-          const { error: resultMetaError } = await supabase.from("referrals").update({ investigation_records: savedInvestigationRecords }).eq("id", insertedReferral.id);
-          if (resultMetaError) throw resultMetaError;
-        }
+      } catch (attachmentError) {
+        if (Array.isArray(attachmentError.confirmedRecords)) savedInvestigationRecords = attachmentError.confirmedRecords;
+        attachmentWarning = attachmentError.message === "INVESTIGATION_SERVICE_UNAVAILABLE"
+          ? " Investigation attachments were not uploaded because the verified attachment service is unavailable. Preserve the original documents and follow the facility referral procedure."
+          : " Attachment registration could not be fully confirmed. The referral remains saved. Preserve the originals and ask an administrator to reconcile the uploads before retrying.";
       }
 
       const referringFacility = facilities.find(
@@ -3307,7 +3312,7 @@ provisional_diagnosis: "",
       setPrintDraft(savedReferral);
 
       setMessage(
-        `Referral saved successfully. Patient: ${form.patient_identifier || "Not recorded"} • REFLINK ID: ${referralNumber}`
+        `Referral saved. REFLINK ID: ${referralNumber}.${attachmentWarning}`
       );
 
       setForm({
@@ -3340,6 +3345,8 @@ provisional_diagnosis: "",
   receiving_facility_id: "",
 });
 
+      clientSubmissionId.current = crypto.randomUUID();
+      setFromDeviceDraft(false);
       setDiagnosisEntries([]);
       setDiagnosisDraft({
         status: "",
@@ -3351,10 +3358,7 @@ provisional_diagnosis: "",
 
     } catch (err) {
 
-      console.error(
-        "Referral creation error:",
-        err
-      );
+
 
       setError(
         err.message ||
@@ -3363,6 +3367,7 @@ provisional_diagnosis: "",
 
     } finally {
 
+      submissionInFlight.current = false;
       setLoading(false);
 
     }
@@ -3370,6 +3375,7 @@ provisional_diagnosis: "",
 
   return (
     <div className="dashboard-card referral-form-card">
+      <ConnectivityNotice />
 
       <div className="form-header">
 
@@ -3441,6 +3447,25 @@ provisional_diagnosis: "",
           {error}
         </div>
       )}
+
+      {import.meta.env.VITE_ENCRYPTED_DRAFTS_ENABLED === "true" && <EncryptedDraftPanel
+        ownerId={ownerId} draftId={clientSubmissionId.current} disabled={loading}
+        getDraft={() => ({
+          form, clientSubmissionId: clientSubmissionId.current, diagnosisEntries,
+          categories: selectedInvestigationCategories,
+          investigations: initialInvestigationRecords(selectedInvestigations),
+        })}
+        restoreDraft={(data) => {
+          const restored = restoreDraftData(data, form);
+          setForm(restored.form);
+          setDiagnosisEntries(restored.diagnosisEntries);
+          setSelectedInvestigationCategories(restored.categories);
+          setSelectedInvestigations(restored.investigations);
+          clientSubmissionId.current = restored.clientSubmissionId;
+          setFromDeviceDraft(true);
+          setError(""); setMessage(""); setSavedReferralInfo(null); setPrintDraft(null);
+        }}
+      />}
 
       <form onSubmit={handleSubmit}>
 
@@ -4172,11 +4197,6 @@ function PHCStaffDashboard({ onNewReferral }) {
         throw referralError;
       }
 
-      console.log(
-        "PHC REFERRALS:",
-        data
-      );
-
       setReferrals(data || []);
     } catch (err) {
       console.error(
@@ -4255,11 +4275,8 @@ function PHCStaffDashboard({ onNewReferral }) {
                 `referring_facility_id=eq.${profile.facility_id}`,
             },
             (payload) => {
-              console.log(
-                "PHC REALTIME REFERRAL UPDATE:",
-                payload
-              );
-
+              // Re-fetch through the authorized query; never log realtime payloads.
+              void payload;
               loadMyReferrals();
             }
           )
@@ -5184,90 +5201,96 @@ function ReceivingDashboard() {
       follow_up_plan: "",
     });
 
+  const investigationMutationInFlight = useRef(false);
   const handleInvestigationFileUpload = async (index, file) => {
+    if (!atomicInvestigationUpdatesEnabled || investigationMutationInFlight.current) return;
     if (!selectedReferral || !file) return;
-    if (file.size > 10 * 1024 * 1024) { setError("Investigation result file must not exceed 10 MB."); return; }
-    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp", "text/plain", "text/csv"];
-    if (file.type && !allowed.includes(file.type)) { setError("Unsupported investigation result file type."); return; }
+    setError("");
+    setMessage("");
     const current = getInvestigationRecords(selectedReferral).map(normalizeInvestigationRecord);
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const path = `${selectedReferral.id}/${Date.now()}-${index}-${safeName}`;
+    if (!current[index]) {
+      setError("Investigation record no longer exists. Refresh before uploading.");
+      return;
+    }
+    investigationMutationInFlight.current = true;
+    let path;
     setActionLoading(`${selectedReferral.id}-investigation-file-${index}`);
+    let uploadAttempted = false;
     try {
-      const { error: uploadError } = await supabase.storage.from("referral-investigation-results").upload(path, file, { upsert: false, contentType: file.type || undefined });
+      try {
+        await validateInvestigationFileContent(file);
+      } catch {
+        setError("Investigation document was not uploaded. Check that it is non-empty, no larger than 10 MB, and has a supported format matching its contents.");
+        return;
+      }
+      path = createInvestigationFilePath(selectedReferral.id, file);
+      // A lost storage response can hide a successful upload.
+      uploadAttempted = true;
+      const { error: uploadError } = await supabase.storage
+        .from("referral-investigation-results")
+        .upload(path, file, { upsert: false, contentType: file.type });
       if (uploadError) throw uploadError;
-      const updated = current.map((item, itemIndex) => itemIndex === index ? { ...item, result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size } : item);
-      const { error } = await supabase.from("referrals").update({ investigation_records: updated }).eq("id", selectedReferral.id);
-      if (error) throw error;
-      const updatedReferral = { ...selectedReferral, investigation_records: updated };
+      const data = await saveInvestigation(
+        supabase, selectedReferral.id, selectedReferral.investigation_records, index,
+        { result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size },
+        crypto.randomUUID()
+      );
+      const updatedReferral = { ...selectedReferral, investigation_records: data.investigation_records };
       setSelectedReferral(updatedReferral);
-      setReferrals((previous) => previous.map((item) => item.id === selectedReferral.id ? updatedReferral : item));
-      setMessage(`${updated[index].investigation} result document uploaded successfully.`);
-    } catch (err) { console.error("INVESTIGATION FILE UPLOAD ERROR:", err); setError(err.message || "Unable to upload investigation result."); }
-    finally { setActionLoading(null); }
+      setReferrals((previous) => previous.map((item) =>
+        item.id === selectedReferral.id ? updatedReferral : item
+      ));
+      setMessage("Investigation result document saved successfully.");
+    } catch (err) {
+      if (err?.message === "STALE_INVESTIGATION_ATTACHMENT") {
+        console.warn("Investigation attachment update blocked due to stale record.");
+      } else {
+        console.error("INVESTIGATION FILE UPLOAD ERROR:", err?.message || "Upload failed");
+      }
+      if (uploadAttempted) {
+        const recovery = await inspectInvestigationAttachment(
+          () => supabase.from("referrals").select("investigation_records")
+            .eq("id", selectedReferral.id).single(),
+          path
+        );
+        if (recovery === "referenced") {
+          setError("Attachment appears saved in the referral, but confirmation failed. Refresh and verify it before retrying.");
+        } else if (recovery === "unreferenced") {
+          setError("The uploaded attachment is not currently referenced by the referral. No file was deleted. Ask an administrator to reconcile the upload before retrying.");
+        } else {
+          setError("Attachment outcome could not be verified. Do not retry until an administrator reconciles the referral and file.");
+        }
+      } else {
+        setError("Investigation document upload failed. No successful upload was confirmed.");
+      }
+    } finally {
+      investigationMutationInFlight.current = false;
+      setActionLoading(null);
+    }
   };
 
-  const handleInvestigationResultChange = async (
-    index,
-    patch
-  ) => {
-    if (!selectedReferral) return;
-
-    const currentInvestigations = getInvestigationRecords(
-      selectedReferral
-    ).map(normalizeInvestigationRecord);
-
-    const updatedInvestigations = currentInvestigations.map(
-      (item, itemIndex) =>
-        itemIndex === index
-          ? {
-              ...item,
-              ...patch,
-            }
-          : item
-    );
-
-    const updatedReferral = {
-      ...selectedReferral,
-      investigation_records: updatedInvestigations,
-    };
-
-    setSelectedReferral(updatedReferral);
-    setReferrals((previous) =>
-      previous.map((item) =>
-        item.id === selectedReferral.id
-          ? updatedReferral
-          : item
-      )
-    );
-
-    setActionLoading(
-      `${selectedReferral.id}-investigation-${index}`
-    );
-
+  const handleInvestigationResultChange = async (index, patch, expectedSnapshot) => {
+    if (!selectedReferral || !atomicInvestigationUpdatesEnabled || investigationMutationInFlight.current) return false;
+    investigationMutationInFlight.current = true;
+    setError("");
+    setMessage("");
+    setActionLoading(`${selectedReferral.id}-investigation-${index}`);
     try {
-      const { error } = await supabase
-        .from("referrals")
-        .update({
-          investigation_records: updatedInvestigations,
-        })
-        .eq("id", selectedReferral.id);
-
-      if (error) throw error;
-
-      setMessage(
-        `${updatedInvestigations[index].investigation} result updated to ${getInvestigationResultLabel(resultStatus)}.`
-      );
-    } catch (err) {
-      console.error(
-        "INVESTIGATION RESULT UPDATE ERROR:",
-        err
-      );
-      setError(
-        err.message ||
-          "Unable to update investigation result."
-      );
+      const data = await saveInvestigation(supabase, selectedReferral.id,
+        expectedSnapshot, index, patch, crypto.randomUUID());
+      const savedReferral = { ...selectedReferral, investigation_records: data.investigation_records };
+      setSelectedReferral(savedReferral);
+      setReferrals((previous) => previous.map((item) =>
+        item.id === selectedReferral.id ? savedReferral : item));
+      setMessage("Investigation result saved successfully.");
+      return true;
+    } catch (error) {
+      setError(error.message === "STALE_INVESTIGATION_RECORD"
+        ? "Another update changed this referral. Your draft is retained. Refresh and compare before saving again."
+        : "The save outcome could not be confirmed. Your draft is retained. Refresh and verify the referral before retrying.");
+      return false;
     } finally {
+      investigationMutationInFlight.current = false;
       setActionLoading(null);
     }
   };
@@ -5371,6 +5394,11 @@ function ReceivingDashboard() {
           throw new Error(
             "Your REFLINK profile could not be found."
           );
+        }
+
+        // UI guard complements (but does not replace) database RLS.
+        if (profile.role !== "receiving_staff") {
+          throw new Error("Receiving-clinician access is required.");
         }
 
         if (
@@ -5484,11 +5512,6 @@ function ReceivingDashboard() {
         if (referralError) {
           throw referralError;
         }
-
-        console.log(
-          "INCOMING REFERRALS:",
-          data
-        );
 
         setReferrals(
           data || []
@@ -5666,6 +5689,21 @@ function ReceivingDashboard() {
       );
 
       try {
+        // Compare the form's original clinical record with the latest database
+        // state before saving. A database transaction is still needed for
+        // fully atomic concurrent-edit protection.
+        const { data: latestInpatient, error: inpatientReadError } = await supabase
+          .from("referrals")
+          .select("admission_at, ward_unit, admission_diagnosis, clinical_progress, inpatient_treatment, discharge_diagnosis, condition_at_discharge, discharge_medications, follow_up_plan, discharged_at, status")
+          .eq("id", selectedInpatientReferral.id)
+          .single();
+        if (inpatientReadError) throw inpatientReadError;
+        if (latestInpatient.status !== "admitted" ||
+            ["admission_at", "ward_unit", "admission_diagnosis", "clinical_progress", "inpatient_treatment", "discharge_diagnosis", "condition_at_discharge", "discharge_medications", "follow_up_plan", "discharged_at"].some(
+              (field) => (latestInpatient[field] ?? null) !== (selectedInpatientReferral[field] ?? null)
+            )) {
+          throw new Error("INPATIENT_RECORD_CHANGED");
+        }
 
         if (
           !admissionForm.ward_unit.trim()
@@ -5721,6 +5759,7 @@ function ReceivingDashboard() {
             "id",
             selectedInpatientReferral.id
           )
+          .eq("status", "admitted")
           .select()
           .single();
 
@@ -5746,8 +5785,9 @@ function ReceivingDashboard() {
         );
 
         setError(
-          err.message ||
-          "Unable to save admission information."
+          err?.message === "INPATIENT_RECORD_CHANGED"
+            ? "The inpatient record has changed since this form was opened. Refresh and review the latest documentation before saving."
+            : (err.message || "Unable to save admission information.")
         );
 
       } finally {
@@ -5780,6 +5820,21 @@ function ReceivingDashboard() {
       );
 
       try {
+        // Compare the form's original clinical record with the latest database
+        // state before saving. A database transaction is still needed for
+        // fully atomic concurrent-edit protection.
+        const { data: latestInpatient, error: inpatientReadError } = await supabase
+          .from("referrals")
+          .select("admission_at, ward_unit, admission_diagnosis, clinical_progress, inpatient_treatment, discharge_diagnosis, condition_at_discharge, discharge_medications, follow_up_plan, discharged_at, status")
+          .eq("id", selectedInpatientReferral.id)
+          .single();
+        if (inpatientReadError) throw inpatientReadError;
+        if (latestInpatient.status !== "admitted" ||
+            ["admission_at", "ward_unit", "admission_diagnosis", "clinical_progress", "inpatient_treatment", "discharge_diagnosis", "condition_at_discharge", "discharge_medications", "follow_up_plan", "discharged_at"].some(
+              (field) => (latestInpatient[field] ?? null) !== (selectedInpatientReferral[field] ?? null)
+            )) {
+          throw new Error("INPATIENT_RECORD_CHANGED");
+        }
 
         if (
           !admissionForm.discharge_diagnosis.trim()
@@ -5838,6 +5893,7 @@ function ReceivingDashboard() {
             "id",
             selectedInpatientReferral.id
           )
+          .eq("status", "admitted")
           .select()
           .single();
 
@@ -5863,8 +5919,9 @@ function ReceivingDashboard() {
         );
 
         setError(
-          err.message ||
-          "Unable to discharge patient."
+          err?.message === "INPATIENT_RECORD_CHANGED"
+            ? "The inpatient record has changed since this form was opened. Refresh and review the latest documentation before saving."
+            : (err.message || "Unable to discharge patient.")
         );
 
       } finally {
@@ -5907,6 +5964,7 @@ function ReceivingDashboard() {
             "id",
             referralId
           )
+          .eq("status", "sent")
           .select()
           .single();
 
@@ -5973,6 +6031,7 @@ function ReceivingDashboard() {
             "id",
             referralId
           )
+          .eq("status", "acknowledged")
           .select()
           .single();
 
@@ -6025,6 +6084,7 @@ const handleStartAssessment = async (referralId) => {
         status: "under_assessment",
       })
       .eq("id", referralId)
+      .eq("status", "patient_arrived")
       .select()
       .single();
 
@@ -6183,6 +6243,21 @@ const handleStartAssessment = async (referralId) => {
 
         }
 
+        // Do not overwrite clinical documentation from a stale assessment form.
+        // This is a preflight check, not an atomic concurrency guarantee.
+        const { data: currentAssessment, error: assessmentReadError } = await supabase
+          .from("referrals")
+          .select("status, assessment_findings, final_diagnosis, diagnosis_category, diagnosis_status, treatment_provided, procedures_performed, clinical_feedback, disposition, assessment_completed_at")
+          .eq("id", selectedReferral.id)
+          .single();
+        if (assessmentReadError) throw assessmentReadError;
+        if (currentAssessment.status !== "under_assessment" ||
+            ["assessment_findings", "final_diagnosis", "diagnosis_category", "diagnosis_status", "treatment_provided", "procedures_performed", "clinical_feedback", "disposition", "assessment_completed_at"].some(
+              (field) => (currentAssessment[field] ?? null) !== (selectedReferral[field] ?? null)
+            )) {
+          throw new Error("ASSESSMENT_CHANGED");
+        }
+
         const {
           data,
           error,
@@ -6193,6 +6268,7 @@ const handleStartAssessment = async (referralId) => {
             "id",
             selectedReferral.id
           )
+          .eq("status", "under_assessment")
           .select()
           .single();
 
@@ -6309,8 +6385,9 @@ const handleStartAssessment = async (referralId) => {
         );
 
         setError(
-          err.message ||
-          "Unable to save clinical assessment."
+          err?.message === "ASSESSMENT_CHANGED"
+            ? "This referral assessment has changed since you opened it. Refresh and review the latest clinical documentation before saving."
+            : (err.message || "Unable to save clinical assessment.")
         );
 
       } finally {
@@ -6381,6 +6458,7 @@ const handleStartAssessment = async (referralId) => {
 
   return (
     <>
+      <ConnectivityNotice />
 
       <div className="dashboard-actions">
 
@@ -7111,9 +7189,13 @@ const handleStartAssessment = async (referralId) => {
               </div>
             )}
 
+            {!atomicInvestigationUpdatesEnabled && <p role="status">
+              Investigation results are currently read-only. Preserve original documents and follow the facility procedure for updates.
+            </p>}
             <ReferralSourceDetails
               referral={selectedReferral}
-              editableInvestigationResults
+              editableInvestigationResults={atomicInvestigationUpdatesEnabled && !["completed", "cancelled"].includes(selectedReferral.status)}
+              onInvestigationFileUpload={handleInvestigationFileUpload}
               onInvestigationResultChange={
                 handleInvestigationResultChange
               }

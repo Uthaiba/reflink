@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase.js";
+import { ageBand, escapeCsvCell, loadBoundedPages } from "../../lib/reportingUtils.js";
 
 function formatClinicalLabel(value) {
   if (!value) return "Not recorded";
@@ -77,7 +78,7 @@ function AnalysisHub() {
     setError("");
 
     try {
-      const { data, error: referralsError } = await supabase
+      const data = await loadBoundedPages((start, end) => supabase
         .from("referrals")
         .select(`
           id,
@@ -85,7 +86,6 @@ function AnalysisHub() {
           patient_identifier,
           patient_age_months,
           patient_sex,
-          patient_address,
           diagnosis_category,
           diagnosis_status,
           provisional_diagnosis,
@@ -107,10 +107,9 @@ function AnalysisHub() {
           )
         `)
         .eq("is_test", false)
-        .order("created_at", { ascending: false });
-
-      if (referralsError) throw referralsError;
-      setReferrals(data || []);
+        .order("id", { ascending: true })
+        .range(start, end));
+      setReferrals(data);
     } catch (err) {
       console.error("ANALYSIS HUB ERROR:", err);
       setError(err?.message || "Unable to load healthcare analysis data.");
@@ -128,16 +127,7 @@ function AnalysisHub() {
     String(row?.final_diagnosis || row?.provisional_diagnosis || "")
       .trim() || "Unclassified";
 
-  const getAgeGroup = (months) => {
-    const value = Number(months);
-    if (!Number.isFinite(value) || value < 0) return "Age not recorded";
-    if (value < 60) return "0–4 years";
-    if (value < 180) return "5–14 years";
-    if (value < 300) return "15–24 years";
-    if (value < 540) return "25–44 years";
-    if (value < 780) return "45–64 years";
-    return "65+ years";
-  };
+  const getAgeGroup = ageBand;
 
   const getBreakdownValue = (row) => {
     switch (breakdown) {
@@ -1112,18 +1102,7 @@ function AnalysisHub() {
       "completed_at",
     ];
 
-    const escapeCsv = (value) => {
-      const text =
-        value === null ||
-        value === undefined
-          ? ""
-          : String(value);
-
-      return `"${text.replace(
-        /"/g,
-        '""'
-      )}"`;
-    };
+    const escapeCsv = escapeCsvCell;
 
     const dataRows = filtered.map((row) =>
       [
@@ -1911,6 +1890,10 @@ function AnalysisHub() {
 
 
 
+      <div className="phase7-workflow-note">
+        <strong>Authorized operational clinical analysis</strong>
+        <span>This workspace contains identifiable clinical records. Keep exports within the authorized care team. Use R-PHI for aggregate public-health reporting.</span>
+      </div>
       <div className="phase7-workflow-note">
         <strong>How to use this workspace</strong>
         <span>

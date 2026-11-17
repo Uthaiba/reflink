@@ -1,0 +1,65 @@
+name: REFLINK synthetic database contracts
+on:
+  pull_request:
+    paths: ['database/**', 'tests/database/**', '.github/workflows/database-contracts.yml']
+  push:
+    branches: ['reflink/master-plan-continuation-20261116']
+    paths: ['database/**', 'tests/database/**', '.github/workflows/database-contracts.yml']
+permissions:
+  contents: read
+jobs:
+  postgres-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGDATABASE: reflink_contracts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Start isolated database with a generated credential
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          import secrets
+          import subprocess
+          import time
+
+          credential = secrets.token_urlsafe(32)
+          print("::add-mask::" + credential, flush=True)
+          container_environment = os.environ.copy()
+          container_environment["POSTGRES_PASSWORD"] = credential
+          subprocess.run([
+              "docker", "run", "--detach", "--rm",
+              "--name", "reflink-synthetic-contracts",
+              "--publish", "127.0.0.1:5432:5432",
+              "--env", "POSTGRES_PASSWORD",
+              "--env", "POSTGRES_DB=reflink_contracts",
+              "postgres:17",
+          ], env=container_environment, check=True, stdout=subprocess.DEVNULL)
+          # GitHub's temporary runner environment file is not repository source.
+          # The generated value is masked before it is passed to subsequent steps.
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+              output.write("PGPASSWORD=" + credential + "\n")
+          for attempt in range(45):
+              ready = subprocess.run([
+                  "docker", "exec", "reflink-synthetic-contracts",
+                  "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "reflink_contracts",
+              ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+              if ready.returncode == 0:
+                  break
+              time.sleep(1)
+          else:
+              raise RuntimeError("Synthetic database did not become ready")
+          PY
+      - name: Run synthetic transaction and authorization contracts
+        run: python3 tests/database/investigation_contracts.py
+      - name: Remove disposable database
+        if: always()
+        run: docker rm --force reflink-synthetic-contracts >/dev/null 2>&1 || true
