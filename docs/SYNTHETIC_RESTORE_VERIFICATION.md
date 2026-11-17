@@ -1,6 +1,6 @@
 # Synthetic restore rehearsal
 
-The disposable PostgreSQL workflow now runs pg_dump in custom format and pg_restore into a separate fresh database after baseline reconciliation and atomic migration rehearsal. It retains ownership and ACLs rather than stripping permissions.
+The disposable PostgreSQL workflow now runs pg_dump in custom format and pg_restore into a separate fresh database after baseline reconciliation and atomic migration rehearsal. It retains ownership and ACLs rather than stripping permissions. The public/private schemas and stub storage metadata/policies are included; Auth remains an explicit managed-service stub. Bucket configuration metadata is compared after restoration. No actual storage file payload is backed up or restored.
 
 A clearly marked synthetic draft referral and both operation-ledger entries are added before backup. The test compares source/restored selected schema metadata, the complete synthetic referral row, audit counts, both operation counts, browser-role column privileges, structural preflight and legacy writer denial. The backup exists only in a temporary directory and is not uploaded as an artifact.
 

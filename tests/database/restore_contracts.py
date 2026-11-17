@@ -21,11 +21,12 @@ def tool(arguments):
 
 with tempfile.TemporaryDirectory() as temporary:
     archive=str(Path(temporary)/"synthetic.dump")
-    tool(["pg_dump","--dbname",source,"--format=custom","--schema=public","--schema=private","--file",archive])
+    tool(["pg_dump","--dbname",source,"--format=custom","--schema=public","--schema=private","--schema=storage","--file",archive])
     run("CREATE DATABASE "+target)
     run(Path("tests/database/managed_schema_stubs.sql").read_text(),target)
     # Target is a brand-new disposable database; never use this command on hosted data.
     tool(["pg_restore","--dbname",target,"--clean","--if-exists","--exit-on-error",archive])
+    assert run("SELECT jsonb_agg(to_jsonb(b) ORDER BY id) FROM storage.buckets b",source)==run("SELECT jsonb_agg(to_jsonb(b) ORDER BY id) FROM storage.buckets b",target)
     assert json.loads(run(base["inventory_sql"],source))==json.loads(run(base["inventory_sql"],target))
     assert run("SELECT to_jsonb(r) FROM public.referrals r WHERE id='"+ref+"'",source)==run("SELECT to_jsonb(r) FROM public.referrals r WHERE id='"+ref+"'",target)
     for table in ["private.clinical_operations","private.investigation_operations"]:
