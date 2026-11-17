@@ -63,6 +63,14 @@ jobs:
           python3 tests/database/baseline_archive_contracts.py
           python3 tests/database/migration_package_contracts.py
           python3 tests/database/staging_trigger_contracts.py
+          python3 tests/database/baseline_replay_contracts.py
+      - name: Preserve baseline drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-replay-report
+          path: baseline-replay-report.json
+          if-no-files-found: ignore
       - name: Remove disposable database
         if: always()
         run: docker rm --force reflink-synthetic-contracts >/dev/null 2>&1 || true
