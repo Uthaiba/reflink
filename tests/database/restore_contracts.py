@@ -34,7 +34,7 @@ with tempfile.TemporaryDirectory() as temporary:
     assert run("SELECT count(*) FROM public.audit_log",source)==run("SELECT count(*) FROM public.audit_log",target)
     assert json.loads(run(Path("database/checks/clinical_staging_preflight.sql").read_text(),target))["blocking_checks"]==0
     assert run("SELECT has_function_privilege('authenticated','public.register_referral_investigation_files(uuid,jsonb)','EXECUTE')",target)=="f"
-    privilege_sql="""SELECT jsonb_agg(to_jsonb(p) ORDER BY table_name,column_name,grantee,privilege_type)
+    privilege_sql="""SELECT jsonb_agg(to_jsonb(p)-'table_catalog' ORDER BY table_schema,table_name,column_name,grantee,privilege_type)
       FROM information_schema.column_privileges p WHERE table_schema IN ('public','private')
       AND grantee IN ('anon','authenticated','service_role')"""
     assert run(privilege_sql,source)==run(privilege_sql,target)
