@@ -10,9 +10,9 @@ This is the current cross-phase handover, not a declaration of completion. Conti
 | 4 Referral engine | Atomic investigation and assessment/admission/discharge migrations and disabled frontend adapters; synthetic concurrency, replay and rollback | Hosted migration rehearsal; explicit acceptance/rejection/escalation; controlled corrections; attachment intents/reconciliation |
 | 5 Security | Account/session/facility/password gates, direct-write guards, minimized audit compatibility tests | Hosted RLS/storage/privileged writer tests, MFA/rate limits, retention/privacy assessment |
 | 6 Analytics | Bounded operational pagination, safe CSV and missing-age handling | Authorized server-snapshot reporting, standard indicator classifications, measured performance |
-| 7 R-PHI | Dedicated aggregate-only source and methodology/suppression safeguards | Cross-report disclosure approval, validated charts/geography/signals, controlled traceable AI reporting |
-| 8 Offline/interoperability | Opt-in encrypted expiring drafts and stable referral submission IDs | Browser/device recovery tests, controlled sync/PWA, approved FHIR/DHIS2 mapping and institutional endpoints |
-| 9 QA/release | Frontend quality gate, disposable PostgreSQL contracts, exact observed trigger compatibility, migration parity checks | Real Auth/RLS/Storage/browser E2E, accessibility, restore, clinical sign-off and production authorization |
+| 7 R-PHI | Dedicated aggregate-only source, selectable facility/LGA/pathway charts, traceable deterministic monthly drafts and methodology/suppression safeguards | Cross-report disclosure approval, multi-period trends, validated signals, geographic-map requirements and controlled traceable AI reporting |
+| 8 Offline/interoperability | Opt-in encrypted expiring drafts, stable referral submission IDs and an opt-in static offline app shell with browser-tested cache boundaries | Authenticated browser/device draft recovery tests, controlled synchronization, cross-platform PWA installation, approved FHIR/DHIS2 mapping and institutional endpoints |
+| 9 QA/release | 112-test frontend quality gate, disposable PostgreSQL contracts, exact observed trigger compatibility, migration parity and real Chromium offline/chart smoke checks | Real Auth/RLS/Storage/browser E2E, accessibility, restore, clinical sign-off and production authorization |
 
 ## Next required sequence
 
