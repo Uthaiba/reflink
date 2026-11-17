@@ -23,4 +23,4 @@ Production has a different migration history. Never mark these staging versions 
 3. Reconcile out-of-ledger objects explicitly. Review ownership, broad historical grants, data-preserving changes and storage permissions.
 4. Only then assemble a reviewed active migration baseline and rehearse the two new atomic migrations plus authenticated clinical workflows in approved synthetic staging.
 
-Do not run this archive against either hosted project. CI currently validates integrity and quarantine, then runs the separate candidate/trigger-contract fixtures. It does not replay the archive. No hosted database, account, patient row, object or deployment was modified during recovery.
+Do not run this archive against either hosted project. CI now validates integrity/quarantine and replays the archive only inside a second disposable PostgreSQL database with explicit managed-service stubs. A separate observed-drift overlay matches selected staging schema metadata before atomic candidates are applied. See docs/BASELINE_REPLAY.md for verification and omitted scope. No hosted database, account, patient row, object or deployment was modified during recovery.
