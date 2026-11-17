@@ -5706,7 +5706,8 @@ function ReceivingDashboard() {
 
             status:
               "admitted",
-          }
+          }, { atomic: import.meta.env.VITE_ATOMIC_CLINICAL_SAVES_ENABLED === "true",
+            kind: "admission", expectedSnapshot: selectedInpatientReferral, operationId: crypto.randomUUID() }
         );
 
         setMessage(
@@ -5726,7 +5727,7 @@ function ReceivingDashboard() {
           setUncertainClinicalReferrals((previous) => new Set(previous).add(selectedInpatientReferral.id));
           setError("The clinical save outcome could not be confirmed. Your form is retained. Saving is paused for this referral in this workspace. Review its current record and ask an administrator to reconcile the outcome before retrying.");
         } else {
-          setError(err?.message === "INPATIENT_RECORD_CHANGED"
+          setError(["INPATIENT_RECORD_CHANGED", "CLINICAL_RECORD_CONFLICT"].includes(err?.message)
             ? "The clinical record has changed. Your form is retained. Refresh and compare the latest documentation before saving."
             : (err.message || "Clinical documentation could not be saved."));
         }
@@ -5828,7 +5829,8 @@ function ReceivingDashboard() {
 
             status:
               "discharged",
-          }
+          }, { atomic: import.meta.env.VITE_ATOMIC_CLINICAL_SAVES_ENABLED === "true",
+            kind: "discharge", expectedSnapshot: selectedInpatientReferral, operationId: crypto.randomUUID() }
         );
 
         setMessage(
@@ -5848,7 +5850,7 @@ function ReceivingDashboard() {
           setUncertainClinicalReferrals((previous) => new Set(previous).add(selectedInpatientReferral.id));
           setError("The clinical save outcome could not be confirmed. Your form is retained. Saving is paused for this referral in this workspace. Review its current record and ask an administrator to reconcile the outcome before retrying.");
         } else {
-          setError(err?.message === "INPATIENT_RECORD_CHANGED"
+          setError(["INPATIENT_RECORD_CHANGED", "CLINICAL_RECORD_CONFLICT"].includes(err?.message)
             ? "The clinical record has changed. Your form is retained. Refresh and compare the latest documentation before saving."
             : (err.message || "Clinical documentation could not be saved."));
         }
@@ -6191,7 +6193,9 @@ const handleStartAssessment = async (referralId) => {
         }
 
         const { data, recovered } = await commitClinicalUpdate(
-          supabase, selectedReferral.id, "under_assessment", updateData
+          supabase, selectedReferral.id, "under_assessment", updateData,
+          { atomic: import.meta.env.VITE_ATOMIC_CLINICAL_SAVES_ENABLED === "true",
+            kind: "assessment", expectedSnapshot: selectedReferral, operationId: crypto.randomUUID() }
         );
 
         setMessage(
@@ -6206,7 +6210,7 @@ const handleStartAssessment = async (referralId) => {
          */
         if (
           assessmentForm.disposition ===
-          "admitted"
+          "admitted" && data.status === "admitted"
         ) {
 
           const updatedReferral = {
@@ -6302,7 +6306,7 @@ const handleStartAssessment = async (referralId) => {
           setUncertainClinicalReferrals((previous) => new Set(previous).add(selectedReferral.id));
           setError("The clinical save outcome could not be confirmed. Your form is retained. Saving is paused for this referral in this workspace. Review its current record and ask an administrator to reconcile the outcome before retrying.");
         } else {
-          setError(err?.message === "ASSESSMENT_CHANGED"
+          setError(["ASSESSMENT_CHANGED", "CLINICAL_RECORD_CONFLICT"].includes(err?.message)
             ? "The clinical record has changed. Your form is retained. Refresh and compare the latest documentation before saving."
             : (err.message || "Clinical documentation could not be saved."));
         }

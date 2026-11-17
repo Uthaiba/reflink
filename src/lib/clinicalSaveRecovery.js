@@ -1,3 +1,5 @@
+import { saveClinicalTransaction } from "./clinicalTransaction.js";
+
 function matchesPatch(record, patch) {
   return Object.entries(patch).every(([field, expected]) => {
     if (!Object.hasOwn(record, field)) return false;
@@ -10,7 +12,10 @@ function matchesPatch(record, patch) {
   });
 }
 
-export async function commitClinicalUpdate(client, referralId, expectedStatus, patch) {
+export async function commitClinicalUpdate(client, referralId, expectedStatus, patch, options = {}) {
+  if (options.atomic === true) {
+    return saveClinicalTransaction(client, referralId, options.kind, options.expectedSnapshot, patch, options.operationId);
+  }
   try {
     const response = await client.from("referrals").update(patch)
       .eq("id", referralId).eq("status", expectedStatus).select().single();
