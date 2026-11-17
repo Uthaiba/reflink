@@ -42,6 +42,15 @@ assert any(row["kind"]=="function" and "register_referral_investigation_files" i
 assert any("register_referral_investigation_files" in key[1] for key in only_hosted), "Expected unmanaged function drift was not detected"
 print("test_replay_detects_known_out_of_ledger_registration_function: passed")
 
+run(Path("tests/database/observed_staging_overlay.sql").read_text(),database)
+reconciled=index(json.loads(run(inventory_sql,database)))
+remaining=sorted(key for key in set(reconciled)|set(hosted) if reconciled.get(key)!=hosted.get(key))
+report["reconciliation_remaining"]=remaining
+report["reconciliation_status"]="matched_selected_schema_metadata" if not remaining else "blocked"
+Path("baseline-replay-report.json").write_text(json.dumps(report,indent=2)+"\n")
+assert not remaining,remaining
+print("test_observed_drift_overlay_matches_selected_hosted_metadata: passed")
+
 for migration in sorted(Path("supabase/migrations").glob("*.sql")):
     run(migration.read_text(),database)
 preflight=json.loads(run(Path("database/checks/clinical_staging_preflight.sql").read_text(),database))
