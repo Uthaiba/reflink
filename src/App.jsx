@@ -1,4 +1,6 @@
 
+import { createPortal } from "react-dom";
+import { referralJourney, filterReceivingReferrals } from "./lib/referralPresentation.js";
 import { lazy, useEffect, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
 import { commitClinicalUpdate } from "./lib/clinicalSaveRecovery.js";
@@ -20,6 +22,7 @@ import "./App.css";
 import "./reflink-theme-professional.css";
 import "./admin-dashboard-modern.css";
 import "./reflink-clinical-accessibility.css";
+import "./referral-print.css";
 
 function formatPatientAge(ageInMonths) {
   const months = Number(ageInMonths);
@@ -377,7 +380,7 @@ function InvestigationResultCards({ investigations, editable = false, onResultCh
   );
 }
 
-function PrintReferralSheet({
+export function PrintReferralSheet({
   referral,
   copyLabel = "REFERRAL COPY",
 }) {
@@ -413,7 +416,7 @@ function PrintReferralSheet({
     referral?.receiving_facility_name ||
     "Not recorded";
 
-  return (
+  return createPortal(
     <div className="printable-referral-sheet">
 
       {/* =====================================================
@@ -488,7 +491,6 @@ function PrintReferralSheet({
       <section className="print-section">
 
         <div className="print-section-title">
-          <span>01</span>
           <h2>Patient Information</h2>
         </div>
 
@@ -548,7 +550,6 @@ function PrintReferralSheet({
         <section className="print-section">
 
           <div className="print-section-title">
-            <span>02</span>
             <h2>Next of Kin / Emergency Contact</h2>
           </div>
 
@@ -590,7 +591,6 @@ function PrintReferralSheet({
       <section className="print-section">
 
         <div className="print-section-title">
-          <span>03</span>
           <h2>Referral Pathway</h2>
         </div>
 
@@ -659,7 +659,6 @@ function PrintReferralSheet({
       <section className="print-section">
 
         <div className="print-section-title">
-          <span>04</span>
           <h2>Clinical Presentation</h2>
         </div>
 
@@ -708,7 +707,6 @@ function PrintReferralSheet({
       <section className="print-section">
 
         <div className="print-section-title">
-          <span>05</span>
           <h2>Treatment Given Before Referral</h2>
         </div>
 
@@ -730,7 +728,6 @@ function PrintReferralSheet({
       <section className="print-section">
 
         <div className="print-section-title">
-          <span>06</span>
           <h2>Diagnosis</h2>
         </div>
 
@@ -799,7 +796,6 @@ function PrintReferralSheet({
       <section className="print-section">
 
         <div className="print-section-title">
-          <span>07</span>
           <h2>Investigations & Results</h2>
         </div>
 
@@ -868,7 +864,6 @@ function PrintReferralSheet({
         <section className="print-section receiving-update-section">
 
           <div className="print-section-title">
-            <span>08</span>
             <h2>Receiving Facility Update</h2>
           </div>
 
@@ -941,7 +936,7 @@ function PrintReferralSheet({
 
             {referral?.disposition && (
               <div>
-                <span>Disposition</span>
+                <span>Disposition at Assessment</span>
                 <strong>
                   {formatClinicalLabel(
                     referral.disposition
@@ -957,52 +952,35 @@ function PrintReferralSheet({
       )}
 
 
+      {[
+        { title: "Inpatient Information", fields: [["Admission Date", "admission_at", true], ["Ward / Unit", "ward_unit"], ["Admission Diagnosis", "admission_diagnosis"], ["Clinical Progress", "clinical_progress"], ["Inpatient Treatment", "inpatient_treatment"]] },
+        { title: "Discharge Information", fields: [["Discharge Diagnosis", "discharge_diagnosis"], ["Condition at Discharge", "condition_at_discharge"], ["Discharge Medications", "discharge_medications"], ["Follow-up Plan", "follow_up_plan"], ["Discharged At", "discharged_at", true]] },
+      ].filter((section) => section.fields.some(([, field]) => referral?.[field])).map((section) => (
+        <section className="print-section" key={section.title}>
+          <div className="print-section-title"><h2>{section.title}</h2></div>
+          <div className="print-narrative-grid">{section.fields.map(([label, field, date]) => (
+            <div className="print-narrative-card" key={field}><span>{label}</span>
+              <p>{referral?.[field] ? (date ? formatReferralDateTime(referral[field]) : referral[field]) : "Not recorded"}</p>
+            </div>
+          ))}</div>
+        </section>
+      ))}
+
       {/* =====================================================
           REFERRAL CONTINUITY
       ===================================================== */}
       <section className="print-section">
 
         <div className="print-section-title">
-          <span>09</span>
           <h2>Referral Continuity</h2>
         </div>
 
-        <div className="print-continuity">
-
-          <div>
-            <span>01</span>
-            <strong>Sent</strong>
-          </div>
-
-          <div className="continuity-line" />
-
-          <div>
-            <span>02</span>
-            <strong>Acknowledged</strong>
-          </div>
-
-          <div className="continuity-line" />
-
-          <div>
-            <span>03</span>
-            <strong>Patient Arrived</strong>
-          </div>
-
-          <div className="continuity-line" />
-
-          <div>
-            <span>04</span>
-            <strong>Assessment</strong>
-          </div>
-
-          <div className="continuity-line" />
-
-          <div>
-            <span>05</span>
-            <strong>Outcome</strong>
-          </div>
-
-        </div>
+        <table className="print-table">
+          <thead><tr><th>Event</th><th>Date and time (local)</th></tr></thead>
+          <tbody>{referralJourney(referral).map((step) => (
+            <tr key={step.key}><td>{step.label}</td><td>{step.timestamp ? formatReferralDateTime(step.timestamp) : "Not recorded"}</td></tr>
+          ))}</tbody>
+        </table>
 
       </section>
 
@@ -1058,7 +1036,7 @@ function PrintReferralSheet({
 
       </footer>
 
-    </div>
+    </div>, document.body
   );
 }
 
@@ -1362,33 +1340,7 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
 }
 
 function ReferralTimeline({ referral }) {
-  const steps = [
-    {
-      key: "created",
-      label: "Referral Created",
-      timestamp: referral.created_at,
-    },
-    {
-      key: "acknowledged",
-      label: "Referral Acknowledged",
-      timestamp: referral.acknowledged_at,
-    },
-    {
-      key: "patient-arrived",
-      label: "Patient Arrived",
-      timestamp: referral.patient_arrived_at,
-    },
-    {
-      key: "assessment",
-      label: "Assessment Completed",
-      timestamp: referral.assessment_completed_at,
-    },
-    {
-      key: "completed",
-      label: "Referral Completed",
-      timestamp: referral.completed_at || referral.discharged_at,
-    },
-  ];
+  const steps = referralJourney(referral);
 
   let activeFound = false;
 
@@ -2618,6 +2570,7 @@ const handleSignIn = async () => {
 
             <NewReferralForm
               ownerId={profile?.id}
+              referringFacilityId={profile?.facility_id}
               onBack={() => setScreen("dashboard")}
             />
 
@@ -2832,7 +2785,7 @@ function InvestigationResultEditor({ item, onChange, onFileChange }) {
   );
 }
 
-function NewReferralForm({ onBack, ownerId }) {
+function NewReferralForm({ onBack, ownerId, referringFacilityId }) {
   const clientSubmissionId = useRef(crypto.randomUUID());
   const submissionInFlight = useRef(false);
   const [fromDeviceDraft, setFromDeviceDraft] = useState(false);
@@ -3066,6 +3019,8 @@ provisional_diagnosis: "",
   const printDraftReferral = () => {
     const draftReferral = {
       referral_number: "DRAFT REFERRAL",
+      referring_facility: facilities.find((facility) => facility.id === referringFacilityId),
+      receiving_facility: facilities.find((facility) => facility.id === form.receiving_facility_id),
       patient_identifier: form.patient_identifier,
       patient_age_months: normalizePatientAgeToMonths(
         form.patient_age_months,
@@ -4190,8 +4145,11 @@ function PHCStaffDashboard({ onNewReferral }) {
           follow_up_plan,
           discharged_at,
 
+          completed_at,
           referring_facility_id,
-          receiving_facility_id
+          receiving_facility_id,
+          referring_facility:facilities!referrals_referring_facility_id_fkey (id, name, lga, state),
+          receiving_facility:facilities!referrals_receiving_facility_id_fkey (id, name, lga, state)
         `)
         .eq(
           "referring_facility_id",
@@ -5142,6 +5100,7 @@ function PHCStaffDashboard({ onNewReferral }) {
    ========================================================= */
 
 function ReceivingDashboard() {
+  const [referralView, setReferralView] = useState("active");
 
   const [referrals, setReferrals] =
     useState([]);
@@ -5509,6 +5468,7 @@ function ReceivingDashboard() {
             referring_facility_id,
             receiving_facility_id,
 
+            receiving_facility:facilities!referrals_receiving_facility_id_fkey (id, name, lga, state),
             referring_facility:facilities!referrals_referring_facility_id_fkey (
               id,
               name,
@@ -6365,12 +6325,7 @@ const handleStartAssessment = async (referralId) => {
      FILTERED REFERRALS
      ======================================================= */
 
-  const filteredReferrals =
-    referrals.filter(
-      (referral) =>
-        referral.status !== "completed" &&
-        referral.status !== "discharged"
-    );
+  const filteredReferrals = filterReceivingReferrals(referrals, referralView);
 
   /* =======================================================
      USER INTERFACE
@@ -6457,7 +6412,7 @@ const handleStartAssessment = async (referralId) => {
 
         <div className="stat-card">
           <span>
-            Completed
+            Discharged / Completed
           </span>
 
           <strong>
@@ -6482,7 +6437,7 @@ const handleStartAssessment = async (referralId) => {
             </span>
 
             <h3>
-              Incoming Referrals
+              Referrals
             </h3>
 
             <p>
@@ -6493,6 +6448,14 @@ const handleStartAssessment = async (referralId) => {
 
         </div>
 
+        <label className="referral-view-filter">Show referrals
+          <select value={referralView} onChange={(event) => setReferralView(event.target.value)}>
+            <option value="active">Active referrals</option>
+            <option value="closed">Discharged / completed</option>
+            <option value="all">All referrals</option>
+          </select>
+        </label>
+
         {loading && (
           <p>
             Loading incoming referrals...
@@ -6500,10 +6463,10 @@ const handleStartAssessment = async (referralId) => {
         )}
 
         {!loading &&
-          referrals.length === 0 &&
+          filteredReferrals.length === 0 &&
           !error && (
             <p>
-              No incoming referrals found.
+              No referrals in this view.
             </p>
           )}
 
@@ -7074,7 +7037,7 @@ const handleStartAssessment = async (referralId) => {
             </p>}
             <ReferralSourceDetails
               referral={selectedReferral}
-              editableInvestigationResults={atomicInvestigationUpdatesEnabled && !["completed", "cancelled"].includes(selectedReferral.status)}
+              editableInvestigationResults={atomicInvestigationUpdatesEnabled && !["completed", "discharged", "cancelled"].includes(selectedReferral.status)}
               onInvestigationFileUpload={handleInvestigationFileUpload}
               onInvestigationResultChange={
                 handleInvestigationResultChange
@@ -7323,12 +7286,25 @@ const handleStartAssessment = async (referralId) => {
                 </h3>
 
                 <p>
-                  The complete information from the referring PHC is shown
-                  above. The receiving-facility clinical assessment form will
-                  become available when the referral reaches
-                  <strong> Under Assessment</strong>.
+                  {["discharged", "completed"].includes(selectedReferral.status)
+                    ? "This record is available for review and printing."
+                    : "The clinical assessment form is available when the referral is Under Assessment."}
                 </p>
               </div>
+            )}
+
+            {["discharged", "completed"].includes(selectedReferral.status) && (
+              <section aria-label="Saved receiving facility record">
+                <h3>Receiving Facility Record</h3>
+                {[
+                  ["Assessment Findings", "assessment_findings"], ["Final Diagnosis", "final_diagnosis"],
+                  ["Clinical Feedback", "clinical_feedback"], ["Disposition at Assessment", "disposition"],
+                  ["Ward / Unit", "ward_unit"], ["Admission Diagnosis", "admission_diagnosis"],
+                  ["Clinical Progress", "clinical_progress"], ["Inpatient Treatment", "inpatient_treatment"],
+                  ["Discharge Diagnosis", "discharge_diagnosis"], ["Condition at Discharge", "condition_at_discharge"],
+                  ["Discharge Medications", "discharge_medications"], ["Follow-up Plan", "follow_up_plan"],
+                ].map(([label, field]) => <div className="detail-row" key={field}><strong>{label}</strong><p>{selectedReferral[field] || "Not recorded"}</p></div>)}
+              </section>
             )}
 
             <button
@@ -7479,3 +7455,4 @@ function AdministratorRoute({ children }) {
 
 
 export default App;
+

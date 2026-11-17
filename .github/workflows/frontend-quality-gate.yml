@@ -75,3 +75,15 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Check synthetic UI and offline cache boundaries
         run: npm run test:browser
+
+      - name: Install PDF text inspection
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - name: Verify synthetic referral print layout and contents
+        run: node tests/referral-print-browser.mjs
+      - name: Retain synthetic print evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-referral-print
+          path: test-results/
+          retention-days: 7
