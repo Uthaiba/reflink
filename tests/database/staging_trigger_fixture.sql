@@ -60,7 +60,7 @@ BEGIN
   END IF;
   RETURN NULL;
 END;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.enqueue_referral_dashboard_notification()
  RETURNS trigger
@@ -107,7 +107,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.log_referral_status_change()
  RETURNS trigger
@@ -156,7 +156,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.require_counter_referral_before_completion()
  RETURNS trigger
@@ -171,7 +171,7 @@ begin
   end if;
   return new;
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.set_referral_ack_due_at()
  RETURNS trigger
@@ -189,7 +189,7 @@ begin
   new.ack_due_at := coalesce(new.created_at, now()) + make_interval(mins => minutes_due);
   return new;
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.validate_referral_entry()
  RETURNS trigger
@@ -211,7 +211,7 @@ begin
   then raise exception 'Emergency referrals require clinical/physical findings.'; end if;
   return new;
 end;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.validate_referral_status_transition()
  RETURNS trigger
@@ -299,7 +299,7 @@ BEGIN
   END IF;
 
 END;
-$function$
+$function$;
 
 CREATE TRIGGER enqueue_referral_dashboard_notification AFTER INSERT OR UPDATE OF status ON public.referrals FOR EACH ROW EXECUTE FUNCTION public.enqueue_referral_dashboard_notification();
 CREATE TRIGGER referral_ack_due_at_trigger BEFORE INSERT OR UPDATE OF urgency, created_at ON public.referrals FOR EACH ROW EXECUTE FUNCTION public.set_referral_ack_due_at();
