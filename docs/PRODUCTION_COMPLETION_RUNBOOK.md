@@ -1,5 +1,7 @@
 # REFLINK production completion and release runbook
 
+Hosted status update (17 November 2026): the two atomic migrations are installed in synthetic staging, the six-point structural preflight passes, and the branch-specific preview enables the two atomic flags against staging only. See HOSTED_STAGING_INSTALLATION_2026-11-17.md. Production remains NO-GO. Earlier review-only/unapplied statements below describe the pre-installation stage and must not be interpreted as current hosted status.
+
 Status: source implementation and synthetic CI evidence only. Production NO-GO.
 Use with MASTER_PLAN_AUDIT_2026-11-16.md and CLINICAL_PRODUCTION_ACCEPTANCE_GATE.md.
 

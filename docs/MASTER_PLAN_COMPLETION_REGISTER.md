@@ -1,6 +1,6 @@
 # Master product completion register — 17 November 2026
 
-This is the current cross-phase handover, not a declaration of completion. Continue the existing app and PR #4. Preserve all existing facilities, users, referrals and documents. Production and hosted synthetic staging have received no changes in this continuation.
+This is the current cross-phase handover, not a declaration of completion. Continue the existing app and PR #4. Preserve all existing facilities, users, referrals and documents. Production remains unchanged. Synthetic staging now has the two verified atomic migrations and a branch-specific preview; actual authenticated clinical verification remains blocked on a completed sign-in. See HOSTED_STAGING_INSTALLATION_2026-11-17.md.
 
 | Phase | Repository evidence | Remaining acceptance |
 | --- | --- | --- |

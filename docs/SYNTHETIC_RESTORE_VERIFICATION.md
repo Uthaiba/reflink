@@ -7,3 +7,5 @@ A clearly marked synthetic draft referral and both operation-ledger entries are 
 The test inherits the loopback server/database/fixture-marker guards from the baseline runner. CREATE DATABASE and pg_restore --clean are restricted to that new disposable database; these commands are not run on hosted staging or production.
 
 This verifies PostgreSQL schema/data/selected permissions restoration using managed-service stubs. It does NOT certify a production backup, hosted PITR, real Auth/session recovery, private file/blob restoration, encryption/key recovery, recovery time/point objectives or a clinical sign-off. Actual production backup and restore evidence remains a release gate. Runtime success must be confirmed from CI before marking this rehearsal passed.
+
+Verified code ca337407bfab8d67e494f8ee0c6403b1fde37b58 passed database workflow #52 and frontend workflows #126/#127, including the restore rehearsal, 112 unit tests, lint/build, synthetic Chromium checks and GitGuardian. The first permission comparison included the intentionally different database name; it was corrected to compare actual privilege fields, and the corrected run passed.

@@ -1,5 +1,7 @@
 # Atomic clinical saves — review candidate
 
+Hosted status update (17 November 2026): the two atomic migrations are installed in synthetic staging, the six-point structural preflight passes, and the branch-specific preview enables the two atomic flags against staging only. See HOSTED_STAGING_INSTALLATION_2026-11-17.md. Production remains NO-GO. Earlier review-only/unapplied statements below describe the pre-installation stage and must not be interpreted as current hosted status.
+
 The proposed `database/changes/atomic_clinical_updates.sql` adds a transaction for receiving assessment, admission and discharge saves. It locks the authorized referral, compares a complete clinical snapshot, validates an allowlisted patch, records an idempotent operation and executes existing audit triggers in one transaction. Response projections exclude patient identity fields. Active account/session, receiving role, facility and password-reset checks run on replay as well as first save.
 
 Apply only after the investigation candidate in an isolated rehearsal. This file is not an applied migration. Its direct-write trigger rejects legacy frontend clinical writes. The frontend adapter is now integrated behind `VITE_ATOMIC_CLINICAL_SAVES_ENABLED=true`; the default is disabled. Do not apply this changeset to a hosted environment before the adapter and flag are rehearsed together. Production behaviour is unchanged while the flag is absent.
