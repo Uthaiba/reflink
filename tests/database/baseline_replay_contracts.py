@@ -51,8 +51,15 @@ Path("baseline-replay-report.json").write_text(json.dumps(report,indent=2)+"\n")
 assert not remaining,remaining
 print("test_observed_drift_overlay_matches_selected_hosted_metadata: passed")
 
+# Reproduce observed hosted legacy access to prove the pending cutover retires it.
+run("GRANT EXECUTE ON FUNCTION public.register_referral_investigation_files(uuid,jsonb) TO authenticated",database)
+assert run("SELECT has_function_privilege('authenticated','public.register_referral_investigation_files(uuid,jsonb)','EXECUTE')",database)=="t"
 for migration in sorted(Path("supabase/migrations").glob("*.sql")):
     run(migration.read_text(),database)
 preflight=json.loads(run(Path("database/checks/clinical_staging_preflight.sql").read_text(),database))
 assert preflight["blocking_checks"]==0,preflight
 print("test_atomic_candidates_apply_on_recovered_baseline_and_pass_preflight: passed")
+
+assert run("SELECT has_function_privilege('authenticated','public.register_referral_investigation_files(uuid,jsonb)','EXECUTE')",database)=="f"
+assert run("SELECT has_function_privilege('anon','public.register_referral_investigation_files(uuid,jsonb)','EXECUTE')",database)=="f"
+print("test_atomic_cutover_retires_legacy_privileged_writer: passed")

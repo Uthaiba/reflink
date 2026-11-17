@@ -156,4 +156,13 @@ END; $guard$;
 REVOKE ALL ON FUNCTION public.guard_investigation_client_writes() FROM PUBLIC,anon,authenticated;
 CREATE TRIGGER guard_investigation_client_writes BEFORE UPDATE ON public.referrals
   FOR EACH ROW EXECUTE FUNCTION public.guard_investigation_client_writes();
+-- Retire the legacy privileged attachment writer during coordinated cutover.
+-- Its definition lacks the new session/password/closed-record checks.
+DO $retire_legacy$
+BEGIN
+  IF to_regprocedure('public.register_referral_investigation_files(uuid,jsonb)') IS NOT NULL THEN
+    REVOKE ALL ON FUNCTION public.register_referral_investigation_files(uuid,jsonb) FROM PUBLIC,anon,authenticated;
+  END IF;
+END;
+$retire_legacy$;
 COMMIT;
