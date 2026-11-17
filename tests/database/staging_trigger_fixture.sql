@@ -1,4 +1,6 @@
 -- Disposable fixture only; exact staging trigger bodies inspected 17 November 2026.
+-- Replace the earlier synthetic audit trigger with the observed staging audit.
+DROP TRIGGER fixture_audit ON public.referrals;
 ALTER TABLE public.referrals
  ADD COLUMN patient_identifier text DEFAULT 'SYNTHETIC ONLY',
  ADD COLUMN patient_age_months integer DEFAULT 240,
