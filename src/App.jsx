@@ -1,6 +1,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
+import { commitClinicalUpdate } from "./lib/clinicalSaveRecovery.js";
 import { assessmentFormFor, inpatientFormFor, hasClinicalFormChanges } from "./lib/clinicalFormState.js";
 import { confirmClinicalNavigation, registerClinicalDraft } from "./lib/clinicalDraftNavigation.js";
 import EncryptedDraftPanel from "./components/EncryptedDraftPanel.jsx";
@@ -5220,6 +5221,8 @@ function ReceivingDashboard() {
   );
   useEffect(() => registerClinicalDraft(window, () => hasUnsavedReceivingForm), [hasUnsavedReceivingForm]);
 
+  const clinicalSaveInFlight = useRef(false);
+  const [uncertainClinicalReferrals, setUncertainClinicalReferrals] = useState(() => new Set());
   const investigationMutationInFlight = useRef(false);
   const handleInvestigationFileUpload = async (index, file) => {
     if (!atomicInvestigationUpdatesEnabled || investigationMutationInFlight.current) return;
@@ -5632,6 +5635,8 @@ function ReceivingDashboard() {
         return;
       }
 
+      if (clinicalSaveInFlight.current || uncertainClinicalReferrals.has(selectedInpatientReferral.id)) return;
+      clinicalSaveInFlight.current = true;
       setError("");
       setMessage("");
 
@@ -5679,12 +5684,8 @@ function ReceivingDashboard() {
               ).toISOString()
             : new Date().toISOString();
 
-        const {
-          data,
-          error,
-        } = await supabase
-          .from("referrals")
-          .update({
+        const { data, recovered } = await commitClinicalUpdate(
+          supabase, selectedInpatientReferral.id, "admitted", {
 
             admission_at:
               admissionAt,
@@ -5705,22 +5706,14 @@ function ReceivingDashboard() {
 
             status:
               "admitted",
-          })
-          .eq(
-            "id",
-            selectedInpatientReferral.id
-          )
-          .eq("status", "admitted")
-          .select()
-          .single();
-
-        if (error) {
-          throw error;
-        }
+          }
+        );
 
         setMessage(
           `Admission information for ${data.referral_number} saved successfully.`
         );
+        if (recovered) setMessage("Matching clinical documentation is present in the referral after confirmation was interrupted. Review the saved record before any further update.");
+
 
         setSelectedInpatientReferral(
           null
@@ -5729,19 +5722,17 @@ function ReceivingDashboard() {
         await loadIncomingReferrals();
 
       } catch (err) {
-
-        console.error(
-          "SAVE ADMISSION ERROR:",
-          err
-        );
-
-        setError(
-          err?.message === "INPATIENT_RECORD_CHANGED"
-            ? "The inpatient record has changed since this form was opened. Refresh and review the latest documentation before saving."
-            : (err.message || "Unable to save admission information.")
-        );
+        if (err?.message === "CLINICAL_SAVE_UNCONFIRMED") {
+          setUncertainClinicalReferrals((previous) => new Set(previous).add(selectedInpatientReferral.id));
+          setError("The clinical save outcome could not be confirmed. Your form is retained. Saving is paused for this referral in this workspace. Review its current record and ask an administrator to reconcile the outcome before retrying.");
+        } else {
+          setError(err?.message === "INPATIENT_RECORD_CHANGED"
+            ? "The clinical record has changed. Your form is retained. Refresh and compare the latest documentation before saving."
+            : (err.message || "Clinical documentation could not be saved."));
+        }
 
       } finally {
+        clinicalSaveInFlight.current = false;
 
         setActionLoading(null);
 
@@ -5763,6 +5754,8 @@ function ReceivingDashboard() {
         return;
       }
 
+      if (clinicalSaveInFlight.current || uncertainClinicalReferrals.has(selectedInpatientReferral.id)) return;
+      clinicalSaveInFlight.current = true;
       setError("");
       setMessage("");
 
@@ -5814,12 +5807,8 @@ function ReceivingDashboard() {
         const dischargedAt =
           new Date().toISOString();
 
-        const {
-          data,
-          error,
-        } = await supabase
-          .from("referrals")
-          .update({
+        const { data, recovered } = await commitClinicalUpdate(
+          supabase, selectedInpatientReferral.id, "admitted", {
 
             discharge_diagnosis:
               admissionForm.discharge_diagnosis,
@@ -5839,22 +5828,14 @@ function ReceivingDashboard() {
 
             status:
               "discharged",
-          })
-          .eq(
-            "id",
-            selectedInpatientReferral.id
-          )
-          .eq("status", "admitted")
-          .select()
-          .single();
-
-        if (error) {
-          throw error;
-        }
+          }
+        );
 
         setMessage(
           `Referral ${data.referral_number} discharged successfully.`
         );
+        if (recovered) setMessage("Matching clinical documentation is present in the referral after confirmation was interrupted. Review the saved record before any further update.");
+
 
         setSelectedInpatientReferral(
           null
@@ -5863,19 +5844,17 @@ function ReceivingDashboard() {
         await loadIncomingReferrals();
 
       } catch (err) {
-
-        console.error(
-          "DISCHARGE ERROR:",
-          err
-        );
-
-        setError(
-          err?.message === "INPATIENT_RECORD_CHANGED"
-            ? "The inpatient record has changed since this form was opened. Refresh and review the latest documentation before saving."
-            : (err.message || "Unable to discharge patient.")
-        );
+        if (err?.message === "CLINICAL_SAVE_UNCONFIRMED") {
+          setUncertainClinicalReferrals((previous) => new Set(previous).add(selectedInpatientReferral.id));
+          setError("The clinical save outcome could not be confirmed. Your form is retained. Saving is paused for this referral in this workspace. Review its current record and ask an administrator to reconcile the outcome before retrying.");
+        } else {
+          setError(err?.message === "INPATIENT_RECORD_CHANGED"
+            ? "The clinical record has changed. Your form is retained. Refresh and compare the latest documentation before saving."
+            : (err.message || "Clinical documentation could not be saved."));
+        }
 
       } finally {
+        clinicalSaveInFlight.current = false;
 
         setActionLoading(null);
 
@@ -6076,6 +6055,8 @@ const handleStartAssessment = async (referralId) => {
         return;
       }
 
+      if (clinicalSaveInFlight.current || uncertainClinicalReferrals.has(selectedReferral.id)) return;
+      clinicalSaveInFlight.current = true;
       setError("");
       setMessage("");
 
@@ -6209,27 +6190,15 @@ const handleStartAssessment = async (referralId) => {
           throw new Error("ASSESSMENT_CHANGED");
         }
 
-        const {
-          data,
-          error,
-        } = await supabase
-          .from("referrals")
-          .update(updateData)
-          .eq(
-            "id",
-            selectedReferral.id
-          )
-          .eq("status", "under_assessment")
-          .select()
-          .single();
-
-        if (error) {
-          throw error;
-        }
+        const { data, recovered } = await commitClinicalUpdate(
+          supabase, selectedReferral.id, "under_assessment", updateData
+        );
 
         setMessage(
           `Clinical assessment for ${data.referral_number} saved successfully.`
         );
+        if (recovered) setMessage("Matching clinical documentation is present in the referral after confirmation was interrupted. Review the saved record before any further update.");
+
 
         /*
          * If admitted, immediately open
@@ -6329,19 +6298,17 @@ const handleStartAssessment = async (referralId) => {
         await loadIncomingReferrals();
 
       } catch (err) {
-
-        console.error(
-          "ASSESSMENT ERROR:",
-          err
-        );
-
-        setError(
-          err?.message === "ASSESSMENT_CHANGED"
-            ? "This referral assessment has changed since you opened it. Refresh and review the latest clinical documentation before saving."
-            : (err.message || "Unable to save clinical assessment.")
-        );
+        if (err?.message === "CLINICAL_SAVE_UNCONFIRMED") {
+          setUncertainClinicalReferrals((previous) => new Set(previous).add(selectedReferral.id));
+          setError("The clinical save outcome could not be confirmed. Your form is retained. Saving is paused for this referral in this workspace. Review its current record and ask an administrator to reconcile the outcome before retrying.");
+        } else {
+          setError(err?.message === "ASSESSMENT_CHANGED"
+            ? "The clinical record has changed. Your form is retained. Refresh and compare the latest documentation before saving."
+            : (err.message || "Clinical documentation could not be saved."));
+        }
 
       } finally {
+        clinicalSaveInFlight.current = false;
 
         setActionLoading(
           null
@@ -6409,6 +6376,9 @@ const handleStartAssessment = async (referralId) => {
 
   return (
     <>
+      {(uncertainClinicalReferrals.has(selectedReferral?.id) || uncertainClinicalReferrals.has(selectedInpatientReferral?.id)) && <p role="alert" className="login-error">
+        Saving is paused for this referral because a previous save could not be confirmed. Your form remains available. Review the current referral and arrange reconciliation before retrying.
+      </p>}
       <ConnectivityNotice />
 
       <div className="dashboard-actions">
@@ -6895,7 +6865,7 @@ const handleStartAssessment = async (referralId) => {
                 className="primary-button full-width"
                 disabled={
                   actionLoading ===
-                  selectedInpatientReferral.id
+                  selectedInpatientReferral.id || uncertainClinicalReferrals.has(selectedInpatientReferral.id)
                 }
               >
                 {actionLoading ===
@@ -6994,7 +6964,7 @@ const handleStartAssessment = async (referralId) => {
                 className="primary-button full-width"
                 disabled={
                   actionLoading ===
-                  selectedInpatientReferral.id
+                  selectedInpatientReferral.id || uncertainClinicalReferrals.has(selectedInpatientReferral.id)
                 }
               >
                 {actionLoading ===
@@ -7330,7 +7300,7 @@ const handleStartAssessment = async (referralId) => {
                     className="primary-button full-width"
                     disabled={
                       actionLoading ===
-                      selectedReferral.id
+                      selectedReferral.id || uncertainClinicalReferrals.has(selectedReferral.id)
                     }
                   >
                     {actionLoading ===
