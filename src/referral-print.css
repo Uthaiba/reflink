@@ -46,3 +46,12 @@
   .printable-referral-sheet .print-document-footer > div { display: inline-flex !important; gap: 2mm; margin-right: 4mm; }
   .printable-referral-sheet .print-document-footer p { margin: 1mm 0 0 !important; }
 }
+
+/* Keep the long, discharged acceptance record compact without shrinking text. */
+@media print {
+  .printable-referral-sheet .print-table th,
+  .printable-referral-sheet .print-table td { padding: 0.8mm 2mm !important; }
+  .printable-referral-sheet .print-narrative-grid > div { padding: 1.2mm 1.8mm !important; }
+  .printable-referral-sheet .print-section { margin-top: 1.5mm !important; }
+  .printable-referral-sheet .print-document-footer { margin-top: 2mm !important; padding-top: 1mm !important; }
+}
