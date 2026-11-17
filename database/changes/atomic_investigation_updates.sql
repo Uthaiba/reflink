@@ -49,7 +49,7 @@ BEGIN
     AND (s.not_after IS NULL OR s.not_after > now()) FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
   SELECT role, facility_id INTO v_role,v_facility FROM public.profiles
-    WHERE id=v_actor FOR SHARE;
+    WHERE id=v_actor AND must_change_password=false FOR SHARE;
   IF NOT FOUND OR v_role NOT IN ('phc_staff','receiving_staff') OR v_facility IS NULL
   THEN RAISE EXCEPTION 'Not authorized' USING ERRCODE='42501'; END IF;
 

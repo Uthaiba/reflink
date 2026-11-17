@@ -1,4 +1,3 @@
-ALTER TABLE public.profiles ADD COLUMN must_change_password boolean NOT NULL DEFAULT false;
 ALTER TABLE public.referrals
   ADD COLUMN referral_number text DEFAULT 'SYNTHETIC',
   ADD COLUMN assessment_findings text,

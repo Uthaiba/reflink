@@ -21,7 +21,7 @@ def uid():
 
 def setup():
     run(open("tests/database/fixture.sql").read())
-    run(open("database/changes/atomic_investigation_updates.sql").read())
+    run(open("supabase/migrations/20261117135653_atomic_investigation_updates.sql").read())
 
 def identity(role="receiving_staff", facility=None, banned=False, expired=False):
     actor, session, facility = uid(), uid(), facility or uid()
@@ -130,9 +130,25 @@ def test_phc_attachment_registration():
     # A fresh key cannot replace an already registered PHC document.
     save(actor,ref,saved["investigation_records"],patch,ok=False)
 
+def test_investigation_password_gate_on_save_and_replay():
+    actor=identity()
+    ref,expected,_=referral(actor)
+    key=uid()
+    patch={"result_notes":"Synthetic result"}
+    run("UPDATE profiles SET must_change_password=true WHERE id="+literal(actor[0]))
+    save(actor,ref,expected,patch,key,ok=False)
+    assert count(ref)==0
+    run("UPDATE profiles SET must_change_password=false WHERE id="+literal(actor[0]))
+    result=save(actor,ref,expected,patch,key)
+    assert result["status"]=="saved"
+    run("UPDATE profiles SET must_change_password=true WHERE id="+literal(actor[0]))
+    save(actor,ref,expected,patch,key,ok=False)
+    assert count(ref)==1
+
+
 setup()
 for case in [test_concurrency_and_idempotency,test_authorization_and_closed_records,
              test_patch_validation_and_rollback,test_legacy_and_direct_bypass,
-             test_phc_attachment_registration]:
+             test_phc_attachment_registration,test_investigation_password_gate_on_save_and_replay]:
     case()
     print(case.__name__+": passed")

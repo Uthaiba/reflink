@@ -1,7 +1,7 @@
 name: REFLINK synthetic database contracts
 on:
   pull_request:
-    paths: ['database/**', 'tests/database/**', '.github/workflows/database-contracts.yml']
+    paths: ['supabase/migrations/**', 'database/**', 'tests/database/**', '.github/workflows/database-contracts.yml']
   push:
     branches: ['reflink/master-plan-continuation-20261116', 'reflink/master-plan-review-20261117']
     paths: ['database/**', 'tests/database/**', '.github/workflows/database-contracts.yml']
@@ -59,7 +59,9 @@ jobs:
               raise RuntimeError("Synthetic database did not become ready")
           PY
       - name: Run synthetic transaction and authorization contracts
-        run: python3 tests/database/staging_trigger_contracts.py
+        run: |
+          python3 tests/database/migration_package_contracts.py
+          python3 tests/database/staging_trigger_contracts.py
       - name: Remove disposable database
         if: always()
         run: docker rm --force reflink-synthetic-contracts >/dev/null 2>&1 || true

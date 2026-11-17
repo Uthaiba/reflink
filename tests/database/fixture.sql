@@ -8,7 +8,7 @@ CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
   SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
 CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$
   SELECT coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb $$;
-CREATE TABLE public.profiles(id uuid PRIMARY KEY, role text, facility_id uuid);
+CREATE TABLE public.profiles(id uuid PRIMARY KEY, role text, facility_id uuid, must_change_password boolean NOT NULL DEFAULT false);
 CREATE TABLE public.referrals(id uuid PRIMARY KEY, investigation_records jsonb, status text,
   referring_user_id uuid, referring_facility_id uuid, receiving_facility_id uuid);
 CREATE TABLE storage.objects(bucket_id text,name text,owner_id text,metadata jsonb);
