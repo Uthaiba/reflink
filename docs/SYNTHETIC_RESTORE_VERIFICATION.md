@@ -1,0 +1,9 @@
+# Synthetic restore rehearsal
+
+The disposable PostgreSQL workflow now runs pg_dump in custom format and pg_restore into a separate fresh database after baseline reconciliation and atomic migration rehearsal. It retains ownership and ACLs rather than stripping permissions.
+
+A clearly marked synthetic draft referral and both operation-ledger entries are added before backup. The test compares source/restored selected schema metadata, the complete synthetic referral row, audit counts, both operation counts, browser-role column privileges, structural preflight and legacy writer denial. The backup exists only in a temporary directory and is not uploaded as an artifact.
+
+The test inherits the loopback server/database/fixture-marker guards from the baseline runner. CREATE DATABASE and pg_restore --clean are restricted to that new disposable database; these commands are not run on hosted staging or production.
+
+This verifies PostgreSQL schema/data/selected permissions restoration using managed-service stubs. It does NOT certify a production backup, hosted PITR, real Auth/session recovery, private file/blob restoration, encryption/key recovery, recovery time/point objectives or a clinical sign-off. Actual production backup and restore evidence remains a release gate. Runtime success must be confirmed from CI before marking this rehearsal passed.
