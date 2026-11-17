@@ -59,7 +59,7 @@ jobs:
               raise RuntimeError("Synthetic database did not become ready")
           PY
       - name: Run synthetic transaction and authorization contracts
-        run: python3 tests/database/investigation_contracts.py
+        run: python3 tests/database/clinical_contracts.py
       - name: Remove disposable database
         if: always()
         run: docker rm --force reflink-synthetic-contracts >/dev/null 2>&1 || true
