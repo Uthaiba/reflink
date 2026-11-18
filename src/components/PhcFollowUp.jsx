@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase.js";
 
-export default function PhcFollowUp({ referralId }) {
+export default function PhcFollowUp({ referralId, dischargedAt }) {
   const [history, setHistory] = useState(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -22,8 +22,15 @@ export default function PhcFollowUp({ referralId }) {
     if (saving.current) return;
     const form = event.currentTarget;
     const fields = new FormData(form);
+    const encounter = new Date(fields.get("time"));
+    if (!Number.isFinite(encounter.getTime()) || encounter > new Date() ||
+        (dischargedAt && encounter < new Date(dischargedAt))) {
+      setMessage("Choose an encounter time after discharge and no later than now. Check the year.");
+      form.elements.namedItem("time").focus();
+      return;
+    }
     const payload = { p_referral: referralId, p_kind: fields.get("kind"),
-      p_encounter: new Date(fields.get("time")).toISOString(), p_outcome: fields.get("outcome"),
+      p_encounter: encounter.toISOString(), p_outcome: fields.get("outcome"),
       p_next: fields.get("next") };
     const signature = JSON.stringify(payload);
     if (operation.current?.signature !== signature) operation.current = { signature, id: crypto.randomUUID() };

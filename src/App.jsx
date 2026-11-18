@@ -5044,7 +5044,7 @@ function PHCStaffDashboard({ onNewReferral }) {
 
             <hr />
 
-            {["discharged", "completed"].includes(selectedReferral.status) && <PhcFollowUp key={selectedReferral.id} referralId={selectedReferral.id} />}
+            {["discharged", "completed"].includes(selectedReferral.status) && <PhcFollowUp key={selectedReferral.id} referralId={selectedReferral.id} dischargedAt={selectedReferral.discharged_at} />}
             {/* BACK */}
 
             <button
