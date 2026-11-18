@@ -1,3 +1,4 @@
+import HospitalFeedback from "./components/HospitalFeedback.jsx";
 import PhcFollowUp from "./components/PhcFollowUp.jsx";
 
 import { createPortal } from "react-dom";
@@ -5044,6 +5045,7 @@ function PHCStaffDashboard({ onNewReferral }) {
 
             <hr />
 
+            {["discharged", "completed"].includes(selectedReferral.status) && <HospitalFeedback key={selectedReferral.id} referral={selectedReferral} />}
             {["discharged", "completed"].includes(selectedReferral.status) && <PhcFollowUp key={selectedReferral.id} referralId={selectedReferral.id} dischargedAt={selectedReferral.discharged_at} />}
             {/* BACK */}
 
@@ -7284,6 +7286,12 @@ const handleStartAssessment = async (referralId) => {
                 ].map(([label, field]) => <div className="detail-row" key={field}><strong>{label}</strong><p>{selectedReferral[field] || "Not recorded"}</p></div>)}
               </section>
             )}
+
+            {["discharged", "completed"].includes(selectedReferral.status) && <HospitalFeedback key={selectedReferral.id} referral={selectedReferral} onComplete={completedAt => {
+              const update = row => row?.id === selectedReferral.id ? {...row, status: "completed", completed_at: completedAt} : row;
+              setSelectedReferral(update);
+              setReferrals(rows => rows.map(update));
+            }} />}
 
             <button
               type="button"
