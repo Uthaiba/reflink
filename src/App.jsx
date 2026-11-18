@@ -1,3 +1,4 @@
+import PhcFollowUp from "./components/PhcFollowUp.jsx";
 
 import { createPortal } from "react-dom";
 import { referralJourney, filterReceivingReferrals } from "./lib/referralPresentation.js";
@@ -5043,6 +5044,7 @@ function PHCStaffDashboard({ onNewReferral }) {
 
             <hr />
 
+            {["discharged", "completed"].includes(selectedReferral.status) && <PhcFollowUp key={selectedReferral.id} referralId={selectedReferral.id} />}
             {/* BACK */}
 
             <button
