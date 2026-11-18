@@ -80,6 +80,7 @@ export default function PublicHealthIntelligence() {
       </select>
       {report.datasets.filter((dataset) => dataset.key === datasetKey).map((dataset) => <section key={dataset.key}>
         <h3>{dataset.title}</h3>
+        {dataset.key === "continuity" && <p>Among referrals discharged in the selected month, each referral counts once for each documented milestone as of retrieval. A contact attempt alone does not count as a performed encounter.</p>}
         <button type="button" className="secondary-button" onClick={() => exportAggregate(dataset)}>Download {dataset.title} CSV</button>
         <AggregateChart dataset={dataset} />
         {!dataset.rows.length ? <p>No aggregate rows are available for this period.</p> :

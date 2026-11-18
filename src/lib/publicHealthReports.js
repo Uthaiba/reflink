@@ -2,6 +2,12 @@ import { monthlyPeriod } from "./reportingUtils.js";
 
 export const REPORT_DATASETS = [
   {
+    key: "continuity",
+    title: "Continuity milestones by discharge month",
+    rpc: "get_admin_continuity_milestones",
+    columns: ["milestone", "referral_count"],
+  },
+  {
     "key": "volume",
     "title": "Referral volume",
     "rpc": "get_admin_referral_volume",

@@ -81,7 +81,8 @@ function reportingClient(role="administrator", fail=false) {
 test("public-health reporting calls only verified aggregate endpoints", async () => {
   const client=reportingClient();
   const report=await loadPublicHealthReport(client,"2025-02");
-  assert.equal(report.datasets.length,5);
+  assert.equal(report.datasets.length,6);
+  assert.ok(client.calls.some(call => call.name === "get_admin_continuity_milestones"));
   assert.deepEqual(client.calls.map((call)=>call.name),REPORT_DATASETS.map((dataset)=>dataset.rpc));
   assert.ok(client.calls.every((call)=>call.args.p_end_date==="2025-02-28"));
 });
