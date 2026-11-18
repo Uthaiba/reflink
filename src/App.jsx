@@ -86,25 +86,6 @@ function parseJsonArray(value) {
   }
 }
 
-function formatDiagnosisRecords(records, fallback = "") {
-  const parsed = Array.isArray(records) ? records : parseJsonArray(records);
-
-  if (parsed.length > 0) {
-    return parsed
-      .map((item) => {
-        if (typeof item === "string") return item;
-        const status = item?.status ? `${item.status}: ` : "";
-        const diagnosis = item?.diagnosis || item?.name || "";
-        const category = item?.category ? ` (${item.category})` : "";
-        return `${status}${diagnosis}${category}`;
-      })
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  return fallback || "Not recorded";
-}
-
 function formatDiagnosisSummary(records, fallback = "", maxItems = 2) {
   const parsed = Array.isArray(records) ? records : parseJsonArray(records);
 
@@ -4722,7 +4703,7 @@ function PHCStaffDashboard({ onNewReferral }) {
                     <div>
 
                       <strong>
-                        {formatDiagnosisSummary(
+                        {referral.final_diagnosis || formatDiagnosisSummary(
                           referral.diagnosis_records,
                           referral.provisional_diagnosis
                         )}
@@ -4857,11 +4838,8 @@ function PHCStaffDashboard({ onNewReferral }) {
               <div>
                 <span>Diagnosis Status</span>
                 <strong>
-                {formatDiagnosisRecords(
-                  selectedReferral.diagnosis_records,
-                  selectedReferral.provisional_diagnosis
-                )}
-              </strong>
+                  {formatClinicalLabel(selectedReferral.diagnosis_status)}
+                </strong>
               </div>
             </div>
 
