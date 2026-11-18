@@ -4871,8 +4871,6 @@ function PHCStaffDashboard({ onNewReferral }) {
 
             <ReferralSourceDetails referral={selectedReferral} />
 
-            <ReferralTimeline referral={selectedReferral} />
-
             <hr />
 
             {/* RECEIVING FACILITY */}
