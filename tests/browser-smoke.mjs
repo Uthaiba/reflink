@@ -65,3 +65,5 @@ try {
   await development.close();
   await new Promise((resolve) => production.httpServer.close(resolve));
 }
+
+await import("./continuity-export-browser.mjs");
