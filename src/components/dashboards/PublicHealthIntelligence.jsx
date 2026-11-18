@@ -14,6 +14,7 @@ export default function PublicHealthIntelligence() {
   const [report, setReport] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [datasetKey, setDatasetKey] = useState("volume");
   const requestId = useRef(0);
 
   const load = async (event) => {
@@ -61,6 +62,7 @@ export default function PublicHealthIntelligence() {
         onChange={(event) => { setMonth(event.target.value); setReport(null); }} />
       <button type="submit" className="primary-button" disabled={loading}>{loading ? "Loading aggregates..." : "Generate report"}</button>
     </form>
+    <div role="status" aria-live="polite">{loading && "Retrieving monthly reports…"}</div>
     {error && <p role="alert">{error}</p>}
     {!report && !error && !loading && <p>Select a calendar month to retrieve the approved aggregate reports.</p>}
     {report && <>
@@ -71,12 +73,17 @@ export default function PublicHealthIntelligence() {
         <button type="button" className="secondary-button" onClick={downloadDraft}>Download draft for review</button>
         <details><summary>Read the traceable draft</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{createAggregateDraft(report)}</pre></details>
       </section>
-      {report.datasets.map((dataset) => <section key={dataset.key}>
+      <label htmlFor="rphi-dataset">Report to explore</label>
+      <select id="rphi-dataset" className="rphi-dataset" value={datasetKey}
+        onChange={(event) => setDatasetKey(event.target.value)}>
+        {report.datasets.map((dataset) => <option key={dataset.key} value={dataset.key}>{dataset.title}</option>)}
+      </select>
+      {report.datasets.filter((dataset) => dataset.key === datasetKey).map((dataset) => <section key={dataset.key}>
         <h3>{dataset.title}</h3>
-        <button type="button" className="secondary-button" onClick={() => exportAggregate(dataset)}>Download aggregate CSV</button>
+        <button type="button" className="secondary-button" onClick={() => exportAggregate(dataset)}>Download {dataset.title} CSV</button>
         <AggregateChart dataset={dataset} />
         {!dataset.rows.length ? <p>No aggregate rows are available for this period.</p> :
-          <div className="table-wrapper"><table>
+          <div className="table-wrapper rphi-table" role="region" aria-label={dataset.title + " data table"} tabIndex={0}><table>
             <caption>{dataset.title}; {report.period.start} to {report.period.end}</caption>
             <thead><tr>{dataset.columns.map((column) => <th scope="col" key={column}>{label(column)}</th>)}</tr></thead>
             <tbody>{dataset.rows.map((row, index) => <tr key={index}>{dataset.columns.map((column) => <td key={column}>{display(row[column])}</td>)}</tr>)}</tbody>

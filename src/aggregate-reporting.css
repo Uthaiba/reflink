@@ -9,3 +9,7 @@
 .aggregate-draft textarea { width: 100%; min-height: 20rem; font: inherit; line-height: 1.5; }
 @media (max-width: 480px) { .aggregate-bars li { grid-template-columns: 1fr; gap: .3rem; } }
 @media print { .aggregate-chart select, .aggregate-draft button { display: none; } }
+
+.rphi-dataset { display: block; max-width: 100%; min-height: 44px; margin-block: .5rem 1rem; font: inherit; }
+.rphi-table { max-width: 100%; overflow-x: auto; }
+.rphi-dataset:focus-visible, .rphi-table:focus-visible { outline: 3px solid #096954; outline-offset: 2px; }
