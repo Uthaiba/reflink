@@ -97,7 +97,8 @@ try {
   const encode = value => Buffer.from(JSON.stringify(value)).toString("base64url");
   const token = [encode({alg:"HS256",typ:"JWT"}), encode({sub:user.id, exp:Math.floor(Date.now()/1000)+3600}), "dGVzdA"].join(".");
   let logoutReceived = false;
-  await page.route("https://reflink-synthetic.invalid/**", async route => {
+  await page.unroute("https://reflink-synthetic.invalid/**");
+  await context.route("https://reflink-synthetic.invalid/**", async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === "/auth/v1/logout") {
       logoutReceived = true;
@@ -112,16 +113,22 @@ try {
     };
     return route.fulfill({json:responses[path] ?? []});
   });
-  await page.goto("http://127.0.0.1:4180/");
-  await page.getByRole("button", {name:"Sign In", exact:true}).first().click();
-  await page.locator('input[type="email"]').fill(user.email);
-  await page.locator('input[type="password"]').fill(crypto.randomUUID());
-  await page.getByRole("button", {name:"Sign In", exact:true}).last().click();
+  async function signIn(tab) {
+    await tab.goto("http://127.0.0.1:4180/");
+    await tab.getByRole("button", {name:"Sign In", exact:true}).first().click();
+    await tab.locator('input[type="email"]').fill(user.email);
+    await tab.locator('input[type="password"]').fill(crypto.randomUUID());
+    await tab.getByRole("button", {name:"Sign In", exact:true}).last().click();
+  }
+  await signIn(page);
   await page.getByRole("button").filter({hasText:marker}).click();
   await page.getByRole("heading", {name:"Referral Timeline"}).waitFor();
   // Create a same-document history entry while the clinical details are open.
   await page.evaluate(() => history.pushState(null, "", "#referral-review"));
-  await page.getByRole("button", {name:"Sign Out", exact:true}).click();
+  const dashboard = await context.newPage();
+  await signIn(dashboard);
+  await dashboard.getByRole("button", {name:"Sign Out", exact:true}).click();
+  await dashboard.getByRole("button", {name:"Sign In", exact:true}).first().waitFor();
   await page.getByRole("button", {name:"Sign In", exact:true}).first().waitFor();
   assert.ok(logoutReceived);
   assert.equal(await page.getByText(marker, {exact:false}).count(), 0);
