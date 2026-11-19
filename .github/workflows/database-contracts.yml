@@ -64,6 +64,10 @@ jobs:
           python3 tests/database/migration_package_contracts.py
           python3 tests/database/staging_trigger_contracts.py
           python3 tests/database/restore_contracts.py
+      - name: Verify discharge-month continuity counts
+        run: |
+          createdb continuity_report_test
+          psql -X -v ON_ERROR_STOP=1 -d continuity_report_test -f tests/database/continuity_counts.sql
       - name: Preserve baseline drift report
         if: always()
         uses: actions/upload-artifact@v4
