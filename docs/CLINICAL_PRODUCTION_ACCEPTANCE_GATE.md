@@ -68,3 +68,9 @@ A rollback-only check created a temporary session for the synthetic referring us
 Chromium opened a synthetic PHC referral and signed out in a second tab. The first tab returned to sign-in and removed the referral identifier. Back navigation kept the identifier hidden both within the document and after navigating away. A separate test dispatched persisted page events and verified that the workspace was hidden before suspension and reloaded on restoration. Authentication responses were simulated. Actual browser cache retention depends on the browser.
 
 Both workflows passed for commit `9aa3525`. [Frontend and browser checks](https://github.com/Uthaiba/reflink/actions/runs/44619287770) · [Synthetic database contracts](https://github.com/Uthaiba/reflink/actions/runs/44619287702)
+
+### PHC follow-up with a screen reader
+
+Chromium verified keyboard navigation from the referral list, reading hospital feedback in the accessibility tree, entering the encounter date and time with keystrokes, saving, and finding the saved entry in the history. [Keyboard and date-entry regression run](https://github.com/Uthaiba/reflink/actions/runs/44622901028)
+
+Spoken output remains pending. In the staging preview, sign in as synthetic PHC staff and use Windows Narrator or NVDA with Chrome. Open RF-2026-117770 and navigate by heading to Final hospital feedback. Confirm the outcome is readable. Continue to PHC follow-up and record a contact attempt after discharge and before the current time. Use “Synthetic screen-reader check” for the outcome. Activate Save follow-up entry once and wait without moving focus. Record the screen reader, browser, and exact words heard. Pass the spoken save check only if the confirmation is announced automatically and the saved attempt can then be read in the history. If speech is silent, inspect the existing entry before retrying.
