@@ -93,7 +93,7 @@ try {
   const user = { id: "00000000-0000-4000-8000-000000000001", email: "phc@example.invalid" };
   const profile = { id: user.id, role: "phc_staff", full_name: "Synthetic tester", facility_id: "test-facility", must_change_password: false };
   const marker = "SYNTHETIC-SIGNOUT-CASE";
-  const referral = { id: "test-referral", referral_number: marker, patient_identifier: marker, status: "sent", urgency: "routine" };
+  const referral = { id: "test-referral", referral_number: marker, patient_identifier: marker, status: "discharged", urgency: "routine" };
   const encode = value => Buffer.from(JSON.stringify(value)).toString("base64url");
   const token = [encode({alg:"HS256",typ:"JWT"}), encode({sub:user.id, exp:Math.floor(Date.now()/1000)+3600}), "dGVzdA"].join(".");
   let logoutReceived = false;
@@ -104,7 +104,12 @@ try {
       logoutReceived = true;
       return route.fulfill({status:204});
     }
+    if (path === "/rest/v1/rpc/phc_follow_up_history") {
+      const fields = route.request().postDataJSON();
+      return route.fulfill({json: fields.p_operation ? [{kind:fields.p_kind, encounter_at:fields.p_encounter, outcome:fields.p_outcome}] : []});
+    }
     const responses = {
+      "/rest/v1/counter_referrals": [{final_diagnosis:"Synthetic diagnosis", outcome:"improved", created_at:"2025-01-01T12:00:00Z"}],
       "/auth/v1/token": {access_token:token, refresh_token:"synthetic-refresh", expires_in:3600, token_type:"bearer", user},
       "/auth/v1/user": user,
       "/rest/v1/profiles": profile,
@@ -121,7 +126,34 @@ try {
     await tab.getByRole("button", {name:"Sign In", exact:true}).last().click();
   }
   await signIn(page);
-  await page.getByRole("button").filter({hasText:marker}).click();
+  async function tabTo(control) {
+    for (let tabs = 0; tabs < 100; tabs++) {
+      if (await control.evaluate(el => el === document.activeElement)) return;
+      await page.keyboard.press("Tab");
+    }
+    assert.fail("Control was unreachable by Tab");
+  }
+  const referralButton = page.getByRole("button").filter({hasText:marker});
+  await referralButton.waitFor();
+  await tabTo(referralButton);
+  await page.keyboard.press("Enter");
+  const feedback = page.getByRole("region", {name:"Final hospital feedback"});
+  await feedback.getByText("improved", {exact:true}).waitFor();
+  assert.match(await feedback.ariaSnapshot(), /improved/);
+  const followUp = page.getByRole("region", {name:"PHC follow-up"});
+  const result = followUp.getByRole("combobox", {name:"Contact result"});
+  await result.waitFor();
+  await tabTo(result);
+  await page.keyboard.press("End");
+  const time = followUp.getByLabel("Encounter or attempt time");
+  await tabTo(time);
+  await time.fill("2025-01-02T12:00");
+  await tabTo(followUp.getByRole("textbox", {name:"Outcome", exact:true}));
+  await page.keyboard.type("Synthetic keyboard encounter");
+  await tabTo(followUp.getByRole("button", {name:"Save follow-up entry"}));
+  await page.keyboard.press("Enter");
+  await followUp.getByRole("status").filter({hasText:"Follow-up entry saved."}).waitFor();
+  assert.match(await followUp.ariaSnapshot(), /Encounter performed.*Synthetic keyboard encounter/);
   await page.getByRole("heading", {name:"Referral Timeline"}).waitFor();
   // Create a same-document history entry while the clinical details are open.
   await page.evaluate(() => history.pushState(null, "", "#referral-review"));
