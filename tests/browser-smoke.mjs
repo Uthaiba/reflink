@@ -17,7 +17,25 @@ import '/src/aggregate-reporting.css';
 const dataset = {title:'Synthetic facility activity', columns:['facility_label','referral_count','completed_count'],rows:[{facility_label:'Synthetic facility A',referral_count:12,completed_count:8},{facility_label:'Synthetic facility B',referral_count:null,completed_count:null}]};
 createRoot(document.getElementById('root')).render(React.createElement(AggregateChart,{dataset}));
 </script></body></html>`;
-const development = await createServer({ server: { host: "127.0.0.1", port: 4180, strictPort: true }, plugins: [{ name: "synthetic-browser-harness", configureServer(server) {
+const mobileHarness = harness.slice(0, harness.indexOf("import AggregateChart")) + `
+import HospitalFeedback from '/src/components/HospitalFeedback.jsx';
+import PhcFollowUp from '/src/components/PhcFollowUp.jsx';
+import '/src/index.css';
+import '/src/App.css';
+import '/src/reflink-theme-professional.css';
+import '/src/reflink-clinical-accessibility.css';
+createRoot(document.getElementById('root')).render(React.createElement('main', {},
+  React.createElement(HospitalFeedback, {referral:{id:'synthetic',status:'discharged'},onComplete:()=>{}}),
+  React.createElement(PhcFollowUp, {referralId:'synthetic'})));
+</script></body></html>`;
+const development = await createServer({ define: {
+  'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://reflink-synthetic.invalid'),
+  'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('synthetic-public-client'),
+}, server: { host: "127.0.0.1", port: 4180, strictPort: true }, plugins: [{ name: "synthetic-browser-harness", configureServer(server) {
+  server.middlewares.use("/__mobile-continuity", async (_request, response) => {
+    response.setHeader("Content-Type", "text/html");
+    response.end(await server.transformIndexHtml("/__mobile-continuity", mobileHarness));
+  });
   server.middlewares.use("/__synthetic-chart", async (_request, response) => {
     response.setHeader("Content-Type", "text/html");
     response.end(await server.transformIndexHtml("/__synthetic-chart", harness));
@@ -60,6 +78,17 @@ try {
   assert.equal(await page.getByLabel("Count indicator").inputValue(), "completed_count");
   assert.ok((await page.locator(".aggregate-bars").textContent()).includes("8"));
   console.log("browser_aggregate_chart_keyboard_suppression_and_responsive_layout: passed");
+  await page.route("https://reflink-synthetic.invalid/**", route => route.fulfill({json: []}));
+  await page.goto("http://127.0.0.1:4180/__mobile-continuity");
+  await page.getByRole("button", {name: /send final feedback/i}).waitFor();
+  await page.getByRole("button", {name: /save follow-up entry/i}).waitFor();
+  for (const width of [320, 390, 768]) {
+    await page.setViewportSize({width, height: 844});
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Continuity form overflow at ${width}px`);
+    assert.ok(await page.locator(".continuity-panel fieldset label").evaluateAll(labels =>
+      labels.length > 0 && labels.every(label => getComputedStyle(label).display === "grid")));
+  }
+  console.log("browser_continuity_form_responsive_layout: passed");
 } finally {
   await browser?.close();
   await development.close();
