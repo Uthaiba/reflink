@@ -61,4 +61,10 @@ On commit `a520707`, Chromium checked the two forms in isolation at 320, 390 and
 
 For RF-2026-117770, an originating PHC session could read the referral and final feedback. An authenticated user from an unrelated receiving facility could read zero matching rows from either table.
 
-A rollback-only check created a temporary session for the synthetic referring user and reused its claims under the authenticated database role. Both records were visible while the account was active, hidden while banned, visible after restoration, and hidden after the temporary session was deleted. The transaction rolled back all fixture changes. These checks cover database reads. Browser sign-out, previously rendered content and client cache clearing require separate verification.
+A rollback-only check created a temporary session for the synthetic referring user and reused its claims under the authenticated database role. Both records were visible while the account was active, hidden while banned, visible after restoration, and hidden after the temporary session was deleted. The transaction rolled back all fixture changes. These checks cover database reads. Browser sign-out and navigation evidence follows below.
+
+### Browser sign-out and referral history
+
+Chromium opened a synthetic PHC referral and signed out in a second tab. The first tab returned to sign-in and removed the referral identifier. Back navigation kept the identifier hidden both within the document and after navigating away. A separate test dispatched persisted page events and verified that the workspace was hidden before suspension and reloaded on restoration. Authentication responses were simulated. Actual browser cache retention depends on the browser.
+
+Both workflows passed for commit `9aa3525`. [Frontend and browser checks](https://github.com/Uthaiba/reflink/actions/runs/44619287770) · [Synthetic database contracts](https://github.com/Uthaiba/reflink/actions/runs/44619287702)
