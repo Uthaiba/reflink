@@ -147,7 +147,12 @@ try {
   await page.keyboard.press("End");
   const time = followUp.getByLabel("Encounter or attempt time");
   await tabTo(time);
-  await time.fill("2025-01-02T12:00");
+  // Chromium's US date control advances after month and day; Tab exits the year segment.
+  await page.keyboard.type("01022025");
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("1200");
+  await page.keyboard.press("p");
+  assert.equal(await time.inputValue(), "2025-01-02T12:00");
   await tabTo(followUp.getByRole("textbox", {name:"Outcome", exact:true}));
   await page.keyboard.type("Synthetic keyboard encounter");
   await tabTo(followUp.getByRole("button", {name:"Save follow-up entry"}));
