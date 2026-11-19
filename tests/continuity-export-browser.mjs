@@ -44,5 +44,14 @@ try {
   await page.getByRole('button',{name:/Download Continuity.*CSV/}).click();
   const csv=await readFile(await (await download).path(),'utf8');
   assert.deepEqual(csv.split('\r\n').slice(-2),['"Hospital feedback sent","5"','"PHC follow-up performed","Suppressed / unavailable"']);
-  console.log('Continuity chart, table and downloaded CSV passed.');
+  await page.getByText('Read the traceable draft', {exact:true}).click();
+  const draft = await page.locator('.aggregate-draft pre').innerText();
+  assert.ok(draft.includes('Hospital feedback sent: referral count = 5. [get_admin_continuity_milestones; row 1; field referral_count]'));
+  assert.ok(!draft.includes('PHC follow-up performed'));
+  assert.ok(draft.includes('1 count cells withheld or unavailable.'));
+  const draftDownload = page.waitForEvent('download');
+  await page.getByRole('button', {name:'Download draft for review'}).click();
+  const downloadedDraft = await readFile(await (await draftDownload).path(), 'utf8');
+  assert.equal(downloadedDraft, draft);
+  console.log('Continuity chart, table, CSV and both monthly draft views passed.');
 } finally {await browser?.close(); await server.close();}
