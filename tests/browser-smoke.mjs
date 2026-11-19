@@ -137,6 +137,31 @@ try {
   assert.equal(await page.getByText(marker, {exact:false}).count(), 0);
   assert.equal(await page.getByRole("heading", {name:"Referral Timeline"}).count(), 0);
   console.log("browser_signout_and_same_document_back: passed");
+
+  await signIn(page);
+  await page.getByRole("button").filter({hasText:marker}).click();
+  await page.getByRole("heading", {name:"Referral Timeline"}).waitFor();
+  await page.goto("about:blank");
+  await signIn(dashboard);
+  await dashboard.getByRole("button", {name:"Sign Out", exact:true}).click();
+  await dashboard.getByRole("button", {name:"Sign In", exact:true}).first().waitFor();
+  await page.goBack();
+  await page.getByRole("button", {name:"Sign In", exact:true}).first().waitFor();
+  assert.equal(await page.getByText(marker, {exact:false}).count(), 0);
+
+  // Exercise the persisted path even when Chromium chooses a fresh navigation.
+  await signIn(page);
+  await page.getByRole("button").filter({hasText:marker}).click();
+  await page.getByRole("heading", {name:"Referral Timeline"}).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide", {persisted:true})));
+  assert.equal(await page.locator("html").evaluate(el => getComputedStyle(el).visibility), "hidden");
+  await Promise.all([
+    page.waitForNavigation(),
+    page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", {persisted:true})))
+  ]);
+  await page.getByRole("button", {name:"Sign In", exact:true}).first().waitFor();
+  assert.equal(await page.getByText(marker, {exact:false}).count(), 0);
+  console.log("browser_cross_document_back_and_persisted_restore: passed");
 } finally {
   await browser?.close();
   await development.close();
