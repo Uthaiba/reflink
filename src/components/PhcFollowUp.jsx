@@ -46,7 +46,7 @@ export default function PhcFollowUp({ referralId, dischargedAt }) {
     finally { saving.current = false; setBusy(false); }
   }
 
-  return <section className="continuity-panel"><h3>PHC follow-up</h3><p role="status">{message}</p>
+  return <section className="continuity-panel" aria-label="PHC follow-up"><h3>PHC follow-up</h3><p role="status">{message}</p>
     {history && <><p>{history.some(row => row.kind === "performed") ? "Follow-up performed" : "No completed encounter recorded"}</p>
       <ul>{history.map((row,index) => <li key={index}>{new Date(row.encounter_at).toLocaleString()} · {row.kind === "performed" ? "Encounter performed" : "Contact attempted"} · {row.outcome}{row.next_action && <p>Next action: {row.next_action}</p>}</li>)}</ul>
       <form onSubmit={save}><fieldset disabled={busy}><legend>Record PHC contact</legend>
