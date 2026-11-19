@@ -1,6 +1,6 @@
 # REFLINK v2.0 — clinical release acceptance gate
 
-**Status: NO-GO for production.** This checklist is an acceptance specification, not evidence that any item has passed. A successful frontend CI run is necessary but insufficient.
+**Status: NO-GO for production.** Checked items have supporting evidence below. Open items still require verification. A successful frontend CI run is necessary but insufficient.
 
 ## 1. Referral creation and receiving-facility lifecycle
 
@@ -15,7 +15,7 @@
 
 - [ ] Receiving clinician records examination, final diagnosis, investigations, treatment, disposition and time stamps.
 - [ ] Admitted patients have admission and discharge documentation, including follow-up plan.
-- [ ] Originating PHC can retrieve authorized receiving-facility feedback and discharge summary.
+- [x] Originating PHC can retrieve authorized receiving-facility feedback and discharge summary. Verified on the synthetic staging referral `RF-2026-117770`.
 - [ ] Counter-referral acknowledgement and follow-up responsibilities are explicit and auditable.
 - [ ] Simultaneous edits, stale tabs and interrupted saves do not silently discard clinical notes.
 - [ ] Clinical lead approves the final forms and terminology using **synthetic** cases.
@@ -50,3 +50,9 @@
 ## Deployment protection
 
 Keep PR #3 in draft and use its Vercel preview only for visual and synthetic-data checks. Confirm that preview environment variables do **not** expose or write to production clinical data. Do not create billable infrastructure, merge to `main`, or deploy production without explicit authorization.
+
+## Staging evidence from 19 November 2026
+
+The signed-in PHC view for synthetic referral RF-2026-117770 showed the hospital outcome “improved” and its sent time of 19 November at 8:53:07 PM. The contact attempt on 17 November at 6:08 PM and the completed encounter at 6:15 PM remained visible with their original timestamps. Times are as displayed in the staging browser. This verifies the originating PHC's access for this case. Cross-facility and revoked-user access require separate evidence.
+
+On commit `a520707`, Chromium checked the two forms in isolation at 320, 390 and 768 pixels. Both forms rendered and fit within the viewport. Keyboard-only and screen-reader acceptance across the clinical workflow remains open. The frontend and synthetic database workflows passed. [Frontend run](https://github.com/Uthaiba/reflink/actions/runs/44616447050) · [Database run](https://github.com/Uthaiba/reflink/actions/runs/44616447119)
