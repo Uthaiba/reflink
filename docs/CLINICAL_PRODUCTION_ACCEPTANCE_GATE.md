@@ -53,6 +53,12 @@ Keep PR #3 in draft and use its Vercel preview only for visual and synthetic-dat
 
 ## Staging evidence from 19 November 2026
 
-The signed-in PHC view for synthetic referral RF-2026-117770 showed the hospital outcome “improved” and its sent time of 19 November at 8:53:07 PM. The contact attempt on 17 November at 6:08 PM and the completed encounter at 6:15 PM remained visible with their original timestamps. Times are as displayed in the staging browser. This verifies the originating PHC's access for this case. Cross-facility and revoked-user access require separate evidence.
+The signed-in PHC view for synthetic referral RF-2026-117770 showed the hospital outcome “improved” and its sent time of 19 November at 8:53:07 PM. The contact attempt on 17 November at 6:08 PM and the completed encounter at 6:15 PM remained visible with their original timestamps. Times are as displayed in the staging browser. This verifies the originating PHC's access for this case. Database access checks for this case are recorded below.
 
 On commit `a520707`, Chromium checked the two forms in isolation at 320, 390 and 768 pixels. Both forms rendered and fit within the viewport. Keyboard-only and screen-reader acceptance across the clinical workflow remains open. The frontend and synthetic database workflows passed. [Frontend run](https://github.com/Uthaiba/reflink/actions/runs/44616447050) · [Database run](https://github.com/Uthaiba/reflink/actions/runs/44616447119)
+
+### Referral and final feedback access in synthetic staging
+
+For RF-2026-117770, an originating PHC session could read the referral and final feedback. An authenticated user from an unrelated receiving facility could read zero matching rows from either table.
+
+A rollback-only check created a temporary session for the synthetic referring user and reused its claims under the authenticated database role. Both records were visible while the account was active, hidden while banned, visible after restoration, and hidden after the temporary session was deleted. The transaction rolled back all fixture changes. These checks cover database reads. Browser sign-out, previously rendered content and client cache clearing require separate verification.
