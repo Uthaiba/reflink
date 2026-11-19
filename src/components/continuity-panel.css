@@ -35,7 +35,7 @@
 .continuity-panel dt { font-weight: 650; }
 .continuity-panel dd { margin: .2rem 0 0; }
 .continuity-panel ul { padding-inline-start: 1.25rem; }
-.continuity-panel [role="status"]:empty { display: none; }
+.continuity-panel [role="status"]:empty { margin: 0; }
 .continuity-panel button[type="submit"] {
   padding: .7rem 1rem;
   border: 0;
