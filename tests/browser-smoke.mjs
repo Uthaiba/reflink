@@ -89,6 +89,47 @@ try {
       labels.length > 0 && labels.every(label => getComputedStyle(label).display === "grid")));
   }
   console.log("browser_continuity_form_responsive_layout: passed");
+
+  const user = { id: "00000000-0000-4000-8000-000000000001", email: "phc@example.invalid" };
+  const profile = { id: user.id, role: "phc_staff", full_name: "Synthetic tester", facility_id: "test-facility", must_change_password: false };
+  const marker = "SYNTHETIC-SIGNOUT-CASE";
+  const referral = { id: "test-referral", referral_number: marker, patient_identifier: marker, status: "sent", urgency: "routine" };
+  const encode = value => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const token = [encode({alg:"HS256",typ:"JWT"}), encode({sub:user.id, exp:Math.floor(Date.now()/1000)+3600}), "dGVzdA"].join(".");
+  let logoutReceived = false;
+  await page.route("https://reflink-synthetic.invalid/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/auth/v1/logout") {
+      logoutReceived = true;
+      return route.fulfill({status:204});
+    }
+    const responses = {
+      "/auth/v1/token": {access_token:token, refresh_token:"synthetic-refresh", expires_in:3600, token_type:"bearer", user},
+      "/auth/v1/user": user,
+      "/rest/v1/profiles": profile,
+      "/rest/v1/referrals": [referral],
+      "/rest/v1/rpc/get_facility_user_count": 1
+    };
+    return route.fulfill({json:responses[path] ?? []});
+  });
+  await page.goto("http://127.0.0.1:4180/");
+  await page.getByRole("button", {name:"Sign In", exact:true}).first().click();
+  await page.locator('input[type="email"]').fill(user.email);
+  await page.locator('input[type="password"]').fill(crypto.randomUUID());
+  await page.getByRole("button", {name:"Sign In", exact:true}).last().click();
+  await page.getByRole("button").filter({hasText:marker}).click();
+  await page.getByRole("heading", {name:"Referral Timeline"}).waitFor();
+  // Create a same-document history entry while the clinical details are open.
+  await page.evaluate(() => history.pushState(null, "", "#referral-review"));
+  await page.getByRole("button", {name:"Sign Out", exact:true}).click();
+  await page.getByRole("button", {name:"Sign In", exact:true}).first().waitFor();
+  assert.ok(logoutReceived);
+  assert.equal(await page.getByText(marker, {exact:false}).count(), 0);
+  await page.goBack();
+  await page.getByRole("button", {name:"Sign In", exact:true}).first().waitFor();
+  assert.equal(await page.getByText(marker, {exact:false}).count(), 0);
+  assert.equal(await page.getByRole("heading", {name:"Referral Timeline"}).count(), 0);
+  console.log("browser_signout_and_same_document_back: passed");
 } finally {
   await browser?.close();
   await development.close();
