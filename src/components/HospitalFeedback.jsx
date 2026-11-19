@@ -1,3 +1,4 @@
+import "./continuity-panel.css";
 import {useEffect, useRef, useState} from "react";
 import {supabase} from "../lib/supabase.js";
 
@@ -34,7 +35,7 @@ export default function HospitalFeedback({referral, onComplete}) {
     } catch {setMessage("Submission could not be confirmed. Reopen the referral to check the saved feedback before retrying.");}
     finally {lock.current=false;setBusy(false);}
   }
-  return <section aria-label="Final hospital feedback"><h3>Final hospital feedback</h3>
+  return <section className="continuity-panel" aria-label="Final hospital feedback"><h3>Final hospital feedback</h3>
     <p role="status">{message}</p>
     {record ? <dl>{Object.entries({Diagnosis:record.final_diagnosis,Outcome:record.outcome?.replaceAll("_"," "),Treatment:record.treatment_provided,"Follow-up instructions":record.follow_up_instructions,Destination:record.referred_further_to,Sent:new Date(record.created_at).toLocaleString()}).filter(([,v])=>v).map(([k,v])=><div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl> :
       ready && (onComplete && referral.status==="discharged" ? <form onSubmit={submit}><fieldset disabled={busy}>
