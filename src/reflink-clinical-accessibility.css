@@ -70,3 +70,9 @@
   color: #392600;
   line-height: 1.5;
 }
+
+/* Keep each milestone label and time beside its marker in centered referral cards. */
+.referral-timeline .timeline-content {
+  text-align: start;
+  min-width: 0;
+}
