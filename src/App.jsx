@@ -1347,7 +1347,7 @@ function ReferralTimeline({ referral }) {
         </span>
       </div>
 
-      <div className="timeline-track">
+      <div className="timeline-track" role="list">
         {steps.map((step) => {
           const completed = Boolean(step.timestamp);
           const current = !completed && !activeFound;
@@ -1355,7 +1355,9 @@ function ReferralTimeline({ referral }) {
 
           return (
             <div
-              className={`timeline-step ${completed ? "is-complete" : ""} ${current ? "is-current" : "is-pending"}`}
+              className={`timeline-step ${completed ? "is-complete" : current ? "is-current" : "is-pending"}`}
+              role="listitem"
+              aria-current={current ? "step" : undefined}
               key={step.key}
             >
               <span className="timeline-dot" aria-hidden="true">
