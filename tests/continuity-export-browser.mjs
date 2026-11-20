@@ -23,7 +23,9 @@ const server = await createServer({envFile:false, server:{host:'127.0.0.1',port:
     if(id.endsWith('/src/lib/supabase.js')) return `export const supabase={
       auth:{getUser:async()=>({data:{user:{id:'fixture'}}})},
       from:()=>({select:()=>({eq:()=>({single:async()=>({data:{role:'administrator'}})})})}),
-      rpc:async(name)=>({data:name==='get_admin_continuity_milestones'?${JSON.stringify(fixture)}:[]})
+      rpc:async(name)=>globalThis.failContinuity && name==='get_admin_continuity_milestones'
+        ? {error:{message:'Synthetic connection interruption'}}
+        : ({data:name==='get_admin_continuity_milestones'?${JSON.stringify(fixture)}:[]})
     }`;
   }}]});
 let browser;
@@ -53,5 +55,18 @@ try {
   await page.getByRole('button', {name:'Download draft for review'}).click();
   const downloadedDraft = await readFile(await (await draftDownload).path(), 'utf8');
   assert.equal(downloadedDraft, draft);
+  await page.locator('#rphi-month').fill('2026-12');
+  const exports = page.getByRole('button',{name:/^Download/});
+  assert.equal(await exports.count(),0);
+  await page.evaluate(()=>{globalThis.failContinuity=true;});
+  await page.getByRole('button',{name:'Generate report'}).click();
+  await page.getByRole('alert').waitFor();
+  assert.equal(await exports.count(),0);
+  assert.equal(await page.locator('.aggregate-bars, .rphi-table').count(),0);
+  await page.evaluate(()=>{globalThis.failContinuity=false;});
+  await page.getByRole('button',{name:'Generate report'}).click();
+  await page.getByRole('button',{name:'Download draft for review'}).waitFor();
+  assert.ok((await page.locator('.aggregate-draft pre').textContent()).includes('2026-12-01 to 2026-12-31'));
+  assert.equal(await page.getByRole('alert').count(),0);
   console.log('Continuity chart, table, CSV and both monthly draft views passed.');
 } finally {await browser?.close(); await server.close();}
