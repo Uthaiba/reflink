@@ -6,6 +6,7 @@ import { initialInvestigationRecords, saveInvestigation, uploadInitialInvestigat
 
 const referralId = randomUUID();
 const operationId = randomUUID();
+const auth = {getUser: async () => ({data:{user:{id:operationId}}})};
 const expected = [{ investigation: "Synthetic investigation", result_status: "pending" }];
 
 test("initial records exclude unconfirmed file descriptors while preserving clinical data", () => {
@@ -59,6 +60,7 @@ test("files are registered sequentially and every next call uses the last confir
   let records = initialInvestigationRecords(selected);
   let registrations = 0;
   const client = {
+    auth,
     storage: { from: () => ({ upload: async () => ({ error: null }) }) },
     rpc: async (_, args) => {
       assert.deepEqual(args.p_expected_records, records);
@@ -68,6 +70,7 @@ test("files are registered sequentially and every next call uses the last confir
     },
   };
   const saved = await uploadInitialInvestigationFiles(client, referralId, selected, records, true, randomUUID);
+  await uploadInitialInvestigationFiles(client, referralId, selected, saved, true, randomUUID);
   assert.equal(registrations, 2);
   assert.equal(saved.filter((record) => record.result_file_path).length, 2);
 });
@@ -77,7 +80,8 @@ test("a later upload failure preserves the earlier confirmed attachment snapshot
   const selected=[{...expected[0],result_file:file},{...expected[0],result_file:file}];
   let uploads=0;
   const client={
-    storage:{from:()=>({upload:async()=>({error:++uploads===2?{}:null})})},
+    auth,
+    storage:{from:()=>({upload:async()=>({error:++uploads===2?new Error("Disconnected"):null}),download:async()=>({error:new Error("Disconnected")})})},
     rpc:async (_,args)=>({data:{status:"saved",investigation_records:args.p_expected_records.map((item,index)=>
       index===args.p_index?{...item,...args.p_patch}:item)},error:null}),
   };
