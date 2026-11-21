@@ -1,0 +1,135 @@
+create or replace function public.submit_counter_referral(
+  p_referral_id uuid,
+  p_final_diagnosis text,
+  p_treatment_provided text,
+  p_outcome text,
+  p_follow_up_instructions text default null,
+  p_referred_further_to text default null,
+  p_additional_notes text default null
+)
+returns table (
+  counter_referral_id uuid,
+  referral_status text,
+  already_recorded boolean,
+  completed_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_user_id uuid := auth.uid();
+  v_role text;
+  v_facility_id uuid;
+  v_receiving_facility_id uuid;
+  v_status text;
+  v_existing_id uuid;
+  v_existing_user_id uuid;
+  v_counter_referral_id uuid;
+  v_already_recorded boolean := false;
+  v_completed_at timestamptz;
+begin
+  if v_user_id is null then
+    raise exception 'Authentication required.' using errcode = '42501';
+  end if;
+
+  select p.role, p.facility_id
+    into v_role, v_facility_id
+    from public.profiles p
+   where p.id = v_user_id;
+
+  if v_role is distinct from 'receiving_staff' or v_facility_id is null then
+    raise exception 'Receiving-facility staff access required.' using errcode = '42501';
+  end if;
+
+  if p_referral_id is null
+     or p_final_diagnosis is null
+     or p_outcome is null
+     or nullif(pg_catalog.btrim(p_final_diagnosis), '') is null
+     or p_outcome not in ('recovered', 'improved', 'referred_further', 'died', 'other')
+     or (p_outcome = 'referred_further' and nullif(pg_catalog.btrim(p_referred_further_to), '') is null)
+     or pg_catalog.char_length(p_final_diagnosis) > 4000
+     or pg_catalog.char_length(coalesce(p_treatment_provided, '')) > 6000
+     or pg_catalog.char_length(coalesce(p_follow_up_instructions, '')) > 4000
+     or pg_catalog.char_length(coalesce(p_referred_further_to, '')) > 500
+     or pg_catalog.char_length(coalesce(p_additional_notes, '')) > 4000 then
+    raise exception 'Counter-referral details are invalid or incomplete.' using errcode = '22023';
+  end if;
+
+  -- Lock the referral to serialise concurrent submissions for the same episode.
+  select r.receiving_facility_id, r.status
+    into v_receiving_facility_id, v_status
+    from public.referrals r
+   where r.id = p_referral_id
+   for update;
+
+  if not found then
+    raise exception 'Referral not found.' using errcode = 'P0002';
+  end if;
+
+  if v_receiving_facility_id is distinct from v_facility_id then
+    raise exception 'This referral is not assigned to your facility.' using errcode = '42501';
+  end if;
+
+  select c.id, c.receiving_user_id
+    into v_existing_id, v_existing_user_id
+    from public.counter_referrals c
+   where c.referral_id = p_referral_id;
+
+  if v_status = 'completed' then
+    if v_existing_id is not null and v_existing_user_id = v_user_id then
+      select r.completed_at into v_completed_at
+        from public.referrals r
+       where r.id = p_referral_id;
+      return query select v_existing_id, 'completed'::text, true, v_completed_at;
+      return;
+    end if;
+    raise exception 'This referral has already been completed.' using errcode = '55000';
+  end if;
+
+  if v_status <> 'discharged' then
+    raise exception 'Only discharged referrals can receive final counter-referral feedback.' using errcode = '55000';
+  end if;
+
+  if v_existing_id is not null then
+    raise exception 'A counter-referral already exists for this discharged episode. Reconcile it through the authorised clinical workflow before completion.' using errcode = '23505';
+  else
+    insert into public.counter_referrals (
+      referral_id,
+      receiving_user_id,
+      final_diagnosis,
+      treatment_provided,
+      outcome,
+      follow_up_instructions,
+      referred_further_to,
+      additional_notes
+    ) values (
+      p_referral_id,
+      v_user_id,
+      pg_catalog.btrim(p_final_diagnosis),
+      nullif(pg_catalog.btrim(coalesce(p_treatment_provided, '')), ''),
+      p_outcome,
+      nullif(pg_catalog.btrim(coalesce(p_follow_up_instructions, '')), ''),
+      case when p_outcome = 'referred_further'
+        then nullif(pg_catalog.btrim(coalesce(p_referred_further_to, '')), '')
+        else null end,
+      nullif(pg_catalog.btrim(coalesce(p_additional_notes, '')), '')
+    )
+    returning id into v_counter_referral_id;
+  end if;
+
+  -- The existing database trigger also enforces the counter-referral guard.
+  update public.referrals as r
+     set status = 'completed',
+         completed_at = coalesce(r.completed_at, pg_catalog.now())
+   where r.id = p_referral_id
+   returning r.completed_at into v_completed_at;
+
+  return query select v_counter_referral_id, 'completed'::text, v_already_recorded, v_completed_at;
+end;
+$function$;
+
+
+revoke all on function public.submit_counter_referral(uuid, text, text, text, text, text, text) from public;
+revoke all on function public.submit_counter_referral(uuid, text, text, text, text, text, text) from anon;
+grant execute on function public.submit_counter_referral(uuid, text, text, text, text, text, text) to authenticated;

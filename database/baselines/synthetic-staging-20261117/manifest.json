@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "project_id": "rcskuzmvyugbanygizri",
+  "captured_date": "2026-11-17",
+  "status": "recovered_source_not_replay_certified",
+  "hash_encoding": "SHA-256 of UTF-8 PostgreSQL array_to_json(statements)::text; one original script per SQL file",
+  "entries": [
+    {
+      "version": "20261110063521",
+      "name": "reconstruct_production_schema_in_staging",
+      "file": "20261110063521_reconstruct_production_schema_in_staging.sql",
+      "statement_count": 1,
+      "statements_sha256": "740254809b803e009d032c82fdec6f58bb7d4c989c5eb732986e469485b86e0b"
+    },
+    {
+      "version": "20261110063620",
+      "name": "configure_private_referral_storage_and_realtime",
+      "file": "20261110063620_configure_private_referral_storage_and_realtime.sql",
+      "statement_count": 1,
+      "statements_sha256": "c83c7dc006f736c2539bbdf51e72fb9315eb4d16fa6d25c0be83fcaf27381dd1"
+    },
+    {
+      "version": "20261110063704",
+      "name": "add_staging_foreign_key_indexes_and_secure_views",
+      "file": "20261110063704_add_staging_foreign_key_indexes_and_secure_views.sql",
+      "statement_count": 1,
+      "statements_sha256": "3f47110bb3592231d14958a17ba7a9abf408c8b55f130163f97f2deb08c63cf3"
+    },
+    {
+      "version": "20261110063756",
+      "name": "optimize_rls_auth_context_evaluation",
+      "file": "20261110063756_optimize_rls_auth_context_evaluation.sql",
+      "statement_count": 1,
+      "statements_sha256": "ef218e14c21090c8c77af583fef214ccd62327a042ee6ff7413019df797d1661"
+    },
+    {
+      "version": "20261110063844",
+      "name": "merge_equivalent_permissive_rls_policies",
+      "file": "20261110063844_merge_equivalent_permissive_rls_policies.sql",
+      "statement_count": 1,
+      "statements_sha256": "5a6101e7475be77fd57e3ac348310e65f705a703970ecabce7ebc32e3f9969ab"
+    },
+    {
+      "version": "20261110063912",
+      "name": "pin_security_definer_search_paths",
+      "file": "20261110063912_pin_security_definer_search_paths.sql",
+      "statement_count": 1,
+      "statements_sha256": "44087fe132c9b1c6d63caaa0da6322c8af5db614739bed74b385ee353245624b"
+    },
+    {
+      "version": "20261110063935",
+      "name": "explicitly_deny_client_access_to_internal_ledgers",
+      "file": "20261110063935_explicitly_deny_client_access_to_internal_ledgers.sql",
+      "statement_count": 1,
+      "statements_sha256": "b2c13cb7e598f6224e6411e504fab8978dd63f36ea4d294568802094bb55b527"
+    },
+    {
+      "version": "20261110065403",
+      "name": "harden_concurrent_referral_print_auditing",
+      "file": "20261110065403_harden_concurrent_referral_print_auditing.sql",
+      "statement_count": 1,
+      "statements_sha256": "ecfd26134cf8493e8fe0688858bb3f9678873b5994858372371ccbe3c3f15609"
+    },
+    {
+      "version": "20261110065634",
+      "name": "guard_forced_password_change_flag",
+      "file": "20261110065634_guard_forced_password_change_flag.sql",
+      "statement_count": 1,
+      "statements_sha256": "a1b2eb713198c26d0e0afb4b6997b5eb77013b2a77717b9df59025b7805479bf"
+    },
+    {
+      "version": "20261110134607",
+      "name": "minimize_phi_in_audit_ledger",
+      "file": "20261110134607_minimize_phi_in_audit_ledger.sql",
+      "statement_count": 1,
+      "statements_sha256": "5771d1b690b1bd04958d363a904b7b9a732d59f39a9887df64ae425f2e44a398"
+    },
+    {
+      "version": "20261110134826",
+      "name": "add_idempotent_referral_notification_queue",
+      "file": "20261110134826_add_idempotent_referral_notification_queue.sql",
+      "statement_count": 1,
+      "statements_sha256": "b9f8e70a4a12eb35161b7f27218d167b4ae9f3c71db107ccb259ec119f769e3d"
+    },
+    {
+      "version": "20261110135058",
+      "name": "restrict_notification_trigger_function",
+      "file": "20261110135058_restrict_notification_trigger_function.sql",
+      "statement_count": 1,
+      "statements_sha256": "e16a422a6e9caac46ec63362be4a484179568f8f227a88d0668f594a897adb95"
+    },
+    {
+      "version": "20261110135145",
+      "name": "add_privacy_preserving_public_health_aggregate",
+      "file": "20261110135145_add_privacy_preserving_public_health_aggregate.sql",
+      "statement_count": 1,
+      "statements_sha256": "5025064254756f8b648b20686db1b84b808410374ccbb8cf051cec690f19785e"
+    },
+    {
+      "version": "20261110135512",
+      "name": "exclude_referral_identifiers_from_audit",
+      "file": "20261110135512_exclude_referral_identifiers_from_audit.sql",
+      "statement_count": 1,
+      "statements_sha256": "a28b35426f0c3ce068a337aacd7e51eb8bf70c6d288ae6135952d56aa84046cc"
+    },
+    {
+      "version": "20261110142053",
+      "name": "publish_referral_notifications_to_realtime",
+      "file": "20261110142053_publish_referral_notifications_to_realtime.sql",
+      "statement_count": 1,
+      "statements_sha256": "7f590c507023c0d6901c3740d0b757ef5f77dc72e19bc174e69312866cf5a7eb"
+    },
+    {
+      "version": "20261110181053",
+      "name": "restore_admin_reporting_and_counter_referral_workflows",
+      "file": "20261110181053_restore_admin_reporting_and_counter_referral_workflows.sql",
+      "statement_count": 1,
+      "statements_sha256": "b8961252f9b4693000a8ef2105931306ea22a8d0c6bf3c88fd86bf6e41a298a6"
+    },
+    {
+      "version": "20261110181810",
+      "name": "fix_admin_facility_reporting_output_qualification",
+      "file": "20261110181810_fix_admin_facility_reporting_output_qualification.sql",
+      "statement_count": 1,
+      "statements_sha256": "1053ffbf5459a41deea83e6feb63b8a768e324a678a5ff732f0d25b2b09ff45e"
+    },
+    {
+      "version": "20261110182140",
+      "name": "allow_referring_facility_to_read_counter_referral",
+      "file": "20261110182140_allow_referring_facility_to_read_counter_referral.sql",
+      "statement_count": 1,
+      "statements_sha256": "edb2657a2e6376b6e18911ac12435f3af57e3fd1cf70fc37825ca8f9fe56f8b4"
+    },
+    {
+      "version": "20261110182502",
+      "name": "fix_counter_referral_completed_at_ambiguity",
+      "file": "20261110182502_fix_counter_referral_completed_at_ambiguity.sql",
+      "statement_count": 1,
+      "statements_sha256": "a6441de5d8bccd6cd73a70fd5af75b1a7da4dc86099e2f885cf0ddc3a6f32bfc"
+    },
+    {
+      "version": "20261110194223",
+      "name": "restrict_counter_referral_clinical_read_to_participants",
+      "file": "20261110194223_restrict_counter_referral_clinical_read_to_participants.sql",
+      "statement_count": 1,
+      "statements_sha256": "63d467d98eebd1386feb52d30e601c88829427975061cc82c2a03ccfabde2582"
+    },
+    {
+      "version": "20261110202141",
+      "name": "restrict_referral_update_columns",
+      "file": "20261110202141_restrict_referral_update_columns.sql",
+      "statement_count": 1,
+      "statements_sha256": "4e18f15dd89ddb9cc044eb817f8bd26f7423da4b936d84b33dbad24fcf4f9438"
+    },
+    {
+      "version": "20261110203341",
+      "name": "require_authenticated_referral_read_audit",
+      "file": "20261110203341_require_authenticated_referral_read_audit.sql",
+      "statement_count": 1,
+      "statements_sha256": "2146c3279ad865e0c67f1894c529745df9e7aa7f37b23071f4d3388ea5dd2659"
+    }
+  ]
+}
