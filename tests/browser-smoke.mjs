@@ -277,6 +277,7 @@ try {
   profile.role = "receiving_staff";
   referral.status = "sent";
   referral.ack_due_at = "2025-01-02T00:00:00Z";
+  referral.receiving_escalated_at = "2025-01-02T00:01:00Z";
   await signIn(page);
   await page.getByText("Acknowledgement overdue", {exact:true}).waitFor();
   referral.status = "under_assessment";
@@ -284,6 +285,7 @@ try {
   await signIn(page);
   const assessment = page.getByRole("button", {name:"Continue Clinical Assessment"});
   await assessment.waitFor();
+  await page.getByText("Escalation recorded", {exact:true}).waitFor();
   assert.equal(await page.getByText("Acknowledgement overdue", {exact:true}).count(), 0);
   await tabTo(assessment);
   await page.keyboard.press("Enter");
