@@ -1,4 +1,4 @@
-import { validateInvestigationFileContent, createInvestigationFilePath } from "./investigationAttachments.js";
+import { validateInvestigationFileContent, uploadResumableInvestigation } from "./investigationAttachments.js";
 
 export function initialInvestigationRecords(records) {
   return records.map(({ result_file, result_file_path, result_file_name, result_file_type, result_file_size, ...clinical }) => clinical);
@@ -26,20 +26,21 @@ export async function uploadInitialInvestigationFiles(client, referralId, select
   if (!selected.some((record) => record.result_file)) return expected;
   if (!enabled) throw new Error("INVESTIGATION_SERVICE_UNAVAILABLE");
   let records = expected;
+  const {data, error: authError} = await client.auth.getUser();
+  if (authError || !data?.user) throw new Error("INVESTIGATION_SIGN_IN_REQUIRED");
+  const bucket = client.storage.from("referral-investigation-results");
   for (let index = 0; index < selected.length; index++) {
     const file = selected[index].result_file;
     if (!file) continue;
     try {
-    await validateInvestigationFileContent(file);
-    const path = createInvestigationFilePath(referralId, file, uuid);
-    const { error } = await client.storage.from("referral-investigation-results")
-      .upload(path, file, { upsert: false, contentType: file.type });
-    if (error) throw new Error("INVESTIGATION_OUTCOME_UNCONFIRMED");
-    const saved = await saveInvestigation(client, referralId, records, index, {
-      result_file_path: path, result_file_name: file.name,
-      result_file_type: file.type, result_file_size: file.size,
-    }, uuid());
-    records = saved.investigation_records;
+      await validateInvestigationFileContent(file);
+      const path = await uploadResumableInvestigation(bucket, referralId, data.user.id, index, file);
+      if (records[index]?.result_file_path === path) continue;
+      const saved = await saveInvestigation(client, referralId, records, index, {
+        result_file_path: path, result_file_name: file.name,
+        result_file_type: file.type, result_file_size: file.size,
+      }, uuid());
+      records = saved.investigation_records;
     } catch (error) {
       error.confirmedRecords = records;
       throw error;
