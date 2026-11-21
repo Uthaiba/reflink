@@ -3238,7 +3238,7 @@ provisional_diagnosis: "",
         if (Array.isArray(attachmentError.confirmedRecords)) savedInvestigationRecords = attachmentError.confirmedRecords;
         attachmentWarning = attachmentError.message === "INVESTIGATION_SERVICE_UNAVAILABLE"
           ? " Investigation attachments were not uploaded because the verified attachment service is unavailable. Preserve the original documents and follow the facility referral procedure."
-          : " Attachment registration could not be fully confirmed. The referral remains saved. Preserve the originals and ask an administrator to reconcile the uploads before retrying.";
+          : " Attachment registration could not be fully confirmed. The referral remains saved. Keep the originals. While the referral is still sent, reopen it and select the same file for the missing investigation document.";
       }
 
       const referringFacility = facilities.find(
@@ -3998,6 +3998,10 @@ provisional_diagnosis: "",
    ========================================================= */
 
 function PHCStaffDashboard({ onNewReferral }) {
+  const [actorId, setActorId] = useState(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const retryLock = useRef(false);
+  const [attachmentStatus, setAttachmentStatus] = useState("");
   const [referrals, setReferrals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -4013,6 +4017,28 @@ function PHCStaffDashboard({ onNewReferral }) {
   /* =========================================================
      LOAD MY REFERRALS
      ========================================================= */
+
+  async function attachMissingFile(referral, index, file) {
+    if (!file || retryLock.current) return;
+    retryLock.current = true;
+    setAttachmentBusy(true);
+    setAttachmentStatus("");
+    try {
+      const selected = referral.investigation_records.map((record, position) =>
+        position === index ? {...record, result_file:file} : record);
+      const records = await uploadInitialInvestigationFiles(supabase, referral.id, selected,
+        referral.investigation_records, atomicInvestigationUpdatesEnabled);
+      const update = row => row?.id === referral.id ? {...row, investigation_records:records} : row;
+      setSelectedReferral(update);
+      setReferrals(rows => rows.map(update));
+      setAttachmentStatus("Document attached.");
+    } catch {
+      setAttachmentStatus("Attachment could not be confirmed. Reopen the referral to check the latest record before retrying.");
+    } finally {
+      retryLock.current = false;
+      setAttachmentBusy(false);
+    }
+  }
 
   const loadMyReferrals = async () => {
     setLoading(true);
@@ -4030,6 +4056,7 @@ function PHCStaffDashboard({ onNewReferral }) {
         );
       }
 
+      setActorId(user.id);
       const {
         data: profile,
         error: profileError,
@@ -4082,6 +4109,7 @@ function PHCStaffDashboard({ onNewReferral }) {
         .from("referrals")
         .select(`
           id,
+          referring_user_id,
           referral_number,
           patient_identifier,
           patient_age_months,
@@ -4852,6 +4880,21 @@ function PHCStaffDashboard({ onNewReferral }) {
             <hr />
 
             <ReferralSourceDetails referral={selectedReferral} />
+            {atomicInvestigationUpdatesEnabled && selectedReferral.status === "sent" &&
+              actorId && selectedReferral.referring_user_id === actorId &&
+              Array.isArray(selectedReferral.investigation_records) && <>
+                {selectedReferral.investigation_records.map((record, index) =>
+                  record && typeof record === "object" && !record.result_file_path &&
+                  <label key={index}>Attach document for {record.investigation || record.name || `investigation ${index + 1}`}
+                    <input type="file" disabled={attachmentBusy}
+                      onChange={event => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        void attachMissingFile(selectedReferral, index, file);
+                      }} />
+                  </label>)}
+                <p role="status">{attachmentStatus}</p>
+              </>}
 
             <hr />
 
