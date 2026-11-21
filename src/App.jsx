@@ -5209,13 +5209,19 @@ function ReceivingDashboard() {
         console.error("INVESTIGATION FILE UPLOAD ERROR:", err?.message || "Upload failed");
       }
       if (uploadAttempted) {
-        const recovery = await inspectInvestigationAttachment(
-          () => supabase.from("referrals").select("investigation_records")
-            .eq("id", selectedReferral.id).single(),
-          path
-        );
+        let latestRecords;
+        const recovery = await inspectInvestigationAttachment(async () => {
+          const response = await supabase.from("referrals").select("investigation_records")
+            .eq("id", selectedReferral.id).single();
+          latestRecords = response.data?.investigation_records;
+          return response;
+        }, path);
         if (recovery === "referenced") {
-          setError("Attachment appears saved in the referral, but confirmation failed. Refresh and verify it before retrying.");
+          const refreshRecords = row => row?.id === selectedReferral.id
+            ? { ...row, investigation_records: latestRecords } : row;
+          setSelectedReferral(refreshRecords);
+          setReferrals(rows => rows.map(refreshRecords));
+          setMessage("The referral contains the uploaded document. Its attachment list has been refreshed.");
         } else if (recovery === "unreferenced") {
           setError("The uploaded attachment is not currently referenced by the referral. No file was deleted. Ask an administrator to reconcile the upload before retrying.");
         } else {
