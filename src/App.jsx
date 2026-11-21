@@ -5142,6 +5142,17 @@ function PHCStaffDashboard({ onNewReferral }) {
    ========================================================= */
 
 function ReceivingDashboard() {
+  async function confirmEscalationSeen(id) {
+    setError("");
+    try {
+      const {data, error} = await supabase.rpc("confirm_escalation_seen", {p_referral:id});
+      if (error || !data) throw new Error();
+      setReferrals(rows => rows.map(row => row.id === id ? {...row, receiving_escalation_seen_at:data} : row));
+    } catch {
+      setError("Receipt could not be confirmed. You can retry.");
+    }
+  }
+
   const [referralView, setReferralView] = useState("active");
 
   const [referrals, setReferrals] =
@@ -5495,6 +5506,7 @@ function ReceivingDashboard() {
             created_at,
             ack_due_at,
             receiving_escalated_at,
+            receiving_escalation_seen_at,
             acknowledged_at,
             patient_arrived_at,
             completed_at,
@@ -6545,6 +6557,9 @@ const handleStartAssessment = async (referralId) => {
                         }
                       </strong>
                       {referral.receiving_escalated_at && <p><strong>Escalation recorded</strong> · {new Date(referral.receiving_escalated_at).toLocaleString()}</p>}
+                      {referral.receiving_escalated_at && (referral.receiving_escalation_seen_at
+                        ? <p>Seen by receiving staff · {new Date(referral.receiving_escalation_seen_at).toLocaleString()}</p>
+                        : <button type="button" onClick={() => confirmEscalationSeen(referral.id)}>Mark escalation as seen</button>)}
                       {referral.status === "sent" && !referral.acknowledged_at &&
                         Date.parse(referral.ack_due_at) < Date.now() && (
                           <p><strong>Acknowledgement overdue</strong> · Due {new Date(referral.ack_due_at).toLocaleString()}</p>
