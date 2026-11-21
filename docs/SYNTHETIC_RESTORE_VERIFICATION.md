@@ -9,3 +9,18 @@ The test inherits the loopback server/database/fixture-marker guards from the ba
 This verifies PostgreSQL schema/data/selected permissions restoration using managed-service stubs. It does NOT certify a production backup, hosted PITR, real Auth/session recovery, private file/blob restoration, encryption/key recovery, recovery time/point objectives or a clinical sign-off. Actual production backup and restore evidence remains a release gate. Runtime success must be confirmed from CI before marking this rehearsal passed.
 
 Verified code ca337407bfab8d67e494f8ee0c6403b1fde37b58 passed database workflow #52 and frontend workflows #126/#127, including the restore rehearsal, 112 unit tests, lint/build, synthetic Chromium checks and GitGuardian. The first permission comparison included the intentionally different database name; it was corrected to compare actual privilege fields, and the corrected run passed.
+
+## Hosted recovery drill preparation — 21 November 2026
+
+The Project Lead authorized synthetic-only preparation and validation. The available production schema export contains schema definitions. The existing reflink-synthetic-staging project is the designated testing environment and contains active workflow fixtures. Preserve that environment and use a separate isolated restore instance for a full rehearsal. Obtain an approved destination before provisioning a billable resource or performing an in-place restore.
+
+| Stage | Required observation |
+| --- | --- |
+| Establish the source | Create a synthetic referral with distinguishable referring and receiving facilities, ordered events, hospital feedback and a PHC encounter. Create separate synthetic Auth identities, including an unrelated facility user, and a small private fixture file. Use test-only secrets. |
+| Establish the recovery point | Record the source time, migration versions, fixture counts, private file byte length and SHA-256, and an inventory of required configuration and key identifiers. Keep credentials, keys and file payloads out of reports. |
+| Restore in isolation | Restore the database, Auth identities, bucket configuration and private objects using the applicable supported recovery paths. Restore test-only key material through the designated secret store. Keep outbound notifications disabled during the rehearsal. |
+| Verify through the application | Sign in with the restored test identities. Check both facility assignments, event order, separate milestones, and the file checksum after an authorized download. Confirm denial for the unrelated facility. Verify that the restored application can read an encrypted test fixture using the recovered test configuration. |
+| Rehearse release and rollback | Apply the release candidate, record a synthetic post-migration event, exercise rollback, and verify the approved handling of writes made after migration. Compare the referral, event history, private file and permissions again. |
+| Record acceptance | Record start/end times, measured recovery time, recovered point, observed losses, and failures. The designated recovery and release owners review the results against approved objectives. |
+
+Current evidence covers a disposable PostgreSQL restore, including ordered referral history and facility assignments. The hosted Auth, private-file, key and configuration restore has no recorded passing result. Operational recovery remains open.
