@@ -5493,6 +5493,7 @@ function ReceivingDashboard() {
             urgency,
             status,
             created_at,
+            ack_due_at,
             acknowledged_at,
             patient_arrived_at,
             completed_at,
@@ -6542,6 +6543,11 @@ const handleStartAssessment = async (referralId) => {
                           referral.referral_number
                         }
                       </strong>
+                      {referral.status === "sent" && !referral.acknowledged_at &&
+                        Date.parse(referral.ack_due_at) < Date.now() && (
+                          <p><strong>Acknowledgement overdue</strong> · Due {new Date(referral.ack_due_at).toLocaleString()}</p>
+                        )}
+
 
                       <p>
                         Patient:{" "}
