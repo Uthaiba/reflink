@@ -84,3 +84,7 @@ Separately, a rollback-only staging database check using temporary session claim
 ## Hosted escalation receipt and acknowledgement — 21 November 2026
 
 Synthetic referral RF-TEST-F70C638C had one automatic escalation at 18:40:00 UTC and one staff receipt at 18:52:07 UTC. The receipt actor belonged to the assigned receiving facility. The referral acknowledgement was saved at 18:52:23 UTC, with one acknowledgement notification record. The receiving dashboard screenshot showed both earlier timestamps, Acknowledged status and the Mark Patient Arrived action. This completes the synthetic escalation-to-acknowledgement scenario.
+
+## Hosted continuity milestones — 21 November 2026
+
+For synthetic referral RF-TEST-F70C638C, the hospital sent final feedback at 19:13:46 UTC. The PHC screen confirmed a saved, performed encounter at 19:25 UTC. A read-only staging query found one hospital feedback record and one performed PHC encounter for this referral. This verifies the two milestones for this case. Monthly reporting on eligible referrals still requires separate reconciliation.
