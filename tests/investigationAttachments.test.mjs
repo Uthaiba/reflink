@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateInvestigationFile, validateInvestigationFileContent, createInvestigationFilePath } from "../src/lib/investigationAttachments.js";
+import { uploadResumableInvestigation, validateInvestigationFile, validateInvestigationFileContent, createInvestigationFilePath } from "../src/lib/investigationAttachments.js";
 
 const referralId = "11111111-1111-4111-8111-111111111111";
 const attachmentId = "22222222-2222-4222-8222-222222222222";
@@ -65,4 +65,28 @@ test("separate upload identifiers produce distinct immutable paths", () => {
   const first = createInvestigationFilePath(referralId, file, () => attachmentId);
   const second = createInvestigationFilePath(referralId, file, () => "33333333-3333-4333-8333-333333333333");
   assert.notEqual(first, second);
+});
+
+test("reopening a receiving investigation resumes one upload after a lost response", async () => {
+  const objects = new Map();
+  let connected = false;
+  const bucket = {
+    async upload(path, file, options) {
+      assert.equal(options.upsert, false);
+      if (!objects.has(path)) objects.set(path, file);
+      return {error: new Error("Upload response unavailable")};
+    },
+    async download(path) {
+      return connected ? {data:objects.get(path)} : {error:new Error("Disconnected")};
+    }
+  };
+  const selectFile = () => document("synthetic.pdf", "application/pdf", [37,80,68,70,45]);
+  const retry = () => uploadResumableInvestigation(bucket, referralId, attachmentId, 0, selectFile());
+  await assert.rejects(retry);
+  connected = true;
+  const path = await retry();
+  assert.equal(objects.size, 1);
+  assert.equal(await retry(), path);
+  objects.set(path, document("different.pdf", "application/pdf", [37,80,68,70,46]));
+  await assert.rejects(retry);
 });
