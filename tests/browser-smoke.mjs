@@ -275,11 +275,16 @@ try {
   await dashboard.getByRole("button", {name:"Sign Out", exact:true}).click();
   await page.getByRole("button", {name:"Sign In", exact:true}).first().waitFor();
   profile.role = "receiving_staff";
+  referral.status = "sent";
+  referral.ack_due_at = "2025-01-02T00:00:00Z";
+  await signIn(page);
+  await page.getByText("Acknowledgement overdue", {exact:true}).waitFor();
   referral.status = "under_assessment";
   await page.setViewportSize({width:390, height:844});
   await signIn(page);
   const assessment = page.getByRole("button", {name:"Continue Clinical Assessment"});
   await assessment.waitFor();
+  assert.equal(await page.getByText("Acknowledgement overdue", {exact:true}).count(), 0);
   await tabTo(assessment);
   await page.keyboard.press("Enter");
   await timeline.waitFor();
