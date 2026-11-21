@@ -1,3 +1,4 @@
+import ClinicalAddenda from "./ClinicalAddenda.jsx";
 import "./continuity-panel.css";
 import {useEffect, useRef, useState} from "react";
 import {supabase} from "../lib/supabase.js";
@@ -48,5 +49,6 @@ export default function HospitalFeedback({referral, onComplete}) {
         <label>Follow-up instructions<textarea name="plan" defaultValue={referral.follow_up_plan} maxLength={4000}/></label>
         <button type="submit">Send final feedback and complete hospital handoff</button>
       </fieldset></form> : <p>No final hospital feedback recorded.</p>)}
+    {referral.status === "completed" && <ClinicalAddenda key={referral.id} referralId={referral.id} />}
   </section>;
 }
