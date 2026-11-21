@@ -29,6 +29,7 @@ createRoot(document.getElementById('root')).render(React.createElement('main', {
   React.createElement(PhcFollowUp, {referralId:'synthetic'})));
 </script></body></html>`;
 const development = await createServer({ define: {
+  'import.meta.env.VITE_ATOMIC_INVESTIGATIONS_ENABLED': JSON.stringify('true'),
   'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://reflink-synthetic.invalid'),
   'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('synthetic-public-client'),
 }, server: { host: "127.0.0.1", port: 4180, strictPort: true }, plugins: [{ name: "synthetic-browser-harness", configureServer(server) {
@@ -97,6 +98,10 @@ try {
   const encode = value => Buffer.from(JSON.stringify(value)).toString("base64url");
   const token = () => [encode({alg:"HS256",typ:"JWT"}), encode({sub:user.id, exp:Math.floor(Date.now()/1000)+3600}), "dGVzdA"].join(".");
   let addendum;
+  const fileBytes = Buffer.from("Synthetic attachment retry fixture");
+  let storedPath;
+  let reconnect = false;
+  let registrations = 0;
   let authorId;
   let logoutReceived = false;
   await page.unroute("https://reflink-synthetic.invalid/**");
@@ -124,6 +129,26 @@ try {
         addendum.reviewed_at = "2025-01-04T12:00:00Z";
       }
       return route.fulfill({json:addendum ? [{...addendum, can_review:user.id !== authorId && addendum.status === "pending"}] : []});
+    }
+    if (path.includes("/storage/v1/object/")) {
+      const key = path.split("referral-investigation-results/")[1];
+      if (route.request().method() === "POST") {
+        if (!storedPath) {
+          storedPath = key;
+          return route.abort();
+        }
+        assert.equal(key, storedPath);
+        return route.fulfill({status:409,json:{message:"Object already exists"}});
+      }
+      assert.equal(key, storedPath);
+      return reconnect ? route.fulfill({body:fileBytes,contentType:"text/plain"}) : route.abort();
+    }
+    if (path === "/rest/v1/rpc/save_referral_investigation") {
+      const fields = route.request().postDataJSON();
+      assert.equal(fields.p_patch.result_file_path, storedPath);
+      registrations++;
+      referral.investigation_records = [{...referral.investigation_records[0], ...fields.p_patch}];
+      return route.fulfill({json:{status:"saved",investigation_records:referral.investigation_records}});
     }
     const responses = {
       "/rest/v1/counter_referrals": [{final_diagnosis:"Synthetic diagnosis", outcome:"improved", created_at:"2025-01-01T12:00:00Z"}],
@@ -260,6 +285,33 @@ try {
   await timeline.waitFor();
   assert.equal(await timeline.count(), 1, "Receiving referral must have one timeline");
   console.log("browser_single_timeline_both_roles: passed");
+
+  await signIn(dashboard);
+  await dashboard.getByRole("button", {name:"Sign Out", exact:true}).click();
+  await page.getByRole("button", {name:"Sign In", exact:true}).first().waitFor();
+  profile.role = "phc_staff";
+  Object.assign(referral, {id:crypto.randomUUID(), status:"sent", referring_user_id:user.id,
+    investigation_records:[{investigation:"Synthetic investigation"}]});
+  const file = {name:"synthetic-retry.txt",mimeType:"text/plain",buffer:fileBytes};
+  async function openSentReferral() {
+    await signIn(page);
+    await page.getByRole("button").filter({hasText:marker}).click();
+  }
+  await openSentReferral();
+  const picker = page.getByLabel("Attach document for Synthetic investigation");
+  await picker.setInputFiles(file);
+  await page.getByText(/Attachment could not be confirmed/).waitFor();
+  assert.ok(storedPath);
+  assert.equal(registrations, 0);
+  reconnect = true;
+  await openSentReferral();
+  await picker.setInputFiles(file);
+  await page.getByText("Document attached.", {exact:true}).waitFor();
+  await openSentReferral();
+  assert.equal(await picker.count(), 0);
+  assert.equal(registrations, 1);
+  await page.getByText(file.name, {exact:true}).waitFor();
+  console.log("browser_phc_reopen_after_interrupted_attachment: passed");
 } finally {
   await browser?.close();
   await development.close();
