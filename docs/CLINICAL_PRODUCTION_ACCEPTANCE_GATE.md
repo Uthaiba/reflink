@@ -80,3 +80,7 @@ Spoken output remains pending. In the staging preview, sign in as synthetic PHC 
 For SYNTHETIC-ATTACH-001, hosted staging contained one private object linked to the investigation. The referral and storage metadata both recorded 69 bytes. The mobile tester opened reflink-test.txt and supplied a screenshot showing the expected synthetic sentence and referral reference. The file viewer identifies the filename and visible text. It does not display the signed-in REFLINK account.
 
 Separately, a rollback-only staging database check using temporary session claims found one visible attachment object for the assigned receiving facility and zero for the unrelated facility. Chromium compared the downloaded bytes against the original fixture using simulated storage responses in [the browser checks](https://github.com/Uthaiba/reflink/actions/runs/44895169467). Backup restoration and clinical approval remain separate release gates.
+
+## Hosted escalation receipt and acknowledgement — 21 November 2026
+
+Synthetic referral RF-TEST-F70C638C had one automatic escalation at 18:40:00 UTC and one staff receipt at 18:52:07 UTC. The receipt actor belonged to the assigned receiving facility. The referral acknowledgement was saved at 18:52:23 UTC, with one acknowledgement notification record. The receiving dashboard screenshot showed both earlier timestamps, Acknowledged status and the Mark Patient Arrived action. This completes the synthetic escalation-to-acknowledgement scenario.
