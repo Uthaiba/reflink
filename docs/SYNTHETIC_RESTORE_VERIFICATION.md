@@ -12,7 +12,7 @@ Verified code ca337407bfab8d67e494f8ee0c6403b1fde37b58 passed database workflow 
 
 ## Hosted recovery drill preparation — 21 November 2026
 
-The Project Lead authorized synthetic-only preparation and validation. The available production schema export contains schema definitions. The existing reflink-synthetic-staging project is the designated testing environment and contains active workflow fixtures. Preserve that environment and use a separate isolated restore instance for a full rehearsal. Obtain an approved destination before provisioning a billable resource or performing an in-place restore.
+The Project Lead authorized synthetic-only preparation and validation. The available production schema export contains schema definitions. The existing reflink-synthetic-staging project is the designated testing environment and contains active workflow fixtures. Use scoped synthetic fixtures for non-destructive checks in that environment. If the provider restore would overwrite existing staging fixtures, obtain an approved maintenance window and recovery plan or an approved disposable destination. Creating a billable resource needs separate authorization.
 
 | Stage | Required observation |
 | --- | --- |
