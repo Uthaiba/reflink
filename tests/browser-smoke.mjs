@@ -95,7 +95,9 @@ try {
   const marker = "SYNTHETIC-SIGNOUT-CASE";
   const referral = { id: "test-referral", referral_number: marker, patient_identifier: marker, status: "discharged", urgency: "routine" };
   const encode = value => Buffer.from(JSON.stringify(value)).toString("base64url");
-  const token = [encode({alg:"HS256",typ:"JWT"}), encode({sub:user.id, exp:Math.floor(Date.now()/1000)+3600}), "dGVzdA"].join(".");
+  const token = () => [encode({alg:"HS256",typ:"JWT"}), encode({sub:user.id, exp:Math.floor(Date.now()/1000)+3600}), "dGVzdA"].join(".");
+  let addendum;
+  let authorId;
   let logoutReceived = false;
   await page.unroute("https://reflink-synthetic.invalid/**");
   await context.route("https://reflink-synthetic.invalid/**", async route => {
@@ -108,9 +110,24 @@ try {
       const fields = route.request().postDataJSON();
       return route.fulfill({json: fields.p_operation ? [{kind:fields.p_kind, encounter_at:fields.p_encounter, outcome:fields.p_outcome}] : []});
     }
+    if (path === "/rest/v1/rpc/closed_record_addenda") {
+      const fields = route.request().postDataJSON();
+      assert.equal(fields.p_referral, referral.id);
+      if (fields.p_action === "request") {
+        authorId = user.id;
+        addendum = {id:fields.p_request, amendment:fields.p_amendment, reason:fields.p_reason,
+          requested_at:"2025-01-03T12:00:00Z", status:"pending"};
+      } else if (fields.p_action === "approved") {
+        assert.notEqual(user.id, authorId);
+        assert.equal(fields.p_request, addendum.id);
+        addendum.status = "approved";
+        addendum.reviewed_at = "2025-01-04T12:00:00Z";
+      }
+      return route.fulfill({json:addendum ? [{...addendum, can_review:user.id !== authorId && addendum.status === "pending"}] : []});
+    }
     const responses = {
       "/rest/v1/counter_referrals": [{final_diagnosis:"Synthetic diagnosis", outcome:"improved", created_at:"2025-01-01T12:00:00Z"}],
-      "/auth/v1/token": {access_token:token, refresh_token:"synthetic-refresh", expires_in:3600, token_type:"bearer", user},
+      "/auth/v1/token": {access_token:token(), refresh_token:"synthetic-refresh", expires_in:3600, token_type:"bearer", user},
       "/auth/v1/user": user,
       "/rest/v1/profiles": profile,
       "/rest/v1/referrals": [referral],
@@ -199,6 +216,33 @@ try {
   await page.getByRole("button", {name:"Sign In", exact:true}).first().waitFor();
   assert.equal(await page.getByText(marker, {exact:false}).count(), 0);
   console.log("browser_cross_document_back_and_persisted_restore: passed");
+
+  referral.status = "completed";
+  async function openCompletedReferral() {
+    await signIn(page);
+    await page.getByRole("button").filter({hasText:marker}).click();
+    await feedback.getByText("improved", {exact:true}).waitFor();
+  }
+  await openCompletedReferral();
+  const addenda = page.getByRole("region", {name:"Clinical addenda"});
+  await addenda.locator("summary").click();
+  await addenda.getByLabel("Reason for correction").fill("Clarify the recorded outcome");
+  await addenda.getByLabel("Proposed addendum", {exact:false}).fill("Synthetic clarification");
+  await addenda.getByRole("button", {name:"Request clinical review"}).click();
+  await addenda.getByText("Pending review", {exact:true}).waitFor();
+  assert.equal(await addenda.getByRole("button", {name:"Approve addendum"}).count(), 0);
+  await signIn(dashboard);
+  await dashboard.getByRole("button", {name:"Sign Out", exact:true}).click();
+  await page.getByRole("button", {name:"Sign In", exact:true}).first().waitFor();
+  user.id = "00000000-0000-4000-8000-000000000002";
+  user.email = "reviewer@example.invalid";
+  profile.id = user.id;
+  await openCompletedReferral();
+  await addenda.getByRole("button", {name:"Approve addendum"}).click();
+  await addenda.getByText("Approved addendum", {exact:true}).waitFor();
+  await addenda.getByText("Synthetic clarification", {exact:true}).waitFor();
+  await feedback.getByText("improved", {exact:true}).waitFor();
+  console.log("browser_independent_addendum_review: passed");
 } finally {
   await browser?.close();
   await development.close();
