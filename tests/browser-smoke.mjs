@@ -224,6 +224,8 @@ try {
     await feedback.getByText("improved", {exact:true}).waitFor();
   }
   await openCompletedReferral();
+  const timeline = page.getByRole("heading", {name:"Referral Timeline", exact:true});
+  assert.equal(await timeline.count(), 1, "PHC referral must have one timeline");
   const addenda = page.getByRole("region", {name:"Clinical addenda"});
   await addenda.locator("summary").click();
   await addenda.getByLabel("Reason for correction").fill("Clarify the recorded outcome");
@@ -243,6 +245,21 @@ try {
   await addenda.getByText("Synthetic clarification", {exact:true}).waitFor();
   await feedback.getByText("improved", {exact:true}).waitFor();
   console.log("browser_independent_addendum_review: passed");
+
+  await signIn(dashboard);
+  await dashboard.getByRole("button", {name:"Sign Out", exact:true}).click();
+  await page.getByRole("button", {name:"Sign In", exact:true}).first().waitFor();
+  profile.role = "receiving_staff";
+  referral.status = "under_assessment";
+  await page.setViewportSize({width:390, height:844});
+  await signIn(page);
+  const assessment = page.getByRole("button", {name:"Continue Clinical Assessment"});
+  await assessment.waitFor();
+  await tabTo(assessment);
+  await page.keyboard.press("Enter");
+  await timeline.waitFor();
+  assert.equal(await timeline.count(), 1, "Receiving referral must have one timeline");
+  console.log("browser_single_timeline_both_roles: passed");
 } finally {
   await browser?.close();
   await development.close();
