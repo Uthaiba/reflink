@@ -150,6 +150,11 @@ try {
       referral.investigation_records = [{...referral.investigation_records[0], ...fields.p_patch}];
       return route.fulfill({json:{status:"saved",investigation_records:referral.investigation_records}});
     }
+    if (path === "/rest/v1/rpc/confirm_escalation_seen") {
+      assert.equal(route.request().postDataJSON().p_referral, referral.id);
+      referral.receiving_escalation_seen_at = "2025-01-02T00:04:00Z";
+      return route.fulfill({json:referral.receiving_escalation_seen_at});
+    }
     const responses = {
       "/rest/v1/counter_referrals": [{final_diagnosis:"Synthetic diagnosis", outcome:"improved", created_at:"2025-01-01T12:00:00Z"}],
       "/auth/v1/token": {access_token:token(), refresh_token:"synthetic-refresh", expires_in:3600, token_type:"bearer", user},
@@ -279,6 +284,9 @@ try {
   referral.ack_due_at = "2025-01-02T00:00:00Z";
   referral.receiving_escalated_at = "2025-01-02T00:01:00Z";
   await signIn(page);
+  await page.getByText("Acknowledgement overdue", {exact:true}).waitFor();
+  await page.getByRole("button", {name:"Mark escalation as seen"}).click();
+  await page.getByText(/Seen by receiving staff/).waitFor();
   await page.getByText("Acknowledgement overdue", {exact:true}).waitFor();
   referral.status = "under_assessment";
   await page.setViewportSize({width:390, height:844});
