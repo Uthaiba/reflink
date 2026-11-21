@@ -311,6 +311,13 @@ try {
   assert.equal(await picker.count(), 0);
   assert.equal(registrations, 1);
   await page.getByText(file.name, {exact:true}).waitFor();
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByRole("button", {name:"Download document"}).click();
+  const download = await downloadEvent;
+  assert.equal(download.suggestedFilename(), file.name);
+  const chunks = [];
+  for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+  assert.deepEqual(Buffer.concat(chunks), fileBytes);
   console.log("browser_phc_reopen_after_interrupted_attachment: passed");
 } finally {
   await browser?.close();
