@@ -292,6 +292,22 @@ function normalizeInvestigationRecord(item) {
 function InvestigationResultCards({ investigations, editable = false, onResultChange, onFileUpload, expectedSnapshot }) {
   const [drafts, setDrafts] = useState({});
   const [saving, setSaving] = useState(null);
+  const [downloadMessage, setDownloadMessage] = useState("");
+  async function downloadResult(item) {
+    setDownloadMessage("");
+    try {
+      const {data, error} = await supabase.storage.from("referral-investigation-results").download(item.result_file_path);
+      if (error || !data) throw new Error("Download unavailable");
+      const url = URL.createObjectURL(data);
+      try {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = item.result_file_name || "investigation-result";
+        link.click();
+      } finally { window.setTimeout(() => URL.revokeObjectURL(url), 1000); }
+      setDownloadMessage("Download started.");
+    } catch { setDownloadMessage("Download unavailable. Check your connection and referral access."); }
+  }
   const hasUnsavedChanges = Object.keys(drafts).length > 0;
   useEffect(() => registerClinicalDraft(window, () => hasUnsavedChanges || saving !== null), [hasUnsavedChanges, saving]);
   const changeDraft = (index, patch) => setDrafts((previous) => ({
@@ -315,6 +331,7 @@ function InvestigationResultCards({ investigations, editable = false, onResultCh
   const normalized = investigations.map((item, index) => ({ ...normalizeInvestigationRecord(item), ...drafts[index]?.patch }));
   return (
     <div className="investigation-result-list">
+      <p role="status">{downloadMessage}</p>
       {normalized.map((item, index) => {
         const config = getInvestigationResultConfig(item.investigation);
         return (
@@ -353,7 +370,7 @@ function InvestigationResultCards({ investigations, editable = false, onResultCh
               </button>
             </div>}
             <div className="investigation-file-row">
-              <div><span>Original result</span><strong>{item.result_file_name || "No result document attached"}</strong>{item.result_file_size ? <small>{item.result_file_size < 1024 ? `${item.result_file_size} B` : `${Math.round(item.result_file_size / 1024)} KB`}</small> : null}</div>
+              <div><span>Original result</span><strong>{item.result_file_name || "No result document attached"}</strong>{item.result_file_size ? <small>{item.result_file_size < 1024 ? `${item.result_file_size} B` : `${Math.round(item.result_file_size / 1024)} KB`}</small> : null}{item.result_file_path && <button type="button" onClick={() => downloadResult(item)}>Download document</button>}</div>
               {editable && <label className="upload-result-button">📎 {item.result_file_name ? "Replace result" : "Upload result"}<input type="file" disabled={saving !== null || Object.keys(drafts).length > 0} accept="application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv" onChange={(e) => onFileUpload?.(index, e.target.files?.[0] || null)} /></label>}
             </div>
           </div>
