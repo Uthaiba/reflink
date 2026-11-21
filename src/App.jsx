@@ -16,7 +16,7 @@ const atomicInvestigationUpdatesEnabled = import.meta.env.VITE_ATOMIC_INVESTIGAT
 import { changeAccountPassword, resolvePasswordChangeMode } from "./lib/passwordChange.js";
 import { getLegacyDiagnosisStatus } from "./lib/diagnosisRecords.js";
 import { inspectInvestigationAttachment } from "./lib/investigationAttachmentRecovery.js";
-import { validateInvestigationFile, validateInvestigationFileContent, createInvestigationFilePath } from "./lib/investigationAttachments.js";
+import { validateInvestigationFile, validateInvestigationFileContent, uploadResumableInvestigation } from "./lib/investigationAttachments.js";
 const AdminDashboard = lazy(() => import("./components/dashboards/AdminDashboard.jsx"));
 const AnalyticsDashboard = lazy(() => import("./components/dashboards/AnalyticsDashboard.jsx"));
 const AnalysisHub = lazy(() => import("./components/dashboards/AnalysisHub.jsx"));
@@ -5184,13 +5184,15 @@ function ReceivingDashboard() {
         setError("Investigation document was not uploaded. Check that it is non-empty, no larger than 10 MB, and has a supported format matching its contents.");
         return;
       }
-      path = createInvestigationFilePath(selectedReferral.id, file);
-      // A lost storage response can hide a successful upload.
+      const { data: session, error: sessionError } = await supabase.auth.getUser();
+      if (sessionError || !session.user) throw new Error("Sign in to upload this document.");
       uploadAttempted = true;
-      const { error: uploadError } = await supabase.storage
-        .from("referral-investigation-results")
-        .upload(path, file, { upsert: false, contentType: file.type });
-      if (uploadError) throw uploadError;
+      path = await uploadResumableInvestigation(supabase.storage.from("referral-investigation-results"),
+        selectedReferral.id, session.user.id, index, file);
+      if (current[index].result_file_path === path) {
+        setMessage("This document is already attached to the investigation.");
+        return;
+      }
       const data = await saveInvestigation(
         supabase, selectedReferral.id, selectedReferral.investigation_records, index,
         { result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size },
@@ -5208,7 +5210,9 @@ function ReceivingDashboard() {
       } else {
         console.error("INVESTIGATION FILE UPLOAD ERROR:", err?.message || "Upload failed");
       }
-      if (uploadAttempted) {
+      if (uploadAttempted && !path) {
+        setError("Upload could not be confirmed. Reopen this investigation and select the same file to retry.");
+      } else if (uploadAttempted) {
         let latestRecords;
         const recovery = await inspectInvestigationAttachment(async () => {
           const response = await supabase.from("referrals").select("investigation_records")
