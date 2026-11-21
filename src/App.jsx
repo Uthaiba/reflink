@@ -353,7 +353,7 @@ function InvestigationResultCards({ investigations, editable = false, onResultCh
               </button>
             </div>}
             <div className="investigation-file-row">
-              <div><span>Original result</span><strong>{item.result_file_name || "No result document attached"}</strong>{item.result_file_size ? <small>{Math.round(item.result_file_size / 1024)} KB</small> : null}</div>
+              <div><span>Original result</span><strong>{item.result_file_name || "No result document attached"}</strong>{item.result_file_size ? <small>{item.result_file_size < 1024 ? `${item.result_file_size} B` : `${Math.round(item.result_file_size / 1024)} KB`}</small> : null}</div>
               {editable && <label className="upload-result-button">📎 {item.result_file_name ? "Replace result" : "Upload result"}<input type="file" disabled={saving !== null || Object.keys(drafts).length > 0} accept="application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv" onChange={(e) => onFileUpload?.(index, e.target.files?.[0] || null)} /></label>}
             </div>
           </div>
