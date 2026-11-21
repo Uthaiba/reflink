@@ -88,3 +88,7 @@ Synthetic referral RF-TEST-F70C638C had one automatic escalation at 18:40:00 UTC
 ## Hosted continuity milestones — 21 November 2026
 
 For synthetic referral RF-TEST-F70C638C, the hospital sent final feedback at 19:13:46 UTC. The PHC screen confirmed a saved, performed encounter at 19:25 UTC. A read-only staging query found one hospital feedback record and one performed PHC encounter for this referral. This verifies the two milestones for this case. Monthly reporting on eligible referrals still requires separate reconciliation.
+
+## Continuity report calculation check — 21 November 2026
+
+Ran the deployed continuity RPC’s aggregation query against transaction-local fixture tables in synthetic staging and rolled back. Twelve eligible November discharges yielded seven distinct hospital feedback milestones and five performed PHC follow-ups. Duplicate events, attempted-only contact, test-flagged and synthetic-prefixed referrals, and a discharge at the next Lagos month boundary contributed no extra counts. With eight feedback and four follow-ups both cells were withheld (complementary four and primary four). With no events both returned visible zero. This covers the aggregation only. Authenticated dashboard, report draft, chart and CSV reconciliation on the same fixture remain open.
