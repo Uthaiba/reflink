@@ -25,6 +25,7 @@ import "./reflink-theme-professional.css";
 import "./admin-dashboard-modern.css";
 import "./reflink-clinical-accessibility.css";
 import "./referral-print.css";
+import "./reflink-logo.css";
 
 function formatPatientAge(ageInMonths) {
   const months = Number(ageInMonths);
@@ -426,7 +427,7 @@ export function PrintReferralSheet({
 
         <div className="print-brand-block">
           <div className="print-brand-mark">
-            <span>R</span>
+            <img src="/reflink-symbol.png" alt="" width="36" height="36" />
           </div>
 
           <div>
@@ -1731,7 +1732,7 @@ const handleSignIn = async () => {
   <>
     <header className="topbar">
       <div className="brand">
-        <div className="brand-mark">R</div>
+        <div className="brand-mark"><img src="/reflink-symbol.png" alt="" width="36" height="36" /></div>
 
         <div>
           <h1>REFLINK</h1>
@@ -2193,7 +2194,7 @@ const handleSignIn = async () => {
       <div className="footer-brand">
 
         <div className="brand">
-          <div className="brand-mark">R</div>
+          <div className="brand-mark"><img src="/reflink-symbol.png" alt="" width="36" height="36" /></div>
 
           <div>
             <h1>REFLINK</h1>
@@ -2249,9 +2250,7 @@ const handleSignIn = async () => {
 
           <div className="login-card">
 
-            <div className="login-logo">
-              R
-            </div>
+            <img className="official-login-logo" src="/reflink-logo.png" width="192" height="63" alt="REFLINK" />
 
             <h2>
               Sign in to REFLINK
@@ -2332,7 +2331,7 @@ const handleSignIn = async () => {
       {screen === "change-password" && (
         <div className="login-page password-page">
           <div className="login-card password-card">
-            <div className="login-logo">R</div>
+            <img className="official-login-logo" src="/reflink-logo.png" width="192" height="63" alt="REFLINK" />
 
             <span className="eyebrow">
               ACCOUNT SECURITY
@@ -2440,9 +2439,7 @@ const handleSignIn = async () => {
 
             <div className="brand">
 
-              <div className="brand-mark">
-                R
-              </div>
+              <div className="brand-mark"><img src="/reflink-symbol.png" alt="" width="36" height="36" /></div>
 
               <div>
                 <h1>REFLINK</h1>
@@ -2547,9 +2544,7 @@ const handleSignIn = async () => {
 
             <div className="brand">
 
-              <div className="brand-mark">
-                R
-              </div>
+              <div className="brand-mark"><img src="/reflink-symbol.png" alt="" width="36" height="36" /></div>
 
               <div>
                 <h1>REFLINK</h1>

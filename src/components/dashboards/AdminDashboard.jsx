@@ -2652,7 +2652,7 @@ function AdminDashboard({
     <div className="admin-modern-shell">
       <aside className="admin-modern-sidebar" aria-label="Administration navigation">
         <div className="admin-sidebar-brand">
-          <div className="admin-sidebar-logo">R</div>
+          <div className="admin-sidebar-logo"><img src="/reflink-symbol.png" alt="" width="36" height="36" /></div>
           <div>
             <strong>REFLINK</strong>
             <span>Health Network</span>
