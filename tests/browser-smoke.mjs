@@ -60,7 +60,8 @@ try {
     return keys;
   });
   assert.ok(cachedPaths.includes("/index.html"));
-  assert.ok(cachedPaths.every((path) => path === "/index.html" || path === "/manifest.webmanifest" || path === "/reflink-icon.svg" || /^\/assets\/[^/]+\.(js|css)$/.test(path)));
+  for (const asset of ["/reflink-logo.png", "/reflink-symbol.png"]) assert.ok(cachedPaths.includes(asset), asset);
+  assert.ok(cachedPaths.every((path) => path === "/index.html" || path === "/manifest.webmanifest" || ["/reflink-icon.svg", "/reflink-logo.png", "/reflink-symbol.png"].includes(path) || /^\/assets\/[^/]+\.(js|css)$/.test(path)));
   await context.setOffline(true);
   await page.reload();
   await page.waitForFunction(() => document.getElementById("root")?.textContent.includes("REFLINK"));
