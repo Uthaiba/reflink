@@ -117,3 +117,7 @@ A signed-in administrator generated the November 2026 Africa/Lagos report on the
 ## Receiving-facility decline — 22 November 2026
 
 Review of the receiving screen and the hosted synthetic staging schema found no referral decline action. The referral status constraint permits cancellation and onward referral. Neither establishes that a receiving clinician declined a referral. The rejection handling located in the closed-record addenda function applies to amendment requests. The end-to-end referral decline check remains blocked on workflow definition and implementation.
+
+## Public Health Intelligence keyboard check at 375 pixels
+
+Chromium rendered the report component at 375 × 812 with a simulated administrator. Keyboard input selected the reporting month, generated the report, selected the continuity dataset and downloaded a CSV containing the expected hospital feedback count. The report fit the viewport without horizontal page scrolling. This check covers this report component. Physical phone and spoken screen-reader testing remain open. [Browser run](https://github.com/Uthaiba/reflink/actions/runs/45036898534)
