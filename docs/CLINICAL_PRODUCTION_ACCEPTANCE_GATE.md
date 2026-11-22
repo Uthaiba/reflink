@@ -96,3 +96,7 @@ Ran the deployed continuity RPC’s aggregation query against transaction-local 
 ## Continuity report browser reconciliation — 22 November 2026
 
 [Chromium CI](https://github.com/Uthaiba/reflink/actions/runs/44992358094) verified the chart, table, CSV download, on-screen draft and downloaded draft using the three staging calculation outputs as simulated RPC responses. Visible counts were 7 hospital feedback and 5 performed PHC follow-ups. Both withheld cells stayed undisclosed and both zero cells remained numeric zero. The browser used a simulated administrator. A hosted staging administrator session backed by the real reporting service remains open.
+
+## Hosted administrator report — 22 November 2026
+
+A signed-in administrator generated the November 2026 Africa/Lagos report on the protected synthetic staging preview at 06:42:55 UTC. The continuity chart and on-screen draft both showed zero hospital feedback and zero performed PHC follow-ups. Both the continuity CSV and the monthly draft finished downloading. The downloaded bytes were not inspected in this hosted run. The nonzero and suppressed fixtures are covered separately by the staging calculation and Chromium checks above.
