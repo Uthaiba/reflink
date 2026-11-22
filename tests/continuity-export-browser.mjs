@@ -25,7 +25,7 @@ const server = await createServer({envFile:false, server:{host:'127.0.0.1',port:
       from:()=>({select:()=>({eq:()=>({single:async()=>({data:{role:'administrator'}})})})}),
       rpc:async(name)=>globalThis.failContinuity && name==='get_admin_continuity_milestones'
         ? {error:{message:'Synthetic connection interruption'}}
-        : ({data:name==='get_admin_continuity_milestones'?${JSON.stringify(fixture)}:[]})
+        : ({data:name==='get_admin_continuity_milestones'?(globalThis.continuityRows ?? ${JSON.stringify(fixture)}):[]})
     }`;
   }}]});
 let browser;
@@ -68,5 +68,34 @@ try {
   await page.getByRole('button',{name:'Download draft for review'}).waitFor();
   assert.ok((await page.locator('.aggregate-draft pre').textContent()).includes('2026-12-01 to 2026-12-31'));
   assert.equal(await page.getByRole('alert').count(),0);
+  // Match the three outputs from the November staging calculation check.
+  for (const counts of [[7, 5], [null, null], [0, 0]]) {
+    const rows = fixture.map(({milestone}, index) => ({
+      milestone, referral_count: counts[index], small_cell_suppressed: counts[index] === null,
+    }));
+    await page.reload();
+    await page.evaluate(rows => { globalThis.continuityRows = rows; }, rows);
+    await page.locator('#rphi-month').fill('2026-11');
+    await page.getByRole('button', {name:'Generate report'}).click();
+    await page.locator('#rphi-dataset').selectOption('continuity');
+    await bars.first().waitFor();
+    const cells = counts.map(n => n === null ? 'Suppressed / unavailable' : String(n));
+    assert.deepEqual(await page.locator('tbody tr td:last-child').allTextContents(), cells);
+    assert.deepEqual(await bars.locator('strong').allTextContents(),
+      counts.map(n => n === null ? 'Withheld / unavailable' : String(n)));
+    const pendingCsv = page.waitForEvent('download');
+    await page.getByRole('button', {name:/Download Continuity.*CSV/}).click();
+    const text = await readFile(await (await pendingCsv).path(), 'utf8');
+    assert.deepEqual(text.split('\r\n').slice(-2), rows.map((row, i) => `"${row.milestone}","${cells[i]}"`));
+    await page.getByText('Read the traceable draft', {exact:true}).click();
+    const narrative = await page.locator('.aggregate-draft pre').innerText();
+    for (const [i, row] of rows.entries()) {
+      if (counts[i] === null) assert.ok(!narrative.includes(row.milestone));
+      else assert.ok(narrative.includes(`${row.milestone}: referral count = ${counts[i]}. [get_admin_continuity_milestones; row ${i+1}; field referral_count]`));
+    }
+    const pendingDraft = page.waitForEvent('download');
+    await page.getByRole('button', {name:'Download draft for review'}).click();
+    assert.equal(await readFile(await (await pendingDraft).path(), 'utf8'), narrative);
+  }
   console.log('Continuity chart, table, CSV and both monthly draft views passed.');
 } finally {await browser?.close(); await server.close();}
