@@ -107,9 +107,13 @@ A signed-in administrator generated the November 2026 Africa/Lagos report on the
 | --- | --- | --- |
 | Database and recovery | Synthetic database contracts passed on the branded build. | Complete an isolated restore covering referral history, facility assignments, hosted authentication, private files and configuration. Rehearse migrations and rollback. |
 | Staff access | Hosted administrator reporting and PHC feedback retrieval were observed. Database tests checked unrelated-facility and revoked-user access. | Complete the signed-in staging role matrix across PHC, receiving, administrator and unrelated-facility accounts. |
-| Referral workflow | Chromium asserted exactly one timeline in both PHC and receiving referral details. Hosted escalation receipt, hospital feedback and PHC encounter evidence appear above. | Complete the rejection scenario and reconcile its audit history and notifications. |
+| Referral workflow | Chromium asserted exactly one timeline in both PHC and receiving referral details. Hosted escalation receipt, hospital feedback and PHC encounter evidence appear above. | Implement the receiving facility’s decline action after the rerouting responsibility is agreed. Verify the original referral, audit event and PHC notification in hosted staging. |
 | Documents and offline use | Android opened the synthetic attachment. Chromium verified both official artwork files in the offline cache. | Verify interrupted attachment upload and offline retry through the hosted workflow, including duplicate checks. Obtain the approved retention period. |
 | UI, UX and Public Health Intelligence | The hosted administrator generated the November report and downloaded both exports. Separate fixtures covered nonzero, zero and withheld counts. The approved logo is used on authentication screens, with its symbol in compact headers, print and app icons. | Complete phone and keyboard checks across the main screens and record spoken screen-reader results. |
 | Release and sign-off | Frontend and database CI passed on application commit `3fb371c`. | Formally designate monitoring, recovery and rollback owners. Record clinical and deployment approvals, then deploy and verify the live release. |
 
 [Frontend and Chromium evidence](https://github.com/Uthaiba/reflink/actions/runs/44995423050) · [Synthetic database evidence](https://github.com/Uthaiba/reflink/actions/runs/44995423064)
+
+## Receiving-facility decline — 22 November 2026
+
+Review of the receiving screen and the hosted synthetic staging schema found no referral decline action. The referral status constraint permits cancellation and onward referral. Neither establishes that a receiving clinician declined a referral. The rejection handling located in the closed-record addenda function applies to amendment requests. The end-to-end referral decline check remains blocked on workflow definition and implementation.
