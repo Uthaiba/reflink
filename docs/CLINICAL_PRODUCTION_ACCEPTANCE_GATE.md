@@ -100,3 +100,16 @@ Ran the deployed continuity RPC’s aggregation query against transaction-local 
 ## Hosted administrator report — 22 November 2026
 
 A signed-in administrator generated the November 2026 Africa/Lagos report on the protected synthetic staging preview at 06:42:55 UTC. The continuity chart and on-screen draft both showed zero hospital feedback and zero performed PHC follow-ups. Both the continuity CSV and the monthly draft finished downloading. The downloaded bytes were not inspected in this hosted run. The nonzero and suppressed fixtures are covered separately by the staging calculation and Chromium checks above.
+
+## Review-branch release status — 22 November 2026
+
+| Production checklist area | Verified evidence | Open before clinical production |
+| --- | --- | --- |
+| Database and recovery | Synthetic database contracts passed on the branded build. | Complete an isolated restore covering referral history, facility assignments, hosted authentication, private files and configuration. Rehearse migrations and rollback. |
+| Staff access | Hosted administrator reporting and PHC feedback retrieval were observed. Database tests checked unrelated-facility and revoked-user access. | Complete the signed-in staging role matrix across PHC, receiving, administrator and unrelated-facility accounts. |
+| Referral workflow | Chromium asserted exactly one timeline in both PHC and receiving referral details. Hosted escalation receipt, hospital feedback and PHC encounter evidence appear above. | Complete the rejection scenario and reconcile its audit history and notifications. |
+| Documents and offline use | Android opened the synthetic attachment. Chromium verified both official artwork files in the offline cache. | Verify interrupted attachment upload and offline retry through the hosted workflow, including duplicate checks. Obtain the approved retention period. |
+| UI, UX and Public Health Intelligence | The hosted administrator generated the November report and downloaded both exports. Separate fixtures covered nonzero, zero and withheld counts. The approved logo is used on authentication screens, with its symbol in compact headers, print and app icons. | Complete phone and keyboard checks across the main screens and record spoken screen-reader results. |
+| Release and sign-off | Frontend and database CI passed on application commit `3fb371c`. | Formally designate monitoring, recovery and rollback owners. Record clinical and deployment approvals, then deploy and verify the live release. |
+
+[Frontend and Chromium evidence](https://github.com/Uthaiba/reflink/actions/runs/44995423050) · [Synthetic database evidence](https://github.com/Uthaiba/reflink/actions/runs/44995423064)
