@@ -97,5 +97,34 @@ try {
     await page.getByRole('button', {name:'Download draft for review'}).click();
     assert.equal(await readFile(await (await pendingDraft).path(), 'utf8'), narrative);
   }
+  await page.setViewportSize({width:375,height:812});
+  await page.reload();
+  await page.keyboard.press('Tab');
+  const month = page.locator('#rphi-month');
+  assert.ok(await month.evaluate(el => el === document.activeElement));
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.type('2026');
+  assert.match(await month.inputValue(), /^2026-\d{2}$/);
+  async function tabTo(control) {
+    for (let step = 0; step < 16; step++) {
+      if (await control.evaluate(el => el === document.activeElement)) return;
+      await page.keyboard.press('Tab');
+    }
+    assert.fail('Report control could not be reached by tabbing');
+  }
+  await tabTo(page.getByRole('button',{name:'Generate report'}));
+  await page.keyboard.press('Enter');
+  const selector = page.locator('#rphi-dataset');
+  await selector.waitFor();
+  await tabTo(selector);
+  await page.keyboard.press('c');
+  assert.equal(await selector.inputValue(),'continuity');
+  await tabTo(page.getByRole('button',{name:/Download Continuity.*CSV/}));
+  const mobileCsv = page.waitForEvent('download');
+  await page.keyboard.press('Enter');
+  assert.ok((await readFile(await (await mobileCsv).path(),'utf8')).includes('"Hospital feedback sent","5"'));
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    'Report causes horizontal page overflow at 375 pixels');
   console.log('Continuity chart, table, CSV and both monthly draft views passed.');
 } finally {await browser?.close(); await server.close();}
