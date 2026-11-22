@@ -90,3 +90,28 @@ test("reopening a receiving investigation resumes one upload after a lost respon
   objects.set(path, document("different.pdf", "application/pdf", [37,80,68,70,46]));
   await assert.rejects(retry);
 });
+
+test("recovers a thrown upload error only after confirming the stored bytes", async () => {
+  const file = new File(["fixture"], "report.txt", { type: "text/plain" });
+  const lost = new Error("Upload confirmation lost");
+  const objects = new Map();
+  let readable = false;
+  const bucket = {
+    async upload(path, selected, options) {
+      assert.equal(options.upsert, false);
+      if (!objects.has(path)) objects.set(path, selected);
+      throw lost;
+    },
+    async download(path) {
+      if (!readable) throw new Error("Read interrupted");
+      return {data: objects.get(path)};
+    },
+  };
+  const submit = () => uploadResumableInvestigation(bucket, referralId, attachmentId, 0, file);
+  await assert.rejects(submit, error => error === lost);
+  readable = true;
+  const path = await submit();
+  assert.equal(objects.size, 1);
+  objects.set(path, new Blob(["changed"]));
+  await assert.rejects(submit, error => error === lost);
+});
