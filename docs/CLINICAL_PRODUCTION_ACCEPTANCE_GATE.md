@@ -92,3 +92,7 @@ For synthetic referral RF-TEST-F70C638C, the hospital sent final feedback at 19:
 ## Continuity report calculation check — 21 November 2026
 
 Ran the deployed continuity RPC’s aggregation query against transaction-local fixture tables in synthetic staging and rolled back. Twelve eligible November discharges yielded seven distinct hospital feedback milestones and five performed PHC follow-ups. Duplicate events, attempted-only contact, test-flagged and synthetic-prefixed referrals, and a discharge at the next Lagos month boundary contributed no extra counts. With eight feedback and four follow-ups both cells were withheld (complementary four and primary four). With no events both returned visible zero. This covers the aggregation only. Authenticated dashboard, report draft, chart and CSV reconciliation on the same fixture remain open.
+
+## Continuity report browser reconciliation — 22 November 2026
+
+[Chromium CI](https://github.com/Uthaiba/reflink/actions/runs/44992358094) verified the chart, table, CSV download, on-screen draft and downloaded draft using the three staging calculation outputs as simulated RPC responses. Visible counts were 7 hospital feedback and 5 performed PHC follow-ups. Both withheld cells stayed undisclosed and both zero cells remained numeric zero. The browser used a simulated administrator. A hosted staging administrator session backed by the real reporting service remains open.
