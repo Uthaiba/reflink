@@ -68,12 +68,22 @@ export async function uploadResumableInvestigation(bucket, referralId, actorId, 
   const key = (await digest(new TextEncoder().encode(scope))).slice(0, 32);
   const uuid = [key.slice(0,8),key.slice(8,12),key.slice(12,16),key.slice(16,20),key.slice(20)].join("-");
   const path = createInvestigationFilePath(referralId, file, () => uuid);
-  const {error} = await bucket.upload(path, file, {upsert:false, contentType:file.type});
-  if (error) {
-    // The first request may have committed before the connection failed.
-    const existing = await bucket.download(path);
-    if (existing.error || existing.data?.size !== file.size ||
-        await digest(await existing.data.arrayBuffer()) !== contentHash) throw error;
+  let uploadError;
+  try {
+    const result = await bucket.upload(path, file, {upsert:false, contentType:file.type});
+    if (!result.error) return path;
+    uploadError = result.error;
+  } catch (error) {
+    uploadError = error;
   }
-  return path;
+
+  // A lost upload response can arrive as a rejected promise or a storage error.
+  try {
+    const existing = await bucket.download(path);
+    if (!existing.error && existing.data?.size === file.size &&
+        await digest(await existing.data.arrayBuffer()) === contentHash) return path;
+  } catch {
+    // An interrupted verification leaves the original upload unconfirmed.
+  }
+  throw uploadError;
 }
