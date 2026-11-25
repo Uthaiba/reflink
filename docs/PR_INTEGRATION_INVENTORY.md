@@ -426,3 +426,17 @@ Compared request 3 at `7836113` with candidate `87f2b36`. All 40 paths exist on 
 The candidate retains the atomic investigation migration and all six investigation database contracts. The authenticated upload flow uses a deterministic storage path on retry. The candidate also checks the password-change requirement on the locked profile and revokes access to the superseded attachment writer.
 
 Commit `c8b02ce` adds release migration paths to the database workflow push trigger. Both checks passed for that commit: [synthetic database contracts](https://github.com/Uthaiba/reflink/actions/runs/45559176316) and [frontend quality gate](https://github.com/Uthaiba/reflink/actions/runs/45559176297). Hosted file recovery and clinical release approval remain open.
+
+## Existing v2.0 feature comparison — 25 November 2026
+
+Compared the actual release tree at `cce730e` with review candidate `d11493d`. The branches diverged. A comparison of the original pull requests alone misses changes present on the v2.0 release branch.
+
+| Existing capability | Candidate evidence and remaining acceptance |
+| --- | --- |
+| PHC creation and printing | Both branches expose Create Referral, Print Draft, Print Saved Form and the detail-screen Print Patient Referral Form. Diagnosis records, investigations and reason for referral are present in both. Candidate uses the official artwork and waits for the print image to decode. |
+| Multilingual interface | The original English and Hausa labels and Kanuri scaffold in `src/lib/i18n.jsx` are absent at that path. Restore and verify the language selector and translated screens before claiming parity. |
+| Offline referral delivery | The original queue supported enqueue, list, count, cached values and sync. Candidate has an offline shell and encrypted drafts. Verify saved queue compatibility, reconnect submission and single-delivery behavior before retiring the original workflow. |
+| SMS notifications | Original `api/referral-sms.js` is absent on the candidate. Database notification and realtime migrations exist. Verify SMS dispatch through an authorized provider test path before declaring equivalent delivery. |
+| Branding and layout | The candidate replaces three legacy logo files and the static service worker. Five original branding and dashboard/detail/investigation UX stylesheets are absent as standalone files. Compare the affected screens and installed/offline behavior before release. |
+
+Keep the v2.0 release branch available as the baseline during reconciliation. These findings are based on repository contents. Hosted user acceptance remains a separate release requirement.
