@@ -373,3 +373,50 @@ The three earlier heads have diverged from request 4. Request 4 contains the app
 | `tests/securityHardeningProposal.test.js` | #1 |
 | `tests/sql/reflink-staging-baseline-assertions.sql` | #2 |
 | `vite.config.js` | #4 |
+
+## Request 3 file comparison
+
+Compared request 3 at `7836113` with candidate `87f2b36`. All 40 paths exist on the candidate. 22 have identical Git blob hashes. Of the 18 different files, 5 retain every previous nonempty line in order. This textual check does not establish equivalent runtime behavior. The package manifest preserves the previous scripts and dependencies and adds browser testing. The administrator sidebar uses the approved logo in place of the old letter mark. Keep the candidate versions of these two files.
+
+| Request 3 path | Comparison |
+| --- | --- |
+| `.github/workflows/database-contracts.yml` | Modified on candidate; behavior review required |
+| `.github/workflows/frontend-quality-gate.yml` | Earlier nonempty lines retained in order |
+| `README.md` | Identical blob |
+| `database/changes/atomic_investigation_updates.sql` | Modified on candidate; behavior review required |
+| `docs/ATOMIC_INVESTIGATION_UPDATE_SPEC.md` | Identical blob |
+| `docs/CLINICAL_PRODUCTION_ACCEPTANCE_GATE.md` | Modified on candidate; behavior review required |
+| `docs/INVESTIGATION_ATTACHMENT_RECONCILIATION.md` | Identical blob |
+| `docs/MASTER_PLAN_AUDIT_2026-11-16.md` | Identical blob |
+| `docs/PASSWORD_CHANGE_RECOVERY.md` | Identical blob |
+| `docs/PRODUCTION_COMPLETION_RUNBOOK.md` | Earlier nonempty lines retained in order |
+| `docs/VERIFICATION_2026-11-16.md` | Identical blob |
+| `package.json` | Previous package configuration retained, browser tests added |
+| `src/App.jsx` | Modified on candidate; behavior review required |
+| `src/components/ConnectivityNotice.jsx` | Identical blob |
+| `src/components/EncryptedDraftPanel.jsx` | Identical blob |
+| `src/components/dashboards/AdminDashboard.jsx` | Official sidebar logo replaces letter mark |
+| `src/components/dashboards/AnalysisHub.jsx` | Identical blob |
+| `src/components/dashboards/AnalyticsDashboard.jsx` | Identical blob |
+| `src/components/dashboards/PublicHealthIntelligence.jsx` | Modified on candidate; behavior review required |
+| `src/lib/diagnosisRecords.js` | Identical blob |
+| `src/lib/encryptedDrafts.js` | Identical blob |
+| `src/lib/investigationAttachmentRecovery.js` | Identical blob |
+| `src/lib/investigationAttachments.js` | Earlier nonempty lines retained in order |
+| `src/lib/investigationUpdates.js` | Modified on candidate; behavior review required |
+| `src/lib/passwordChange.js` | Identical blob |
+| `src/lib/publicHealthReports.js` | Earlier nonempty lines retained in order |
+| `src/lib/referralAnalytics.js` | Identical blob |
+| `src/lib/referralSubmission.js` | Identical blob |
+| `src/lib/reportingUtils.js` | Identical blob |
+| `src/reflink-clinical-accessibility.css` | Earlier nonempty lines retained in order |
+| `tests/database/fixture.sql` | Modified on candidate; behavior review required |
+| `tests/database/investigation_contracts.py` | Modified on candidate; behavior review required |
+| `tests/diagnosisRecords.test.mjs` | Identical blob |
+| `tests/encryptedDrafts.test.mjs` | Identical blob |
+| `tests/investigationAttachmentRecovery.test.mjs` | Identical blob |
+| `tests/investigationAttachments.test.mjs` | Modified on candidate; behavior review required |
+| `tests/investigationUpdates.test.mjs` | Modified on candidate; behavior review required |
+| `tests/passwordChange.test.mjs` | Identical blob |
+| `tests/referralAnalytics.test.mjs` | Identical blob |
+| `tests/reporting.test.mjs` | Modified on candidate; behavior review required |
