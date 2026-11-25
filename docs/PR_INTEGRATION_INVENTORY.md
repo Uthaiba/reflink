@@ -420,3 +420,9 @@ Compared request 3 at `7836113` with candidate `87f2b36`. All 40 paths exist on 
 | `tests/passwordChange.test.mjs` | Identical blob |
 | `tests/referralAnalytics.test.mjs` | Identical blob |
 | `tests/reporting.test.mjs` | Modified on candidate; behavior review required |
+
+## PR #3 investigation workflow review
+
+The candidate retains the atomic investigation migration and all six investigation database contracts. The authenticated upload flow uses a deterministic storage path on retry. The candidate also checks the password-change requirement on the locked profile and revokes access to the superseded attachment writer.
+
+Commit `c8b02ce` adds release migration paths to the database workflow push trigger. Both checks passed for that commit: [synthetic database contracts](https://github.com/Uthaiba/reflink/actions/runs/45559176316) and [frontend quality gate](https://github.com/Uthaiba/reflink/actions/runs/45559176297). Hosted file recovery and clinical release approval remain open.
