@@ -4,7 +4,7 @@ on:
     paths: ['supabase/migrations/**', 'database/**', 'tests/database/**', '.github/workflows/database-contracts.yml']
   push:
     branches: ['reflink/master-plan-continuation-20261116', 'reflink/master-plan-review-20261117']
-    paths: ['database/**', 'tests/database/**', '.github/workflows/database-contracts.yml']
+    paths: ['supabase/migrations/**', 'database/**', 'tests/database/**', '.github/workflows/database-contracts.yml']
 permissions:
   contents: read
 jobs:
