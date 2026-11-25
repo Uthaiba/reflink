@@ -125,3 +125,15 @@ Chromium rendered the report component at 375 × 812 with a simulated administra
 ## Interrupted investigation attachment confirmation — 25 November 2026
 
 The automated storage fixture committed an upload and then threw a connection error. While verification was offline, the upload remained unconfirmed. After reconnection the same file resolved to one stored object. A same-size object with different bytes failed verification. This covers the upload helper. The hosted check must also confirm that one referral attachment reference survives a reload and that the downloaded contents match the original. [Frontend regression run](https://github.com/Uthaiba/reflink/actions/runs/45037454079)
+
+## Hosted staging migration reconciliation — 25 November 2026
+
+Compared five release files at `f99dffd` with the SQL statements recorded in the synthetic staging migration ledger. Each pair matched after trimming leading and trailing whitespace. The ledger assigns different version identifiers. Account for these mappings during release rehearsal to avoid replaying already applied SQL. This comparison covers recorded statements only. Restore, rollback and production schema verification remain open.
+
+| Migration | Repository version | Synthetic staging version |
+| --- | --- | --- |
+| `phc_follow_up` | `20261118130000` | `20261118133615` |
+| `continuity_milestones` | `20261118160000` | `20261118154130` |
+| `final_feedback` | `20261118210000` | `20261118214619` |
+| `receiving_escalation_timestamp` | `20261121190000` | `20261121184226` |
+| `receiving_escalation_receipt` | `20261121192000` | `20261121184534` |
