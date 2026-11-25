@@ -1,3 +1,4 @@
+import { LanguageSwitcher, useLanguage } from "./lib/i18n.jsx";
 import HospitalFeedback from "./components/HospitalFeedback.jsx";
 import PhcFollowUp from "./components/PhcFollowUp.jsx";
 
@@ -1397,6 +1398,8 @@ function ReferralTimeline({ referral }) {
    ========================================================= */
 
 function App() {
+  const language = useLanguage();
+  const { t } = language;
   const [screen, setScreen] = useState("home");
   const [role, setRole] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -1740,6 +1743,7 @@ const handleSignIn = async () => {
       </div>
 
       <nav className="home-nav">
+        <LanguageSwitcher {...language} />
         <button
           type="button"
           onClick={() =>
@@ -1748,7 +1752,7 @@ const handleSignIn = async () => {
               ?.scrollIntoView({ behavior: "smooth" })
           }
         >
-          How It Works
+          {t("howItWorks")}
         </button>
 
         <button
@@ -1759,7 +1763,7 @@ const handleSignIn = async () => {
               ?.scrollIntoView({ behavior: "smooth" })
           }
         >
-          Platform
+          {t("platform")}
         </button>
 
         <button
@@ -1767,7 +1771,7 @@ const handleSignIn = async () => {
           onClick={openLogin}
           className="login-button"
         >
-          Sign In
+          {t("signIn")}
         </button>
       </nav>
     </header>
@@ -1784,9 +1788,7 @@ const handleSignIn = async () => {
           </span>
 
           <h2>
-            Every Referral Connected.
-            <br />
-            <span>Every Patient Followed.</span>
+            {t("hero")}
           </h2>
 
           <p className="hero-text">
@@ -1802,7 +1804,7 @@ const handleSignIn = async () => {
               className="primary-button hero-primary"
               onClick={openLogin}
             >
-              Access REFLINK
+              {t("access")}
               <span>→</span>
             </button>
 
@@ -2782,6 +2784,7 @@ function InvestigationResultEditor({ item, onChange, onFileChange }) {
 }
 
 function NewReferralForm({ onBack, ownerId, referringFacilityId }) {
+  const { t } = useLanguage();
   const clientSubmissionId = useRef(crypto.randomUUID());
   const submissionInFlight = useRef(false);
   const [fromDeviceDraft, setFromDeviceDraft] = useState(false);
@@ -3348,7 +3351,7 @@ provisional_diagnosis: "",
           </span>
 
           <h2>
-            New Referral
+          {t("newReferral")}
           </h2>
 
           <p>
@@ -3371,7 +3374,7 @@ provisional_diagnosis: "",
             className="back-button" data-leave-clinical-workspace
             onClick={onBack}
           >
-            ← Back
+            ← {t("back")}
           </button>
         </div>
 
@@ -3430,7 +3433,7 @@ provisional_diagnosis: "",
       <form onSubmit={handleSubmit}>
 
         <h3>
-          Patient Information
+          {t("patientInformation")}
         </h3>
 
         <label>
@@ -3602,7 +3605,7 @@ provisional_diagnosis: "",
         </div>
 
         <h3>
-          Clinical Information
+          {t("clinicalInformation")}
         </h3>
 
         <label>
@@ -3912,7 +3915,7 @@ provisional_diagnosis: "",
         />
 
         <h3>
-          Referral Information
+          {t("referralInformation")}
         </h3>
 
         <label>
@@ -3986,7 +3989,7 @@ provisional_diagnosis: "",
         >
           {loading
             ? "Creating Referral..."
-            : "Create Referral"}
+            : t("createReferral")}
         </button>
 
       </form>
