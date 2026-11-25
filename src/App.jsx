@@ -1,7 +1,7 @@
 import HospitalFeedback from "./components/HospitalFeedback.jsx";
 import PhcFollowUp from "./components/PhcFollowUp.jsx";
 
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { referralJourney, filterReceivingReferrals } from "./lib/referralPresentation.js";
 import { lazy, useEffect, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
@@ -1032,8 +1032,16 @@ export function PrintReferralSheet({
   );
 }
 
-function printReferralForm() {
-  window.print();
+async function printReferralForm() {
+  const sheet = document.querySelector("body > .printable-referral-sheet");
+  const logo = sheet?.querySelector(".official-document-logo");
+  if (!logo) return;
+  try {
+    await logo.decode();
+  } catch {
+    // Allow the existing text-labelled paper handoff if the offline asset is unavailable.
+  }
+  if (sheet.isConnected) window.print();
 }
 
 function ReferralSourceDetails({ referral, editableInvestigationResults = false, onInvestigationResultChange, onInvestigationFileUpload }) {
@@ -3033,8 +3041,8 @@ provisional_diagnosis: "",
       created_at: new Date().toISOString(),
     };
 
-    setPrintDraft(draftReferral);
-    window.setTimeout(() => window.print(), 80);
+    flushSync(() => setPrintDraft(draftReferral));
+    void printReferralForm();
   };
 
   const generateReferralNumber = () => {
@@ -3386,9 +3394,7 @@ provisional_diagnosis: "",
             <button
               type="button"
               className="secondary-button"
-              onClick={() => {
-                window.setTimeout(() => window.print(), 80);
-              }}
+              onClick={printReferralForm}
             >
               🖨 Print Saved Form
             </button>
