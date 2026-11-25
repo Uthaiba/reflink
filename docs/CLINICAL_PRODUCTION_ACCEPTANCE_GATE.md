@@ -107,7 +107,7 @@ A signed-in administrator generated the November 2026 Africa/Lagos report on the
 | --- | --- | --- |
 | Database and recovery | Synthetic database contracts passed on the branded build. | Complete an isolated restore covering referral history, facility assignments, hosted authentication, private files and configuration. Rehearse migrations and rollback. |
 | Staff access | Hosted administrator reporting and PHC feedback retrieval were observed. Database tests checked unrelated-facility and revoked-user access. | Complete the signed-in staging role matrix across PHC, receiving, administrator and unrelated-facility accounts. |
-| Referral workflow | Chromium asserted exactly one timeline in both PHC and receiving referral details. Hosted escalation receipt, hospital feedback and PHC encounter evidence appear above. | Implement the receiving facility’s decline action after the rerouting responsibility is agreed. Verify the original referral, audit event and PHC notification in hosted staging. |
+| Referral workflow | Chromium asserted exactly one timeline in both PHC and receiving referral details. Hosted escalation receipt, hospital feedback and PHC encounter evidence appear above. | Implement the receiving facility’s decline action and the referring PHC’s selection of the next facility. Verify the original referral, audit event and PHC notification in hosted staging. |
 | Documents and offline use | Android opened the synthetic attachment. Chromium verified both official artwork files in the offline cache. | Verify interrupted attachment upload and offline retry through the hosted workflow, including duplicate checks. Obtain the approved retention period. |
 | UI, UX and Public Health Intelligence | The hosted administrator generated the November report and downloaded both exports. Separate fixtures covered nonzero, zero and withheld counts. The approved logo is used on authentication screens, with its symbol in compact headers, print and app icons. | Complete phone and keyboard checks across the main screens and record spoken screen-reader results. |
 | Release and sign-off | Frontend and database CI passed on application commit `3fb371c`. | Formally designate monitoring, recovery and rollback owners. Record clinical and deployment approvals, then deploy and verify the live release. |
@@ -137,3 +137,7 @@ Compared five release files at `f99dffd` with the SQL statements recorded in the
 | `final_feedback` | `20261118210000` | `20261118214619` |
 | `receiving_escalation_timestamp` | `20261121190000` | `20261121184226` |
 | `receiving_escalation_receipt` | `20261121192000` | `20261121184534` |
+
+## Hospital decline and rerouting ownership — 25 November 2026
+
+The project lead selected the referring PHC to choose the next facility after a receiving hospital declines a synthetic staging referral. Preserve the original referral and decline history. The staging acceptance scenario must show the receiving clinician recording the decline, the PHC receiving the notification and selecting the next facility, and an audit history that connects the two steps. Implementation and authenticated staging verification remain open.
