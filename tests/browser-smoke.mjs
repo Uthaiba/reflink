@@ -51,6 +51,14 @@ try {
   const page = await context.newPage();
   await page.goto("http://127.0.0.1:4179/");
   await page.waitForFunction(() => document.getElementById("root")?.textContent.includes("REFLINK"));
+  const selector = page.getByRole("combobox", {name:/Language|Harshe/});
+  assert.deepEqual(await selector.locator("option").allTextContents(), ["English", "Hausa"]);
+  await selector.selectOption("ha");
+  await page.getByRole("button", {name:"Shiga", exact:true}).waitFor();
+  await page.reload();
+  assert.equal(await selector.inputValue(), "ha");
+  await selector.selectOption("en");
+  await page.getByRole("button", {name:"Sign In", exact:true}).first().waitFor();
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();
   await page.waitForFunction(() => navigator.serviceWorker.controller != null);
