@@ -141,3 +141,7 @@ Compared five release files at `f99dffd` with the SQL statements recorded in the
 ## Hospital decline and rerouting ownership — 25 November 2026
 
 The project lead selected the referring PHC to choose the next facility after a receiving hospital declines a synthetic staging referral. Preserve the original referral and decline history. The staging acceptance scenario must show the receiving clinician recording the decline, the PHC receiving the notification and selecting the next facility, and an audit history that connects the two steps. Implementation and authenticated staging verification remain open.
+
+## Release decision — 25 November 2026
+
+The founder authorized deployment. The review build at `eb83d13` is available for synthetic demonstrations. The [database rehearsal](https://github.com/Uthaiba/reflink/actions/runs/45606885403) passed the pre-release dump, restore and migration replay in disposable PostgreSQL. Hosted Auth, private object contents and deployment configuration still require an isolated recovery exercise. The clinical review and retention decision remain outstanding alongside the hosted workflow checks above. Clinical production promotion remains pending.
