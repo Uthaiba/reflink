@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 
 assert os.environ.get("PGHOST") in ("127.0.0.1","localhost"), "Replay requires loopback fixture server"
 assert os.environ.get("PGDATABASE")=="reflink_contracts", "Replay requires fixture database"
@@ -54,8 +55,25 @@ print("test_observed_drift_overlay_matches_selected_hosted_metadata: passed")
 # Reproduce observed hosted legacy access to prove the pending cutover retires it.
 run("GRANT EXECUTE ON FUNCTION public.register_referral_investigation_files(uuid,jsonb) TO authenticated",database)
 assert run("SELECT has_function_privilege('authenticated','public.register_referral_investigation_files(uuid,jsonb)','EXECUTE')",database)=="t"
-for migration in sorted(Path("supabase/migrations").glob("*.sql")):
-    run(migration.read_text(),database)
+migration_files = sorted(Path("supabase/migrations").glob("*.sql"))
+rollback_database = "reflink_pre_release_rollback"
+with tempfile.TemporaryDirectory() as directory:
+    archive = str(Path(directory) / "pre-release.dump")
+    original_inventory = index(json.loads(run(inventory_sql, database)))
+    subprocess.run(["pg_dump", "--format=custom", "--dbname", database, "--file", archive], check=True, timeout=60)
+    for migration in migration_files:
+        run(migration.read_text(), database)
+    # Reconstruct the pre-release state on a fresh CI database, including its original grants.
+    run("CREATE DATABASE " + rollback_database)
+    subprocess.run(["pg_restore", "--exit-on-error", "--dbname", rollback_database, archive], check=True, timeout=60)
+    assert index(json.loads(run(inventory_sql, rollback_database))) == original_inventory
+    before_privilege = "SELECT has_function_privilege('authenticated','public.register_referral_investigation_files(uuid,jsonb)','EXECUTE')"
+    assert run(before_privilege, rollback_database) == "t"
+    for migration in migration_files:
+        run(migration.read_text(), rollback_database)
+    assert index(json.loads(run(inventory_sql, rollback_database))) == index(json.loads(run(inventory_sql, database)))
+    assert run(before_privilege, rollback_database) == "f"
+    print("test_synthetic_pre_release_restore_and_redeployment: passed")
 preflight=json.loads(run(Path("database/checks/clinical_staging_preflight.sql").read_text(),database))
 assert preflight["blocking_checks"]==0,preflight
 print("test_atomic_candidates_apply_on_recovered_baseline_and_pass_preflight: passed")
