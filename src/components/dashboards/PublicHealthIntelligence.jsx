@@ -52,7 +52,7 @@ export default function PublicHealthIntelligence() {
   };
 
   return <section className="dashboard-card" aria-labelledby="rphi-title">
-    <span className="eyebrow">R-PHI</span>
+    <img className="official-document-logo" src="/reflink-logo.png" alt="" width="192" height="64" />
     <h2 id="rphi-title">REFLINK Public Health Intelligence</h2>
     <p>Institutional aggregate reports for authorized planning. These reports describe recorded referral activity, not population incidence, prevalence or confirmed outbreaks.</p>
     <p>Coverage depends on participating facilities, recording completeness and referral selection. Missing values and suppressed counts are not zero. External sharing requires disclosure review.</p>

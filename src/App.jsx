@@ -426,17 +426,8 @@ export function PrintReferralSheet({
       <header className="print-document-header">
 
         <div className="print-brand-block">
-          <div className="print-brand-mark">
-            <img src="/reflink-symbol.png" alt="" width="36" height="36" />
-          </div>
-
           <div>
-            <div className="print-brand">REFLINK</div>
-
-            <div className="print-brand-subtitle">
-              DIGITAL REFERRAL & CARE CONTINUITY SYSTEM
-            </div>
-
+            <img className="official-document-logo" src="/reflink-logo.png" alt="REFLINK" width="192" height="64" />
             <h1>Patient Referral Form</h1>
 
             <p>
@@ -2250,7 +2241,7 @@ const handleSignIn = async () => {
 
           <div className="login-card">
 
-            <img className="official-login-logo" src="/reflink-logo.png" width="192" height="63" alt="REFLINK" />
+            <img className="official-login-logo" src="/reflink-logo.png" width="192" height="64" alt="REFLINK" />
 
             <h2>
               Sign in to REFLINK
@@ -2331,7 +2322,7 @@ const handleSignIn = async () => {
       {screen === "change-password" && (
         <div className="login-page password-page">
           <div className="login-card password-card">
-            <img className="official-login-logo" src="/reflink-logo.png" width="192" height="63" alt="REFLINK" />
+            <img className="official-login-logo" src="/reflink-logo.png" width="192" height="64" alt="REFLINK" />
 
             <span className="eyebrow">
               ACCOUNT SECURITY

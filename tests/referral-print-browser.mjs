@@ -51,6 +51,9 @@ try {
   assert.equal(await page.locator('#root').isVisible(),false,'Screen content must leave the print layout');
   const sheet = page.locator('.printable-referral-sheet');
   for (const expected of ['SYNTHETIC PHC A','SYNTHETIC RECEIVING B','Inpatient Information','Synthetic Test Ward B','Discharge Information',referral.follow_up_plan,'Disposition at Assessment','Patient Discharged']) assert.ok((await sheet.textContent()).includes(expected),expected);
+  const logo = sheet.locator('img[src="/reflink-logo.png"]');
+  await logo.evaluate(image => image.decode());
+  assert.ok(await logo.isVisible());
   const closure=sheet.locator('tr').filter({hasText:'Referral Completed'});
   assert.ok((await closure.textContent()).includes('Not recorded'));
   assert.equal(await sheet.evaluate(el=>getComputedStyle(el).position),'static');

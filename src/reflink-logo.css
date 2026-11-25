@@ -7,11 +7,22 @@
   margin: 0 auto 1rem;
   padding: .4rem .6rem;
   border-radius: .6rem;
-  background: #123640;
+  background: white;
 }
 .brand-mark img, .print-brand-mark img, .admin-sidebar-logo img {
   display: block;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+
+.official-document-logo {
+  display: block;
+  width: 12rem;
+  max-width: 100%;
+  height: auto;
+  background: white;
+}
+@media print {
+  .official-document-logo { width: 40mm; }
 }

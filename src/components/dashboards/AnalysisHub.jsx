@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase.js";
 import { ageBand, escapeCsvCell, loadBoundedPages } from "../../lib/reportingUtils.js";
@@ -1824,8 +1825,96 @@ function AnalysisHub() {
 
   const activeBreakdowns = breakdownOptions[analysis] || breakdownOptions.diagnosis;
 
+  const executiveMetrics = (
+    <>
+        <div className="intelligence-kpi-grid">
+          <div className="intelligence-kpi">
+            <span>Total Referrals</span>
+            <strong>{phase4Kpis.total}</strong>
+            <small>
+              {phase4Kpis.active} currently active
+            </small>
+          </div>
+
+          <div className="intelligence-kpi">
+            <span>Acknowledgement Rate</span>
+            <strong>
+              {phase4Kpis.acknowledgementRate.toFixed(1)}%
+            </strong>
+            <small>
+              {phase4Kpis.acknowledged} of {phase4Kpis.total}
+            </small>
+          </div>
+
+          <div className="intelligence-kpi">
+            <span>Assessment Rate</span>
+            <strong>
+              {phase4Kpis.assessmentRate.toFixed(1)}%
+            </strong>
+            <small>
+              {phase4Kpis.assessed} assessments recorded
+            </small>
+          </div>
+
+          <div className="intelligence-kpi">
+            <span>Episode Completion</span>
+            <strong>
+              {phase4Kpis.completionRate.toFixed(1)}%
+            </strong>
+            <small>
+              {phase4Kpis.completedEpisodes} completed/discharged
+            </small>
+          </div>
+        </div>
+
+        <div className="intelligence-secondary-grid">
+          <div>
+            <span>Median time to acknowledgement</span>
+            <strong>
+              {phase4Kpis.medianAcknowledgement === null
+                ? "—"
+                : `${phase4Kpis.medianAcknowledgement.toFixed(2)} h`}
+            </strong>
+          </div>
+
+          <div>
+            <span>Median time to assessment</span>
+            <strong>
+              {phase4Kpis.medianAssessment === null
+                ? "—"
+                : `${phase4Kpis.medianAssessment.toFixed(2)} h`}
+            </strong>
+          </div>
+
+          <div>
+            <span>Median episode duration</span>
+            <strong>
+              {phase4Kpis.medianEpisode === null
+                ? "—"
+                : `${phase4Kpis.medianEpisode.toFixed(2)} h`}
+            </strong>
+          </div>
+
+          <div>
+            <span>Discharged / admitted</span>
+            <strong>
+              {phase4Kpis.discharged} / {phase4Kpis.admitted}
+            </strong>
+          </div>
+        </div>
+    </>
+  );
+
   return (
     <section className="analysis-hub">
+      {createPortal(
+        <article className="printable-referral-sheet">
+          <img className="official-document-logo" src="/reflink-logo.png" alt="REFLINK" width="192" height="64" />
+          <h1>Executive Referral Performance</h1>
+          <p>Referral activity for the current analysis filters.</p>
+          {executiveMetrics}
+        </article>, document.body
+      )}
       <div className="analysis-hub-header">
         <div>
           <span className="eyebrow">HEALTHCARE DATA INTELLIGENCE</span>
@@ -2155,81 +2244,7 @@ function AnalysisHub() {
           </div>
         </div>
 
-        <div className="intelligence-kpi-grid">
-          <div className="intelligence-kpi">
-            <span>Total Referrals</span>
-            <strong>{phase4Kpis.total}</strong>
-            <small>
-              {phase4Kpis.active} currently active
-            </small>
-          </div>
-
-          <div className="intelligence-kpi">
-            <span>Acknowledgement Rate</span>
-            <strong>
-              {phase4Kpis.acknowledgementRate.toFixed(1)}%
-            </strong>
-            <small>
-              {phase4Kpis.acknowledged} of {phase4Kpis.total}
-            </small>
-          </div>
-
-          <div className="intelligence-kpi">
-            <span>Assessment Rate</span>
-            <strong>
-              {phase4Kpis.assessmentRate.toFixed(1)}%
-            </strong>
-            <small>
-              {phase4Kpis.assessed} assessments recorded
-            </small>
-          </div>
-
-          <div className="intelligence-kpi">
-            <span>Episode Completion</span>
-            <strong>
-              {phase4Kpis.completionRate.toFixed(1)}%
-            </strong>
-            <small>
-              {phase4Kpis.completedEpisodes} completed/discharged
-            </small>
-          </div>
-        </div>
-
-        <div className="intelligence-secondary-grid">
-          <div>
-            <span>Median time to acknowledgement</span>
-            <strong>
-              {phase4Kpis.medianAcknowledgement === null
-                ? "—"
-                : `${phase4Kpis.medianAcknowledgement.toFixed(2)} h`}
-            </strong>
-          </div>
-
-          <div>
-            <span>Median time to assessment</span>
-            <strong>
-              {phase4Kpis.medianAssessment === null
-                ? "—"
-                : `${phase4Kpis.medianAssessment.toFixed(2)} h`}
-            </strong>
-          </div>
-
-          <div>
-            <span>Median episode duration</span>
-            <strong>
-              {phase4Kpis.medianEpisode === null
-                ? "—"
-                : `${phase4Kpis.medianEpisode.toFixed(2)} h`}
-            </strong>
-          </div>
-
-          <div>
-            <span>Discharged / admitted</span>
-            <strong>
-              {phase4Kpis.discharged} / {phase4Kpis.admitted}
-            </strong>
-          </div>
-        </div>
+        {executiveMetrics}
       </div>
 
       <div className="dashboard-card intelligence-card">
