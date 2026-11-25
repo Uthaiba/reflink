@@ -25,14 +25,16 @@ const referral = {
 };
 const harness = `<!doctype html><html><body><div id="root"></div><script type="module">
 import React from 'react'; import {createRoot} from 'react-dom/client';
-import {PrintReferralSheet} from '/src/App.jsx';
+import {PrintReferralSheet, NewReferralForm} from '/src/App.jsx';
 import '/src/index.css';
-createRoot(document.getElementById('root')).render(React.createElement('div', {style:{height:'5000px'}}, 'SCREEN CONTENT MUST NOT PRINT', React.createElement(PrintReferralSheet,{referral:${JSON.stringify(referral)}})));
+createRoot(document.getElementById('root')).render(location.search === '?draft' ? React.createElement(NewReferralForm, {ownerId:'synthetic',referringFacilityId:'test'}) : React.createElement('div', {style:{height:'5000px'}}, 'SCREEN CONTENT MUST NOT PRINT', React.createElement(PrintReferralSheet,{referral:${JSON.stringify(referral)}})));
 </script></body></html>`;
 const server = await createServer({
   define: { 'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://synthetic.invalid'), 'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('synthetic-public-client') },
   server: { host: '127.0.0.1', port: 4181, strictPort: true },
-  plugins: [{name:'synthetic-print-harness', configureServer(server) {
+  plugins: [{name:'synthetic-print-harness', transform(code, id) {
+    if (id.endsWith('/src/App.jsx')) return code + '\nexport { NewReferralForm };';
+  }, configureServer(server) {
     server.middlewares.use('/__synthetic-print', async (_req,res) => { res.setHeader('Content-Type','text/html');res.end(await server.transformIndexHtml('/__synthetic-print',harness)); });
   }}],
 });
@@ -68,6 +70,29 @@ try {
   assert.ok(pageTexts.every(text => /PATIENT INFORMATION|RECEIVING FACILITY UPDATE|DISCHARGE INFORMATION|REFERRAL CONTINUITY/.test(text)), 'Every page must contain clinical sections, not only a footer');
   for (const value of ['SYNTHETIC PHC A','SYNTHETIC RECEIVING B','Synthetic Test Ward B','Discharge Information','Synthetic follow-up','6:07:04 PM','Disposition at Assessment']) assert.ok(pdfText.replace(/\s+/g, " ").toLowerCase().includes(value.toLowerCase()),`Missing PDF content: ${value}`);
   assert.ok(!pdfText.includes('SCREEN CONTENT MUST NOT PRINT'));
+  const draftPage = await context.newPage();
+  let releaseLogo;
+  const logoGate = new Promise(resolve => { releaseLogo = resolve; });
+  await draftPage.route('**/reflink-logo.png', async route => {
+    await logoGate;
+    await route.fulfill({path:'public/reflink-logo.png', contentType:'image/png'});
+  });
+  await draftPage.goto('http://127.0.0.1:4181/__synthetic-print?draft');
+  await draftPage.evaluate(() => {
+    window.print = () => {
+      const image = document.querySelector('.printable-referral-sheet .official-document-logo');
+      window.printedLogoWidth = image?.naturalWidth || 0;
+    };
+  });
+  await draftPage.getByRole('button', {name:/Print Draft/}).click();
+  await draftPage.locator('.printable-referral-sheet').waitFor({state:'attached'});
+  await draftPage.waitForTimeout(150);
+  assert.equal(await draftPage.evaluate(() => window.printedLogoWidth), undefined);
+  releaseLogo();
+  await draftPage.waitForFunction(() => window.printedLogoWidth > 0);
+  await draftPage.emulateMedia({media:'print'});
+  assert.ok(await draftPage.locator('.printable-referral-sheet .official-document-logo').isVisible());
+  assert.ok((await draftPage.locator('.printable-referral-sheet').textContent()).includes('DRAFT REFERRAL'));
   assert.deepEqual(errors,[]);
   writeFileSync('test-results/referral-print-result.json',JSON.stringify({pages,checks:'portal isolation, facilities, admission, discharge, timestamps and closure semantics passed'},null,2));
   console.log(`synthetic_referral_print: passed (${pages} pages)`);
