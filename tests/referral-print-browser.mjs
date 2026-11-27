@@ -107,6 +107,7 @@ try {
     await navigator.serviceWorker.register('/reflink-sw.js');
     await navigator.serviceWorker.ready;
   });
+  await offlinePage.reload();
   await offlinePage.waitForFunction(() => navigator.serviceWorker.controller !== null);
   await offlinePage.locator('[name="patient_identifier"]').fill('SYNTHETIC-OFFLINE-PRINT');
   await offlinePage.evaluate(() => { window.print = () => { window.draftPrinted = true; }; });
