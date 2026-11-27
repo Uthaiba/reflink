@@ -145,3 +145,9 @@ The project lead selected the referring PHC to choose the next facility after a 
 ## Release decision — 25 November 2026
 
 The founder authorized deployment. The review build at `eb83d13` is available for synthetic demonstrations. The [database rehearsal](https://github.com/Uthaiba/reflink/actions/runs/45606885403) passed the pre-release dump, restore and migration replay in disposable PostgreSQL. Hosted Auth, private object contents and deployment configuration still require an isolated recovery exercise. The clinical review and retention decision remain outstanding alongside the hosted workflow checks above. Clinical production promotion remains pending.
+
+## Offline submission retest — 27 November 2026
+
+The project lead reported a successful retest. Device, steps and final referral count were unspecified. The hosted staging ledger records `accept_standard_offline_referral_uuid` as `20261127183820`. Its SQL matches repository migration `20261127184000` after trimming surrounding whitespace. The active check accepts the standard UUID format and the previously accepted legacy format.
+
+In hosted synthetic staging, a temporary table copied the referral table's checks and indexes. Two synthetic insert attempts with the same standard retry key left one row. The [isolated database test](https://github.com/Uthaiba/reflink/actions/runs/46050856649) also exercised two concurrent clients after restore. End-to-end verification of a queued referral through browser restart, reconnect and receipt at the receiving facility remains open.
