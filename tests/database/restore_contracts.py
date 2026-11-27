@@ -61,15 +61,18 @@ print("test_synthetic_dump_restore_preserves_schema_clinical_row_audit_ledgers_a
 
 # Two independent clients can retry one offline submission after connectivity returns.
 retry_key = str(uuid.uuid4())
+run(f"""INSERT INTO auth.users(id) VALUES ('{actor}');
+    INSERT INTO public.profiles(id,full_name,role,facility_id)
+    VALUES ('{actor}','Synthetic retry operator','phc_staff','{phc}')""", target)
 def submit_retry(attempt):
     return run(f"""
         DO $retry$
         DECLARE violated text;
         BEGIN
           INSERT INTO public.referrals
-            (id, referral_number, patient_identifier, status, is_test, offline_client_id, sync_source)
+            (id, referral_number, patient_identifier, status, is_test, referring_user_id, offline_client_id, sync_source)
           VALUES (gen_random_uuid(), 'SYNTHETIC-RETRY-{attempt}', 'SYNTHETIC ONLY',
-                  'draft', true, '{retry_key}', 'offline');
+                  'draft', true, '{actor}', '{retry_key}', 'offline');
         EXCEPTION WHEN unique_violation THEN
           GET STACKED DIAGNOSTICS violated = CONSTRAINT_NAME;
           IF violated <> 'referrals_offline_client_id_uidx' THEN RAISE; END IF;
