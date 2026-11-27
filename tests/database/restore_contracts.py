@@ -1,4 +1,5 @@
 """Synthetic pg_dump/pg_restore rehearsal; no hosted connections or real data."""
+from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import runpy
@@ -57,3 +58,25 @@ with tempfile.TemporaryDirectory() as temporary:
       AND grantee IN ('anon','authenticated','service_role')"""
     assert run(privilege_sql,source)==run(privilege_sql,target)
 print("test_synthetic_dump_restore_preserves_schema_clinical_row_audit_ledgers_and_grants: passed")
+
+# Two independent clients can retry one offline submission after connectivity returns.
+retry_key = str(uuid.uuid4())
+def submit_retry(attempt):
+    return run(f"""
+        DO $retry$
+        DECLARE violated text;
+        BEGIN
+          INSERT INTO public.referrals
+            (id, referral_number, patient_identifier, status, is_test, offline_client_id, sync_source)
+          VALUES (gen_random_uuid(), 'SYNTHETIC-RETRY-{attempt}', 'SYNTHETIC ONLY',
+                  'draft', true, '{retry_key}', 'offline');
+        EXCEPTION WHEN unique_violation THEN
+          GET STACKED DIAGNOSTICS violated = CONSTRAINT_NAME;
+          IF violated <> 'referrals_offline_client_id_uidx' THEN RAISE; END IF;
+        END $retry$;
+    """, target)
+
+with ThreadPoolExecutor(max_workers=2) as workers:
+    list(workers.map(submit_retry, [1, 2]))
+assert run(f"SELECT count(*) FROM public.referrals WHERE offline_client_id='{retry_key}'", target) == "1"
+print("test_restored_database_deduplicates_offline_submission_retries: passed")
