@@ -2,8 +2,8 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import { chromium } from 'playwright';
-import { createServer } from 'vite';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { build, createServer } from 'vite';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 const referral = {
   referral_number: 'RF-SYNTHETIC-PRINT', patient_identifier: 'SYNTHETIC-PRINT-001',
@@ -29,12 +29,20 @@ import {PrintReferralSheet, NewReferralForm} from '/src/App.jsx';
 import '/src/index.css';
 createRoot(document.getElementById('root')).render(location.search === '?draft' ? React.createElement(NewReferralForm, {ownerId:'synthetic',referringFacilityId:'test'}) : React.createElement('div', {style:{height:'5000px'}}, 'SCREEN CONTENT MUST NOT PRINT', React.createElement(PrintReferralSheet,{referral:${JSON.stringify(referral)}})));
 </script></body></html>`;
+await build({logLevel:'warn'});
 const server = await createServer({
   define: { 'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://synthetic.invalid'), 'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('synthetic-public-client') },
   server: { host: '127.0.0.1', port: 4181, strictPort: true },
   plugins: [{name:'synthetic-print-harness', transform(code, id) {
     if (id.endsWith('/src/App.jsx')) return code + '\nexport { NewReferralForm };';
   }, configureServer(server) {
+    // Serve the generated worker and its bundled assets on the form fixture's origin.
+    server.middlewares.use((req, res, next) => {
+      const path = req.url.split('?')[0];
+      if (path !== '/reflink-sw.js' && !/^\/assets\/[\w.-]+\.(js|css)$/.test(path)) return next();
+      res.setHeader('Content-Type', path.endsWith('.css') ? 'text/css' : 'application/javascript');
+      res.end(readFileSync('dist' + path));
+    });
     server.middlewares.use('/__synthetic-print', async (_req,res) => { res.setHeader('Content-Type','text/html');res.end(await server.transformIndexHtml('/__synthetic-print',harness)); });
   }}],
 });
@@ -93,6 +101,29 @@ try {
   await draftPage.emulateMedia({media:'print'});
   assert.ok(await draftPage.locator('.printable-referral-sheet .official-document-logo').isVisible());
   assert.ok((await draftPage.locator('.printable-referral-sheet').textContent()).includes('DRAFT REFERRAL'));
+  const offlinePage = await context.newPage();
+  await offlinePage.goto('http://127.0.0.1:4181/__synthetic-print?draft');
+  await offlinePage.evaluate(async () => {
+    await navigator.serviceWorker.register('/reflink-sw.js');
+    await navigator.serviceWorker.ready;
+  });
+  await offlinePage.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  await offlinePage.locator('[name="patient_identifier"]').fill('SYNTHETIC-OFFLINE-PRINT');
+  await offlinePage.evaluate(() => { window.print = () => { window.draftPrinted = true; }; });
+  await context.setOffline(true);
+  assert.equal(await offlinePage.evaluate(() => navigator.onLine), false);
+  await offlinePage.getByRole('button', {name:/Print Draft/}).click();
+  await offlinePage.waitForFunction(() => window.draftPrinted);
+  await offlinePage.emulateMedia({media:'print'});
+  const offlineLogo = offlinePage.locator('.printable-referral-sheet .official-document-logo');
+  assert.ok(await offlineLogo.isVisible());
+  assert.ok(await offlineLogo.evaluate(image => image.naturalWidth > 0));
+  const offlinePdf = 'test-results/offline-phc-draft.pdf';
+  await offlinePage.pdf({path:offlinePdf, preferCSSPageSize:true, printBackground:false});
+  const offlineText = execFileSync('pdftotext',[offlinePdf,'-'],{encoding:'utf8'});
+  assert.ok(offlineText.includes('SYNTHETIC-OFFLINE-PRINT'));
+  assert.ok(offlineText.includes('DRAFT REFERRAL'));
+  assert.match(execFileSync('pdfimages',['-list',offlinePdf],{encoding:'utf8'}), /\bimage\b/);
   assert.deepEqual(errors,[]);
   writeFileSync('test-results/referral-print-result.json',JSON.stringify({pages,checks:'portal isolation, facilities, admission, discharge, timestamps and closure semantics passed'},null,2));
   console.log(`synthetic_referral_print: passed (${pages} pages)`);
