@@ -1,0 +1,57 @@
+.referral-view-filter { display: flex; align-items: center; gap: 12px; margin: 16px 0; flex-wrap: wrap; }
+
+/* The sheet is a body-level React portal. Remove the app from print layout,
+   rather than making it invisible while retaining its multi-page height. */
+@media print {
+  @page { size: A4 portrait; margin: 10mm; }
+  html, body { width: auto !important; min-width: 0 !important; height: auto !important; min-height: 0 !important; overflow: visible !important; }
+  body > :not(.printable-referral-sheet) { display: none !important; }
+  body > .printable-referral-sheet {
+    display: block !important; position: static !important;
+    width: 100% !important; max-width: none !important;
+    font-size: 10pt !important; line-height: 1.35 !important;
+  }
+  .printable-referral-sheet .print-section { break-inside: auto !important; page-break-inside: auto !important; }
+  .printable-referral-sheet .print-section-title { break-after: avoid !important; }
+  .printable-referral-sheet .print-section-title h2 { font-size: 12pt !important; }
+  .printable-referral-sheet .print-brand-block { display: flex !important; align-items: center; gap: 3mm; }
+  .printable-referral-sheet p,
+  .printable-referral-sheet strong,
+  .printable-referral-sheet td { font-size: 10pt !important; line-height: 1.35 !important; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .printable-referral-sheet span,
+  .printable-referral-sheet small,
+  .printable-referral-sheet th { font-size: 9pt !important; line-height: 1.3 !important; }
+  .printable-referral-sheet .print-table { break-inside: auto !important; page-break-inside: auto !important; }
+  .printable-referral-sheet thead { display: table-header-group; }
+  .printable-referral-sheet .print-grid,
+  .printable-referral-sheet .print-narrative-grid { break-inside: auto !important; page-break-inside: auto !important; }
+  .printable-referral-sheet .print-grid > div,
+  .printable-referral-sheet .print-narrative-card { min-width: 0; }
+  .printable-referral-sheet .print-document-footer { position: static !important; }
+}
+
+@media print {
+  .printable-referral-sheet .print-section { margin-top: 2mm !important; }
+  .printable-referral-sheet .print-section-title h2::after { display: none !important; }
+  .printable-referral-sheet .print-narrative-grid { gap: 1.5mm !important; }
+  .printable-referral-sheet .print-narrative-grid > div {
+    padding: 1.8mm !important; min-height: 0 !important;
+    break-inside: avoid !important; page-break-inside: avoid !important;
+  }
+  .printable-referral-sheet .print-grid > div { padding: 1.5mm 2mm !important; break-inside: avoid !important; }
+  .printable-referral-sheet .print-empty-state { font-size: 9pt !important; min-height: 0 !important; padding: 1.5mm !important; }
+  .printable-referral-sheet .print-brand-mark { border: 1px solid #333 !important; border-radius: 2mm; font-weight: bold; }
+  .printable-referral-sheet .print-brand-mark span { font-size: 16pt !important; }
+  .printable-referral-sheet .print-document-footer { display: block !important; text-align: left !important; }
+  .printable-referral-sheet .print-document-footer > div { display: inline-flex !important; gap: 2mm; margin-right: 4mm; }
+  .printable-referral-sheet .print-document-footer p { margin: 1mm 0 0 !important; }
+}
+
+/* Keep the long, discharged acceptance record compact without shrinking text. */
+@media print {
+  .printable-referral-sheet .print-table th,
+  .printable-referral-sheet .print-table td { padding: 0.8mm 2mm !important; }
+  .printable-referral-sheet .print-narrative-grid > div { padding: 1.2mm 1.8mm !important; }
+  .printable-referral-sheet .print-section { margin-top: 1.5mm !important; }
+  .printable-referral-sheet .print-document-footer { margin-top: 2mm !important; padding-top: 1mm !important; }
+}

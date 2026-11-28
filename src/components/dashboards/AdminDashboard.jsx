@@ -1,3 +1,4 @@
+import PublicHealthIntelligence from "./PublicHealthIntelligence.jsx";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase.js";
 
@@ -2270,6 +2271,14 @@ function AdminDashboard({
      ANALYSIS HUB VIEW
      ======================================================= */
 
+  if (view === "public-health") {
+    return <>
+      <div className="dashboard-actions"><button type="button" className="secondary-button"
+        onClick={() => setView("home")}>← Back to Administration</button></div>
+      <PublicHealthIntelligence />
+    </>;
+  }
+
   if (view === "analysis") {
     return (
       <>
@@ -2643,7 +2652,7 @@ function AdminDashboard({
     <div className="admin-modern-shell">
       <aside className="admin-modern-sidebar" aria-label="Administration navigation">
         <div className="admin-sidebar-brand">
-          <div className="admin-sidebar-logo">R</div>
+          <div className="admin-sidebar-logo"><img src="/reflink-symbol.png" alt="" width="36" height="36" /></div>
           <div>
             <strong>REFLINK</strong>
             <span>Health Network</span>
@@ -2664,6 +2673,10 @@ function AdminDashboard({
           <button type="button" className={view === "analysis" ? "is-active" : ""} onClick={() => setView("analysis")}>
             <span className="admin-nav-icon">◫</span>
             <span>Analytics</span>
+          </button>
+          <button type="button" className={view === "public-health" ? "is-active" : ""} onClick={() => setView("public-health")}>
+            <span className="admin-nav-icon" aria-hidden="true">▦</span>
+            <span>Public Health Intelligence</span>
           </button>
           <button type="button" className={view === "analytics" ? "is-active" : ""} onClick={() => setView("analytics")}>
             <span className="admin-nav-icon">▥</span>

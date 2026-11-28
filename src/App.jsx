@@ -1,12 +1,32 @@
+import { LanguageSwitcher, useLanguage } from "./lib/i18n.jsx";
+import HospitalFeedback from "./components/HospitalFeedback.jsx";
+import PhcFollowUp from "./components/PhcFollowUp.jsx";
 
-import { useEffect, useMemo, useState } from "react";
+import { createPortal, flushSync } from "react-dom";
+import { referralJourney, filterReceivingReferrals } from "./lib/referralPresentation.js";
+import { lazy, useEffect, useRef, useState } from "react";
 import { supabase } from "./lib/supabase.js";
-import AdminDashboard from "./components/dashboards/AdminDashboard.jsx";
-import AnalyticsDashboard from "./components/dashboards/AnalyticsDashboard.jsx";
-import AnalysisHub from "./components/dashboards/AnalysisHub.jsx";
+import { commitClinicalUpdate } from "./lib/clinicalSaveRecovery.js";
+import { assessmentFormFor, inpatientFormFor, hasClinicalFormChanges } from "./lib/clinicalFormState.js";
+import { confirmClinicalNavigation, registerClinicalDraft } from "./lib/clinicalDraftNavigation.js";
+import EncryptedDraftPanel from "./components/EncryptedDraftPanel.jsx";
+import { restoreDraftData } from "./lib/encryptedDrafts.js";
+import { createReferralOnce } from "./lib/referralSubmission.js";
+import { initialInvestigationRecords, saveInvestigation, uploadInitialInvestigationFiles } from "./lib/investigationUpdates.js";
+const atomicInvestigationUpdatesEnabled = import.meta.env.VITE_ATOMIC_INVESTIGATIONS_ENABLED === "true";
+import { changeAccountPassword, resolvePasswordChangeMode } from "./lib/passwordChange.js";
+import { getLegacyDiagnosisStatus } from "./lib/diagnosisRecords.js";
+import { inspectInvestigationAttachment } from "./lib/investigationAttachmentRecovery.js";
+import { validateInvestigationFile, validateInvestigationFileContent, uploadResumableInvestigation } from "./lib/investigationAttachments.js";
+const AdminDashboard = lazy(() => import("./components/dashboards/AdminDashboard.jsx"));
+const AnalyticsDashboard = lazy(() => import("./components/dashboards/AnalyticsDashboard.jsx"));
+const AnalysisHub = lazy(() => import("./components/dashboards/AnalysisHub.jsx"));
 import "./App.css";
 import "./reflink-theme-professional.css";
 import "./admin-dashboard-modern.css";
+import "./reflink-clinical-accessibility.css";
+import "./referral-print.css";
+import "./reflink-logo.css";
 
 function formatPatientAge(ageInMonths) {
   const months = Number(ageInMonths);
@@ -68,25 +88,6 @@ function parseJsonArray(value) {
   } catch {
     return [];
   }
-}
-
-function formatDiagnosisRecords(records, fallback = "") {
-  const parsed = Array.isArray(records) ? records : parseJsonArray(records);
-
-  if (parsed.length > 0) {
-    return parsed
-      .map((item) => {
-        if (typeof item === "string") return item;
-        const status = item?.status ? `${item.status}: ` : "";
-        const diagnosis = item?.diagnosis || item?.name || "";
-        const category = item?.category ? ` (${item.category})` : "";
-        return `${status}${diagnosis}${category}`;
-      })
-      .filter(Boolean)
-      .join(" • ");
-  }
-
-  return fallback || "Not recorded";
 }
 
 function formatDiagnosisSummary(records, fallback = "", maxItems = 2) {
@@ -290,11 +291,49 @@ function normalizeInvestigationRecord(item) {
   };
 }
 
-function InvestigationResultCards({ investigations, editable = false, onResultChange, onFileUpload }) {
+function InvestigationResultCards({ investigations, editable = false, onResultChange, onFileUpload, expectedSnapshot }) {
+  const [drafts, setDrafts] = useState({});
+  const [saving, setSaving] = useState(null);
+  const [downloadMessage, setDownloadMessage] = useState("");
+  async function downloadResult(item) {
+    setDownloadMessage("");
+    try {
+      const {data, error} = await supabase.storage.from("referral-investigation-results").download(item.result_file_path);
+      if (error || !data) throw new Error("Download unavailable");
+      const url = URL.createObjectURL(data);
+      try {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = item.result_file_name || "investigation-result";
+        link.click();
+      } finally { window.setTimeout(() => URL.revokeObjectURL(url), 1000); }
+      setDownloadMessage("Download started.");
+    } catch { setDownloadMessage("Download unavailable. Check your connection and referral access."); }
+  }
+  const hasUnsavedChanges = Object.keys(drafts).length > 0;
+  useEffect(() => registerClinicalDraft(window, () => hasUnsavedChanges || saving !== null), [hasUnsavedChanges, saving]);
+  const changeDraft = (index, patch) => setDrafts((previous) => ({
+    ...previous,
+    [index]: { patch: { ...previous[index]?.patch, ...patch },
+      expected: previous[index]?.expected ?? expectedSnapshot,
+      blocked: previous[index]?.blocked ?? false },
+  }));
+  const saveDraft = async (index) => {
+    if (!drafts[index] || saving !== null) return;
+    setSaving(index);
+    try {
+      const saved = await onResultChange?.(index, drafts[index].patch, drafts[index].expected);
+      if (!saved) setDrafts((previous) => ({ ...previous, [index]: { ...previous[index], blocked: true } }));
+      if (saved) setDrafts((previous) => {
+        const next = { ...previous }; delete next[index]; return next;
+      });
+    } finally { setSaving(null); }
+  };
   if (!investigations.length) return <div className="empty-selection-state">No investigation was recorded.</div>;
-  const normalized = investigations.map(normalizeInvestigationRecord);
+  const normalized = investigations.map((item, index) => ({ ...normalizeInvestigationRecord(item), ...drafts[index]?.patch }));
   return (
     <div className="investigation-result-list">
+      <p role="status">{downloadMessage}</p>
       {normalized.map((item, index) => {
         const config = getInvestigationResultConfig(item.investigation);
         return (
@@ -306,7 +345,7 @@ function InvestigationResultCards({ investigations, editable = false, onResultCh
             <div className="investigation-result-control">
               <span>{config.label}</span>
               {editable ? (
-                <select value={item.result_status} onChange={(e) => onResultChange?.(index, { result_status: e.target.value })} aria-label={`Result for ${item.investigation}`}>
+                <select disabled={saving !== null} value={item.result_status} onChange={(e) => changeDraft(index, { result_status: e.target.value })} aria-label={`Result for ${item.investigation}`}>
                   {config.statuses.map((status) => <option value={status} key={status}>{getInvestigationResultLabel(status)}</option>)}
                 </select>
               ) : <span className={`investigation-result-badge ${getInvestigationResultClass(item.result_status)}`}>{getInvestigationResultLabel(item.result_status)}</span>}
@@ -314,19 +353,27 @@ function InvestigationResultCards({ investigations, editable = false, onResultCh
             {editable && (
               <div className="investigation-result-detail-grid">
                 {config.type === "quantitative" && <>
-                  <label><span>Value</span><input value={item.result_value} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder="e.g. 32" /></label>
-                  <label><span>Unit</span><input value={item.result_unit} onChange={(e) => onResultChange?.(index, { result_unit: e.target.value })} placeholder="% / g/dL" /></label>
-                  <label><span>Reference range</span><input value={item.reference_range} onChange={(e) => onResultChange?.(index, { reference_range: e.target.value })} placeholder="Use performing laboratory range" /></label>
+                  <label><span>Value</span><input disabled={saving !== null} value={item.result_value} onChange={(e) => changeDraft(index, { result_value: e.target.value })} placeholder="e.g. 32" /></label>
+                  <label><span>Unit</span><input disabled={saving !== null} value={item.result_unit} onChange={(e) => changeDraft(index, { result_unit: e.target.value })} placeholder="% / g/dL" /></label>
+                  <label><span>Reference range</span><input disabled={saving !== null} value={item.reference_range} onChange={(e) => changeDraft(index, { reference_range: e.target.value })} placeholder="Use performing laboratory range" /></label>
                 </>}
-                {config.type === "panel" && <label className="investigation-result-notes"><span>Panel findings</span><textarea value={item.result_value} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder="Record pH, protein, glucose, blood, nitrite, leukocytes, specific gravity and other findings." rows={3} /></label>}
-                {(config.type === "qualitative" || config.type === "microbiology" || config.type === "imaging") && <label className="investigation-result-notes"><span>Result / report detail</span><textarea value={item.result_value} onChange={(e) => onResultChange?.(index, { result_value: e.target.value })} placeholder={config.type === "imaging" ? "Enter report findings and impression." : "Enter organism, finding or additional result detail."} rows={3} /></label>}
-                <label className="investigation-result-notes"><span>Clinical/laboratory note</span><textarea value={item.result_notes} onChange={(e) => onResultChange?.(index, { result_notes: e.target.value })} placeholder="Optional note" rows={2} /></label>
+                {config.type === "panel" && <label className="investigation-result-notes"><span>Panel findings</span><textarea disabled={saving !== null} value={item.result_value} onChange={(e) => changeDraft(index, { result_value: e.target.value })} placeholder="Record pH, protein, glucose, blood, nitrite, leukocytes, specific gravity and other findings." rows={3} /></label>}
+                {(config.type === "qualitative" || config.type === "microbiology" || config.type === "imaging") && <label className="investigation-result-notes"><span>Result / report detail</span><textarea disabled={saving !== null} value={item.result_value} onChange={(e) => changeDraft(index, { result_value: e.target.value })} placeholder={config.type === "imaging" ? "Enter report findings and impression." : "Enter organism, finding or additional result detail."} rows={3} /></label>}
+                <label className="investigation-result-notes"><span>Clinical/laboratory note</span><textarea disabled={saving !== null} value={item.result_notes} onChange={(e) => changeDraft(index, { result_notes: e.target.value })} placeholder="Optional note" rows={2} /></label>
               </div>
             )}
             {!editable && item.result_value && <div className="investigation-result-value"><span>Result detail</span><strong>{item.result_value}</strong>{item.result_unit && <small>{item.result_unit}</small>}{item.reference_range && <small>Reference: {item.reference_range}</small>}</div>}
+            {editable && drafts[index] && <div role="status">
+              Unsaved changes. <button type="button" className="secondary-button"
+                disabled={saving !== null || drafts[index].blocked} onClick={() => saveDraft(index)}>Save result</button>
+              <button type="button" className="secondary-button" disabled={saving !== null}
+                onClick={() => setDrafts((previous) => { const next = { ...previous }; delete next[index]; return next; })}>
+                Discard draft
+              </button>
+            </div>}
             <div className="investigation-file-row">
-              <div><span>Original result</span><strong>{item.result_file_name || "No result document attached"}</strong>{item.result_file_size ? <small>{Math.round(item.result_file_size / 1024)} KB</small> : null}</div>
-              {editable && <label className="upload-result-button">📎 {item.result_file_name ? "Replace result" : "Upload result"}<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv" onChange={(e) => onFileUpload?.(index, e.target.files?.[0] || null)} /></label>}
+              <div><span>Original result</span><strong>{item.result_file_name || "No result document attached"}</strong>{item.result_file_size ? <small>{item.result_file_size < 1024 ? `${item.result_file_size} B` : `${Math.round(item.result_file_size / 1024)} KB`}</small> : null}{item.result_file_path && <button type="button" onClick={() => downloadResult(item)}>Download document</button>}</div>
+              {editable && <label className="upload-result-button">📎 {item.result_file_name ? "Replace result" : "Upload result"}<input type="file" disabled={saving !== null || Object.keys(drafts).length > 0} accept="application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv" onChange={(e) => onFileUpload?.(index, e.target.files?.[0] || null)} /></label>}
             </div>
           </div>
         );
@@ -335,7 +382,7 @@ function InvestigationResultCards({ investigations, editable = false, onResultCh
   );
 }
 
-function PrintReferralSheet({
+export function PrintReferralSheet({
   referral,
   copyLabel = "REFERRAL COPY",
 }) {
@@ -371,7 +418,7 @@ function PrintReferralSheet({
     referral?.receiving_facility_name ||
     "Not recorded";
 
-  return (
+  return createPortal(
     <div className="printable-referral-sheet">
 
       {/* =====================================================
@@ -380,17 +427,8 @@ function PrintReferralSheet({
       <header className="print-document-header">
 
         <div className="print-brand-block">
-          <div className="print-brand-mark">
-            <span>R</span>
-          </div>
-
           <div>
-            <div className="print-brand">REFLINK</div>
-
-            <div className="print-brand-subtitle">
-              DIGITAL REFERRAL & CARE CONTINUITY SYSTEM
-            </div>
-
+            <img className="official-document-logo" src="/reflink-logo.png" alt="REFLINK" width="192" height="64" />
             <h1>Patient Referral Form</h1>
 
             <p>
@@ -446,7 +484,6 @@ function PrintReferralSheet({
       <section className="print-section">
 
         <div className="print-section-title">
-          <span>01</span>
           <h2>Patient Information</h2>
         </div>
 
@@ -506,7 +543,6 @@ function PrintReferralSheet({
         <section className="print-section">
 
           <div className="print-section-title">
-            <span>02</span>
             <h2>Next of Kin / Emergency Contact</h2>
           </div>
 
@@ -548,7 +584,6 @@ function PrintReferralSheet({
       <section className="print-section">
 
         <div className="print-section-title">
-          <span>03</span>
           <h2>Referral Pathway</h2>
         </div>
 
@@ -617,7 +652,6 @@ function PrintReferralSheet({
       <section className="print-section">
 
         <div className="print-section-title">
-          <span>04</span>
           <h2>Clinical Presentation</h2>
         </div>
 
@@ -666,7 +700,6 @@ function PrintReferralSheet({
       <section className="print-section">
 
         <div className="print-section-title">
-          <span>05</span>
           <h2>Treatment Given Before Referral</h2>
         </div>
 
@@ -688,7 +721,6 @@ function PrintReferralSheet({
       <section className="print-section">
 
         <div className="print-section-title">
-          <span>06</span>
           <h2>Diagnosis</h2>
         </div>
 
@@ -757,7 +789,6 @@ function PrintReferralSheet({
       <section className="print-section">
 
         <div className="print-section-title">
-          <span>07</span>
           <h2>Investigations & Results</h2>
         </div>
 
@@ -826,7 +857,6 @@ function PrintReferralSheet({
         <section className="print-section receiving-update-section">
 
           <div className="print-section-title">
-            <span>08</span>
             <h2>Receiving Facility Update</h2>
           </div>
 
@@ -899,7 +929,7 @@ function PrintReferralSheet({
 
             {referral?.disposition && (
               <div>
-                <span>Disposition</span>
+                <span>Disposition at Assessment</span>
                 <strong>
                   {formatClinicalLabel(
                     referral.disposition
@@ -915,52 +945,35 @@ function PrintReferralSheet({
       )}
 
 
+      {[
+        { title: "Inpatient Information", fields: [["Admission Date", "admission_at", true], ["Ward / Unit", "ward_unit"], ["Admission Diagnosis", "admission_diagnosis"], ["Clinical Progress", "clinical_progress"], ["Inpatient Treatment", "inpatient_treatment"]] },
+        { title: "Discharge Information", fields: [["Discharge Diagnosis", "discharge_diagnosis"], ["Condition at Discharge", "condition_at_discharge"], ["Discharge Medications", "discharge_medications"], ["Follow-up Plan", "follow_up_plan"], ["Discharged At", "discharged_at", true]] },
+      ].filter((section) => section.fields.some(([, field]) => referral?.[field])).map((section) => (
+        <section className="print-section" key={section.title}>
+          <div className="print-section-title"><h2>{section.title}</h2></div>
+          <div className="print-narrative-grid">{section.fields.map(([label, field, date]) => (
+            <div className="print-narrative-card" key={field}><span>{label}</span>
+              <p>{referral?.[field] ? (date ? formatReferralDateTime(referral[field]) : referral[field]) : "Not recorded"}</p>
+            </div>
+          ))}</div>
+        </section>
+      ))}
+
       {/* =====================================================
           REFERRAL CONTINUITY
       ===================================================== */}
       <section className="print-section">
 
         <div className="print-section-title">
-          <span>09</span>
           <h2>Referral Continuity</h2>
         </div>
 
-        <div className="print-continuity">
-
-          <div>
-            <span>01</span>
-            <strong>Sent</strong>
-          </div>
-
-          <div className="continuity-line" />
-
-          <div>
-            <span>02</span>
-            <strong>Acknowledged</strong>
-          </div>
-
-          <div className="continuity-line" />
-
-          <div>
-            <span>03</span>
-            <strong>Patient Arrived</strong>
-          </div>
-
-          <div className="continuity-line" />
-
-          <div>
-            <span>04</span>
-            <strong>Assessment</strong>
-          </div>
-
-          <div className="continuity-line" />
-
-          <div>
-            <span>05</span>
-            <strong>Outcome</strong>
-          </div>
-
-        </div>
+        <table className="print-table">
+          <thead><tr><th>Event</th><th>Date and time (local)</th></tr></thead>
+          <tbody>{referralJourney(referral).map((step) => (
+            <tr key={step.key}><td>{step.label}</td><td>{step.timestamp ? formatReferralDateTime(step.timestamp) : "Not recorded"}</td></tr>
+          ))}</tbody>
+        </table>
 
       </section>
 
@@ -1016,15 +1029,23 @@ function PrintReferralSheet({
 
       </footer>
 
-    </div>
+    </div>, document.body
   );
 }
 
-function printReferralForm() {
-  window.print();
+async function printReferralForm() {
+  const sheet = document.querySelector("body > .printable-referral-sheet");
+  const logo = sheet?.querySelector(".official-document-logo");
+  if (!logo) return;
+  try {
+    await logo.decode();
+  } catch {
+    // Allow the existing text-labelled paper handoff if the offline asset is unavailable.
+  }
+  if (sheet.isConnected) window.print();
 }
 
-function ReferralSourceDetails({ referral, editableInvestigationResults = false, onInvestigationResultChange }) {
+function ReferralSourceDetails({ referral, editableInvestigationResults = false, onInvestigationResultChange, onInvestigationFileUpload }) {
   const diagnoses = getDiagnosisRecords(referral);
   const investigations = getInvestigationRecords(referral);
 
@@ -1060,7 +1081,7 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
         (typeof item === "string" ? item : "");
 
       if (investigation) {
-        groups[category].push(investigation);
+        groups[category].push(item);
       }
 
       return groups;
@@ -1281,9 +1302,16 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
                   </div>
 
                   <InvestigationResultCards
+                    key={`${referral.id}:${category}`}
                     investigations={items}
                     editable={editableInvestigationResults}
-                    onResultChange={(localIndex, value) => {
+                    expectedSnapshot={referral.investigation_records}
+                    onFileUpload={(localIndex, file) => {
+                      const selectedItem = items[localIndex];
+                      const globalIndex = investigations.findIndex((entry) => entry === selectedItem);
+                      if (globalIndex >= 0) return onInvestigationFileUpload?.(globalIndex, file);
+                    }}
+                    onResultChange={(localIndex, value, expected) => {
                       const categoryItems = investigations.filter(
                         (entry) =>
                           (entry?.category || "Other Investigations") === category
@@ -1294,7 +1322,7 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
                       );
 
                       if (globalIndex >= 0) {
-                        onInvestigationResultChange?.(globalIndex, value);
+                        return onInvestigationResultChange?.(globalIndex, value, expected);
                       }
                     }}
                   />
@@ -1313,33 +1341,7 @@ function ReferralSourceDetails({ referral, editableInvestigationResults = false,
 }
 
 function ReferralTimeline({ referral }) {
-  const steps = [
-    {
-      key: "created",
-      label: "Referral Created",
-      timestamp: referral.created_at,
-    },
-    {
-      key: "acknowledged",
-      label: "Referral Acknowledged",
-      timestamp: referral.acknowledged_at,
-    },
-    {
-      key: "patient-arrived",
-      label: "Patient Arrived",
-      timestamp: referral.patient_arrived_at,
-    },
-    {
-      key: "assessment",
-      label: "Assessment Completed",
-      timestamp: referral.assessment_completed_at,
-    },
-    {
-      key: "completed",
-      label: "Referral Completed",
-      timestamp: referral.completed_at || referral.discharged_at,
-    },
-  ];
+  const steps = referralJourney(referral);
 
   let activeFound = false;
 
@@ -1363,7 +1365,7 @@ function ReferralTimeline({ referral }) {
         </span>
       </div>
 
-      <div className="timeline-track">
+      <div className="timeline-track" role="list">
         {steps.map((step) => {
           const completed = Boolean(step.timestamp);
           const current = !completed && !activeFound;
@@ -1371,7 +1373,9 @@ function ReferralTimeline({ referral }) {
 
           return (
             <div
-              className={`timeline-step ${completed ? "is-complete" : ""} ${current ? "is-current" : "is-pending"}`}
+              className={`timeline-step ${completed ? "is-complete" : current ? "is-current" : "is-pending"}`}
+              role="listitem"
+              aria-current={current ? "step" : undefined}
               key={step.key}
             >
               <span className="timeline-dot" aria-hidden="true">
@@ -1394,6 +1398,8 @@ function ReferralTimeline({ referral }) {
    ========================================================= */
 
 function App() {
+  const language = useLanguage();
+  const { t } = language;
   const [screen, setScreen] = useState("home");
   const [role, setRole] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -1417,6 +1423,9 @@ function App() {
   const [passwordError, setPasswordError] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordOutcome, setPasswordOutcome] = useState(null);
+  const passwordChangeInFlight = useRef(false);
+  const passwordChangeLocked = ["confirmed", "account_pending", "unknown"].includes(passwordOutcome);
 
   /* =========================================================
    LOGIN / AUTHENTICATION
@@ -1518,6 +1527,7 @@ const handleSignIn = async () => {
     setRole(applicationRole);
 
     if (userProfile.must_change_password) {
+      setPasswordOutcome(null);
       setPasswordError("");
       setPasswordMessage(
         "Your account was created with a temporary password. Please set your own password before continuing."
@@ -1553,30 +1563,20 @@ const handleSignIn = async () => {
   }
 };
 
-  /* =========================================================
-     TEST SUPABASE CONNECTION
-     ========================================================= */
-
-  useEffect(() => {
-    const testSupabase = async () => {
-      const { data, error } = await supabase
-        .from("facilities")
-        .select("*")
-        .limit(1);
-
-      console.log("Supabase data:", data);
-      console.log("Supabase error:", error);
-    };
-
-    testSupabase();
-  }, []);
-
-
   useEffect(() => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setRole(null);
+        setProfile(null);
+        setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+        setScreen("login");
+      }
       if (event === "PASSWORD_RECOVERY") {
+        setRole(null);
+        setProfile(null);
+        setPasswordOutcome(null);
         setPasswordError("");
         setPasswordMessage("");
         setPasswordForm({
@@ -1631,6 +1631,7 @@ const handleSignIn = async () => {
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
+    if (passwordChangeInFlight.current || passwordChangeLocked) return;
     setPasswordError("");
     setPasswordMessage("");
 
@@ -1664,44 +1665,29 @@ const handleSignIn = async () => {
       return;
     }
 
+    passwordChangeInFlight.current = true;
     setPasswordSaving(true);
-
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-
-      if (error) throw error;
-
-      setPasswordForm({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      });
-
-      try {
-        await supabase
-          .from("profiles")
-          .update({
-            must_change_password: false,
-          })
-          .eq("id", profile?.id || "");
-      } catch (profileUpdateError) {
-        console.warn(
-          "PASSWORD FLAG UPDATE SKIPPED:",
-          profileUpdateError
-        );
+      const mode = resolvePasswordChangeMode(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_PASSWORD_CHANGE_MODE
+      );
+      const result = await changeAccountPassword(supabase, newPassword, mode);
+      setPasswordOutcome(result.status);
+      if (result.status === "confirmed") {
+        setProfile((previous) => previous?.id === result.userId
+          ? { ...previous, must_change_password: false } : null);
+        setPasswordMessage("Password and account status confirmed. Sign out, then sign in with your new password.");
+      } else if (result.status === "account_pending") {
+        setPasswordError("Your password changed, but account access could not be confirmed. Do not submit another password change. Sign out and sign in with the new password; contact an administrator if access remains blocked.");
+      } else if (result.status === "unknown") {
+        setPasswordError("The password-change outcome could not be confirmed. Do not retry here. Sign out and verify your new password, or use password recovery.");
+      } else {
+        setPasswordError("Password change was not started. Check your connection and sign-in session. If this continues, contact an administrator.");
       }
-
-      setPasswordMessage(
-        "Password changed successfully. Your new password is now active."
-      );
-    } catch (error) {
-      console.error("PASSWORD CHANGE ERROR:", error);
-      setPasswordError(
-        error?.message || "Unable to change your password."
-      );
     } finally {
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      passwordChangeInFlight.current = false;
       setPasswordSaving(false);
     }
   };
@@ -1748,7 +1734,7 @@ const handleSignIn = async () => {
   <>
     <header className="topbar">
       <div className="brand">
-        <div className="brand-mark">R</div>
+        <div className="brand-mark"><img src="/reflink-symbol.png" alt="" width="36" height="36" /></div>
 
         <div>
           <h1>REFLINK</h1>
@@ -1757,6 +1743,7 @@ const handleSignIn = async () => {
       </div>
 
       <nav className="home-nav">
+        <LanguageSwitcher {...language} />
         <button
           type="button"
           onClick={() =>
@@ -1765,7 +1752,7 @@ const handleSignIn = async () => {
               ?.scrollIntoView({ behavior: "smooth" })
           }
         >
-          How It Works
+          {t("howItWorks")}
         </button>
 
         <button
@@ -1776,7 +1763,7 @@ const handleSignIn = async () => {
               ?.scrollIntoView({ behavior: "smooth" })
           }
         >
-          Platform
+          {t("platform")}
         </button>
 
         <button
@@ -1784,7 +1771,7 @@ const handleSignIn = async () => {
           onClick={openLogin}
           className="login-button"
         >
-          Sign In
+          {t("signIn")}
         </button>
       </nav>
     </header>
@@ -1801,9 +1788,7 @@ const handleSignIn = async () => {
           </span>
 
           <h2>
-            Every Referral Connected.
-            <br />
-            <span>Every Patient Followed.</span>
+            {t("hero")}
           </h2>
 
           <p className="hero-text">
@@ -1819,7 +1804,7 @@ const handleSignIn = async () => {
               className="primary-button hero-primary"
               onClick={openLogin}
             >
-              Access REFLINK
+              {t("access")}
               <span>→</span>
             </button>
 
@@ -2210,7 +2195,7 @@ const handleSignIn = async () => {
       <div className="footer-brand">
 
         <div className="brand">
-          <div className="brand-mark">R</div>
+          <div className="brand-mark"><img src="/reflink-symbol.png" alt="" width="36" height="36" /></div>
 
           <div>
             <h1>REFLINK</h1>
@@ -2266,9 +2251,7 @@ const handleSignIn = async () => {
 
           <div className="login-card">
 
-            <div className="login-logo">
-              R
-            </div>
+            <img className="official-login-logo" src="/reflink-logo.png" width="192" height="64" alt="REFLINK" />
 
             <h2>
               Sign in to REFLINK
@@ -2326,7 +2309,7 @@ const handleSignIn = async () => {
 
             <button
               type="button"
-              className="back-button"
+              className="back-button" data-leave-clinical-workspace
               onClick={() => setScreen("home")}
             >
               ← Back to home
@@ -2349,7 +2332,7 @@ const handleSignIn = async () => {
       {screen === "change-password" && (
         <div className="login-page password-page">
           <div className="login-card password-card">
-            <div className="login-logo">R</div>
+            <img className="official-login-logo" src="/reflink-logo.png" width="192" height="64" alt="REFLINK" />
 
             <span className="eyebrow">
               ACCOUNT SECURITY
@@ -2367,6 +2350,7 @@ const handleSignIn = async () => {
 
               <input
                 type="password"
+                disabled={passwordSaving || passwordChangeLocked}
                 value={passwordForm.newPassword}
                 onChange={(e) =>
                   setPasswordForm((previous) => ({
@@ -2384,6 +2368,7 @@ const handleSignIn = async () => {
 
               <input
                 type="password"
+                disabled={passwordSaving || passwordChangeLocked}
                 value={passwordForm.confirmPassword}
                 onChange={(e) =>
                   setPasswordForm((previous) => ({
@@ -2398,13 +2383,13 @@ const handleSignIn = async () => {
               />
 
               {passwordError && (
-                <div className="login-error">
+                <div className="login-error" role="alert">
                   {passwordError}
                 </div>
               )}
 
               {passwordMessage && (
-                <div className="success-message">
+                <div className="success-message" role="status">
                   {passwordMessage}
                 </div>
               )}
@@ -2412,7 +2397,7 @@ const handleSignIn = async () => {
               <button
                 type="submit"
                 className="primary-button full-width"
-                disabled={passwordSaving}
+                disabled={passwordSaving || passwordChangeLocked}
               >
                 {passwordSaving
                   ? "Updating Password..."
@@ -2422,16 +2407,19 @@ const handleSignIn = async () => {
 
             <button
               type="button"
-              className="back-button"
+              className="back-button" data-leave-clinical-workspace
+              disabled={passwordSaving}
               onClick={() => {
+                if (profile?.must_change_password || passwordChangeLocked || !role) {
+                  logout();
+                  return;
+                }
                 setPasswordError("");
                 setPasswordMessage("");
-                setScreen(
-                  role ? "dashboard" : "login"
-                );
+                setScreen("dashboard");
               }}
             >
-              ← Back
+              {profile?.must_change_password || passwordChangeLocked || !role ? "Sign Out" : "← Back"}
             </button>
 
             <p className="demo-note">
@@ -2452,9 +2440,7 @@ const handleSignIn = async () => {
 
             <div className="brand">
 
-              <div className="brand-mark">
-                R
-              </div>
+              <div className="brand-mark"><img src="/reflink-symbol.png" alt="" width="36" height="36" /></div>
 
               <div>
                 <h1>REFLINK</h1>
@@ -2473,6 +2459,8 @@ const handleSignIn = async () => {
                 type="button"
                 className="secondary-button"
                 onClick={() => {
+                  if (!confirmClinicalNavigation(window)) return;
+                  setPasswordOutcome(null);
                   setPasswordError("");
                   setPasswordMessage("");
                   setPasswordForm({
@@ -2488,7 +2476,7 @@ const handleSignIn = async () => {
 
               <button
                 type="button"
-                className="logout-button"
+                className="logout-button" data-leave-clinical-workspace
                 onClick={logout}
               >
                 Sign Out
@@ -2557,9 +2545,7 @@ const handleSignIn = async () => {
 
             <div className="brand">
 
-              <div className="brand-mark">
-                R
-              </div>
+              <div className="brand-mark"><img src="/reflink-symbol.png" alt="" width="36" height="36" /></div>
 
               <div>
                 <h1>REFLINK</h1>
@@ -2570,7 +2556,7 @@ const handleSignIn = async () => {
 
             <button
               type="button"
-              className="logout-button"
+              className="logout-button" data-leave-clinical-workspace
               onClick={logout}
             >
               Sign Out
@@ -2581,6 +2567,8 @@ const handleSignIn = async () => {
           <main className="dashboard">
 
             <NewReferralForm
+              ownerId={profile?.id}
+              referringFacilityId={profile?.facility_id}
               onBack={() => setScreen("dashboard")}
             />
 
@@ -2795,7 +2783,11 @@ function InvestigationResultEditor({ item, onChange, onFileChange }) {
   );
 }
 
-function NewReferralForm({ onBack }) {
+function NewReferralForm({ onBack, ownerId, referringFacilityId }) {
+  const { t } = useLanguage();
+  const clientSubmissionId = useRef(crypto.randomUUID());
+  const submissionInFlight = useRef(false);
+  const [fromDeviceDraft, setFromDeviceDraft] = useState(false);
 
   const [form, setForm] = useState({
   patient_identifier: "",
@@ -2854,6 +2846,12 @@ provisional_diagnosis: "",
   const [selectedInvestigations, setSelectedInvestigations] = useState([]);
   const [printDraft, setPrintDraft] = useState(null);
   const [savedReferralInfo, setSavedReferralInfo] = useState(null);
+  const hasUnsavedReferral = Object.entries(form).some(([field, value]) =>
+    !["patient_age_unit", "urgency"].includes(field) && String(value ?? "").trim() !== ""
+  ) || form.urgency !== "routine" || Object.values(diagnosisDraft).some((value) => String(value).trim() !== "")
+    || diagnosisEntries.length > 0 || selectedInvestigations.length > 0 || selectedInvestigationCategories.length > 0;
+  useEffect(() => registerClinicalDraft(window, () => hasUnsavedReferral || loading), [hasUnsavedReferral, loading]);
+
 
   useEffect(() => {
     loadFacilities();
@@ -3011,9 +3009,8 @@ provisional_diagnosis: "",
 
   const handleInvestigationFileSelection = (index, file) => {
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { setError("Investigation result file must not exceed 10 MB."); return; }
-    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp", "text/plain", "text/csv"];
-    if (file.type && !allowed.includes(file.type)) { setError("Unsupported investigation result file type."); return; }
+    try { validateInvestigationFile(file); }
+    catch (error) { setError(error.message); return; }
     updateInvestigationResult(index, { result_file: file, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size });
     setError("");
   };
@@ -3021,6 +3018,8 @@ provisional_diagnosis: "",
   const printDraftReferral = () => {
     const draftReferral = {
       referral_number: "DRAFT REFERRAL",
+      referring_facility: facilities.find((facility) => facility.id === referringFacilityId),
+      receiving_facility: facilities.find((facility) => facility.id === form.receiving_facility_id),
       patient_identifier: form.patient_identifier,
       patient_age_months: normalizePatientAgeToMonths(
         form.patient_age_months,
@@ -3045,8 +3044,8 @@ provisional_diagnosis: "",
       created_at: new Date().toISOString(),
     };
 
-    setPrintDraft(draftReferral);
-    window.setTimeout(() => window.print(), 80);
+    flushSync(() => setPrintDraft(draftReferral));
+    void printReferralForm();
   };
 
   const generateReferralNumber = () => {
@@ -3066,13 +3065,20 @@ provisional_diagnosis: "",
   const handleSubmit = async (e) => {
 
     e.preventDefault();
+    if (submissionInFlight.current) return;
+    submissionInFlight.current = true;
 
     setError("");
     setSavedReferralInfo(null);
+    setPrintDraft(null);
     setMessage("");
     setLoading(true);
 
     try {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        throw new Error("Device is offline. Referral was not submitted. Follow the approved facility referral procedure and retry when connected.");
+      }
+
 
       const {
         data: {
@@ -3174,8 +3180,7 @@ provisional_diagnosis: "",
 
   // Keep legacy fields populated for compatibility with existing records/views.
   diagnosis_status:
-    [...new Set(diagnosisEntries.map((item) => item.status))]
-      .join(", ") || null,
+    getLegacyDiagnosisStatus(diagnosisEntries),
 
   diagnosis_category:
     [...new Set(diagnosisEntries.map((item) => item.category))]
@@ -3194,7 +3199,7 @@ provisional_diagnosis: "",
     selectedInvestigationCategories,
 
   investigation_records:
-    selectedInvestigations.map(({ result_file, ...item }) => item),
+    initialInvestigationRecords(selectedInvestigations),
 
   investigations:
     selectedInvestigations
@@ -3230,58 +3235,24 @@ provisional_diagnosis: "",
           "sent",
       };
 
-      console.log(
-        "AUTH USER:",
-        user.id
+      const insertedReferral = await createReferralOnce(
+        supabase, referralPayload, clientSubmissionId.current, fromDeviceDraft
       );
 
-      console.log(
-        "PROFILE:",
-        profile
-      );
-
-      console.log(
-        "REFERRAL PAYLOAD:",
-        referralPayload
-      );
-
-      const {
-        data: insertedReferral,
-        error: referralError,
-      } = await supabase
-        .from("referrals")
-        .insert(referralPayload)
-        .select("id")
-        .single();
-
-      if (referralError) {
-        console.error(
-          "REFERRAL INSERT ERROR:",
-          referralError
+      // Referral is already persisted at this point. A failed optional
+      // attachment upload must not be reported as a failed referral.
+      let attachmentWarning = "";
+      let savedInvestigationRecords = initialInvestigationRecords(selectedInvestigations);
+      try {
+        savedInvestigationRecords = await uploadInitialInvestigationFiles(
+          supabase, insertedReferral.id, selectedInvestigations,
+          savedInvestigationRecords, atomicInvestigationUpdatesEnabled
         );
-
-        throw referralError;
-      }
-
-      let savedInvestigationRecords = selectedInvestigations.map(({ result_file, ...item }) => item);
-      if (insertedReferral?.id) {
-        for (let i = 0; i < selectedInvestigations.length; i += 1) {
-          const file = selectedInvestigations[i]?.result_file;
-          if (!file) continue;
-          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-          const path = `${insertedReferral.id}/${Date.now()}-${i}-${safeName}`;
-          const { error: uploadError } = await supabase.storage
-            .from("referral-investigation-results")
-            .upload(path, file, { upsert: false, contentType: file.type || undefined });
-          if (uploadError) throw uploadError;
-          savedInvestigationRecords = savedInvestigationRecords.map((item, itemIndex) =>
-            itemIndex === i ? { ...item, result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size } : item
-          );
-        }
-        if (savedInvestigationRecords.length) {
-          const { error: resultMetaError } = await supabase.from("referrals").update({ investigation_records: savedInvestigationRecords }).eq("id", insertedReferral.id);
-          if (resultMetaError) throw resultMetaError;
-        }
+      } catch (attachmentError) {
+        if (Array.isArray(attachmentError.confirmedRecords)) savedInvestigationRecords = attachmentError.confirmedRecords;
+        attachmentWarning = attachmentError.message === "INVESTIGATION_SERVICE_UNAVAILABLE"
+          ? " Investigation attachments were not uploaded because the verified attachment service is unavailable. Preserve the original documents and follow the facility referral procedure."
+          : " Attachment registration could not be fully confirmed. The referral remains saved. Keep the originals. While the referral is still sent, reopen it and select the same file for the missing investigation document.";
       }
 
       const referringFacility = facilities.find(
@@ -3307,7 +3278,7 @@ provisional_diagnosis: "",
       setPrintDraft(savedReferral);
 
       setMessage(
-        `Referral saved successfully. Patient: ${form.patient_identifier || "Not recorded"} • REFLINK ID: ${referralNumber}`
+        `Referral saved. REFLINK ID: ${referralNumber}.${attachmentWarning}`
       );
 
       setForm({
@@ -3340,6 +3311,8 @@ provisional_diagnosis: "",
   receiving_facility_id: "",
 });
 
+      clientSubmissionId.current = crypto.randomUUID();
+      setFromDeviceDraft(false);
       setDiagnosisEntries([]);
       setDiagnosisDraft({
         status: "",
@@ -3351,10 +3324,7 @@ provisional_diagnosis: "",
 
     } catch (err) {
 
-      console.error(
-        "Referral creation error:",
-        err
-      );
+
 
       setError(
         err.message ||
@@ -3363,6 +3333,7 @@ provisional_diagnosis: "",
 
     } finally {
 
+      submissionInFlight.current = false;
       setLoading(false);
 
     }
@@ -3380,7 +3351,7 @@ provisional_diagnosis: "",
           </span>
 
           <h2>
-            New Referral
+          {t("newReferral")}
           </h2>
 
           <p>
@@ -3400,10 +3371,10 @@ provisional_diagnosis: "",
 
           <button
             type="button"
-            className="back-button"
+            className="back-button" data-leave-clinical-workspace
             onClick={onBack}
           >
-            ← Back
+            ← {t("back")}
           </button>
         </div>
 
@@ -3426,9 +3397,7 @@ provisional_diagnosis: "",
             <button
               type="button"
               className="secondary-button"
-              onClick={() => {
-                window.setTimeout(() => window.print(), 80);
-              }}
+              onClick={printReferralForm}
             >
               🖨 Print Saved Form
             </button>
@@ -3442,10 +3411,29 @@ provisional_diagnosis: "",
         </div>
       )}
 
+      {import.meta.env.VITE_ENCRYPTED_DRAFTS_ENABLED === "true" && <EncryptedDraftPanel
+        ownerId={ownerId} draftId={clientSubmissionId.current} disabled={loading}
+        getDraft={() => ({
+          form, clientSubmissionId: clientSubmissionId.current, diagnosisEntries,
+          categories: selectedInvestigationCategories,
+          investigations: initialInvestigationRecords(selectedInvestigations),
+        })}
+        restoreDraft={(data) => {
+          const restored = restoreDraftData(data, form);
+          setForm(restored.form);
+          setDiagnosisEntries(restored.diagnosisEntries);
+          setSelectedInvestigationCategories(restored.categories);
+          setSelectedInvestigations(restored.investigations);
+          clientSubmissionId.current = restored.clientSubmissionId;
+          setFromDeviceDraft(true);
+          setError(""); setMessage(""); setSavedReferralInfo(null); setPrintDraft(null);
+        }}
+      />}
+
       <form onSubmit={handleSubmit}>
 
         <h3>
-          Patient Information
+          {t("patientInformation")}
         </h3>
 
         <label>
@@ -3617,7 +3605,7 @@ provisional_diagnosis: "",
         </div>
 
         <h3>
-          Clinical Information
+          {t("clinicalInformation")}
         </h3>
 
         <label>
@@ -3927,7 +3915,7 @@ provisional_diagnosis: "",
         />
 
         <h3>
-          Referral Information
+          {t("referralInformation")}
         </h3>
 
         <label>
@@ -4001,7 +3989,7 @@ provisional_diagnosis: "",
         >
           {loading
             ? "Creating Referral..."
-            : "Create Referral"}
+            : t("createReferral")}
         </button>
 
       </form>
@@ -4022,6 +4010,10 @@ provisional_diagnosis: "",
    ========================================================= */
 
 function PHCStaffDashboard({ onNewReferral }) {
+  const [actorId, setActorId] = useState(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const retryLock = useRef(false);
+  const [attachmentStatus, setAttachmentStatus] = useState("");
   const [referrals, setReferrals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -4037,6 +4029,28 @@ function PHCStaffDashboard({ onNewReferral }) {
   /* =========================================================
      LOAD MY REFERRALS
      ========================================================= */
+
+  async function attachMissingFile(referral, index, file) {
+    if (!file || retryLock.current) return;
+    retryLock.current = true;
+    setAttachmentBusy(true);
+    setAttachmentStatus("");
+    try {
+      const selected = referral.investigation_records.map((record, position) =>
+        position === index ? {...record, result_file:file} : record);
+      const records = await uploadInitialInvestigationFiles(supabase, referral.id, selected,
+        referral.investigation_records, atomicInvestigationUpdatesEnabled);
+      const update = row => row?.id === referral.id ? {...row, investigation_records:records} : row;
+      setSelectedReferral(update);
+      setReferrals(rows => rows.map(update));
+      setAttachmentStatus("Document attached.");
+    } catch {
+      setAttachmentStatus("Attachment could not be confirmed. Reopen the referral to check the latest record before retrying.");
+    } finally {
+      retryLock.current = false;
+      setAttachmentBusy(false);
+    }
+  }
 
   const loadMyReferrals = async () => {
     setLoading(true);
@@ -4054,6 +4068,7 @@ function PHCStaffDashboard({ onNewReferral }) {
         );
       }
 
+      setActorId(user.id);
       const {
         data: profile,
         error: profileError,
@@ -4106,6 +4121,7 @@ function PHCStaffDashboard({ onNewReferral }) {
         .from("referrals")
         .select(`
           id,
+          referring_user_id,
           referral_number,
           patient_identifier,
           patient_age_months,
@@ -4154,8 +4170,11 @@ function PHCStaffDashboard({ onNewReferral }) {
           follow_up_plan,
           discharged_at,
 
+          completed_at,
           referring_facility_id,
-          receiving_facility_id
+          receiving_facility_id,
+          referring_facility:facilities!referrals_referring_facility_id_fkey (id, name, lga, state),
+          receiving_facility:facilities!referrals_receiving_facility_id_fkey (id, name, lga, state)
         `)
         .eq(
           "referring_facility_id",
@@ -4171,11 +4190,6 @@ function PHCStaffDashboard({ onNewReferral }) {
       if (referralError) {
         throw referralError;
       }
-
-      console.log(
-        "PHC REFERRALS:",
-        data
-      );
 
       setReferrals(data || []);
     } catch (err) {
@@ -4255,11 +4269,8 @@ function PHCStaffDashboard({ onNewReferral }) {
                 `referring_facility_id=eq.${profile.facility_id}`,
             },
             (payload) => {
-              console.log(
-                "PHC REALTIME REFERRAL UPDATE:",
-                payload
-              );
-
+              // Re-fetch through the authorized query; never log realtime payloads.
+              void payload;
               loadMyReferrals();
             }
           )
@@ -4621,7 +4632,7 @@ function PHCStaffDashboard({ onNewReferral }) {
               "all" && (
               <button
                 type="button"
-                className="back-button"
+                className="back-button" data-leave-clinical-workspace
                 onClick={() =>
                   setActiveFilter(
                     "all"
@@ -4736,7 +4747,7 @@ function PHCStaffDashboard({ onNewReferral }) {
                     <div>
 
                       <strong>
-                        {formatDiagnosisSummary(
+                        {referral.final_diagnosis || formatDiagnosisSummary(
                           referral.diagnosis_records,
                           referral.provisional_diagnosis
                         )}
@@ -4871,11 +4882,8 @@ function PHCStaffDashboard({ onNewReferral }) {
               <div>
                 <span>Diagnosis Status</span>
                 <strong>
-                {formatDiagnosisRecords(
-                  selectedReferral.diagnosis_records,
-                  selectedReferral.provisional_diagnosis
-                )}
-              </strong>
+                  {formatClinicalLabel(selectedReferral.diagnosis_status)}
+                </strong>
               </div>
             </div>
 
@@ -4884,8 +4892,21 @@ function PHCStaffDashboard({ onNewReferral }) {
             <hr />
 
             <ReferralSourceDetails referral={selectedReferral} />
-
-            <ReferralTimeline referral={selectedReferral} />
+            {atomicInvestigationUpdatesEnabled && selectedReferral.status === "sent" &&
+              actorId && selectedReferral.referring_user_id === actorId &&
+              Array.isArray(selectedReferral.investigation_records) && <>
+                {selectedReferral.investigation_records.map((record, index) =>
+                  record && typeof record === "object" && !record.result_file_path &&
+                  <label key={index}>Attach document for {record.investigation || record.name || `investigation ${index + 1}`}
+                    <input type="file" disabled={attachmentBusy}
+                      onChange={event => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        void attachMissingFile(selectedReferral, index, file);
+                      }} />
+                  </label>)}
+                <p role="status">{attachmentStatus}</p>
+              </>}
 
             <hr />
 
@@ -5081,11 +5102,13 @@ function PHCStaffDashboard({ onNewReferral }) {
 
             <hr />
 
+            {["discharged", "completed"].includes(selectedReferral.status) && <HospitalFeedback key={selectedReferral.id} referral={selectedReferral} />}
+            {["discharged", "completed"].includes(selectedReferral.status) && <PhcFollowUp key={selectedReferral.id} referralId={selectedReferral.id} dischargedAt={selectedReferral.discharged_at} />}
             {/* BACK */}
 
             <button
               type="button"
-              className="back-button"
+              className="back-button" data-leave-clinical-workspace
               onClick={() =>
                 setSelectedReferral(
                   null
@@ -5114,6 +5137,18 @@ function PHCStaffDashboard({ onNewReferral }) {
    ========================================================= */
 
 function ReceivingDashboard() {
+  async function confirmEscalationSeen(id) {
+    setError("");
+    try {
+      const {data, error} = await supabase.rpc("confirm_escalation_seen", {p_referral:id});
+      if (error || !data) throw new Error();
+      setReferrals(rows => rows.map(row => row.id === id ? {...row, receiving_escalation_seen_at:data} : row));
+    } catch {
+      setError("Receipt could not be confirmed. You can retry.");
+    }
+  }
+
+  const [referralView, setReferralView] = useState("active");
 
   const [referrals, setReferrals] =
     useState([]);
@@ -5184,90 +5219,115 @@ function ReceivingDashboard() {
       follow_up_plan: "",
     });
 
+  const hasUnsavedReceivingForm = Boolean(
+    (selectedReferral && hasClinicalFormChanges(assessmentForm, assessmentFormFor(selectedReferral))) ||
+    (selectedInpatientReferral && hasClinicalFormChanges(admissionForm, inpatientFormFor(selectedInpatientReferral))) ||
+    ((selectedReferral || selectedInpatientReferral) && actionLoading)
+  );
+  useEffect(() => registerClinicalDraft(window, () => hasUnsavedReceivingForm), [hasUnsavedReceivingForm]);
+
+  const clinicalSaveInFlight = useRef(false);
+  const [uncertainClinicalReferrals, setUncertainClinicalReferrals] = useState(() => new Set());
+  const investigationMutationInFlight = useRef(false);
   const handleInvestigationFileUpload = async (index, file) => {
+    if (!atomicInvestigationUpdatesEnabled || investigationMutationInFlight.current) return;
     if (!selectedReferral || !file) return;
-    if (file.size > 10 * 1024 * 1024) { setError("Investigation result file must not exceed 10 MB."); return; }
-    const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp", "text/plain", "text/csv"];
-    if (file.type && !allowed.includes(file.type)) { setError("Unsupported investigation result file type."); return; }
+    setError("");
+    setMessage("");
     const current = getInvestigationRecords(selectedReferral).map(normalizeInvestigationRecord);
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const path = `${selectedReferral.id}/${Date.now()}-${index}-${safeName}`;
+    if (!current[index]) {
+      setError("Investigation record no longer exists. Refresh before uploading.");
+      return;
+    }
+    investigationMutationInFlight.current = true;
+    let path;
     setActionLoading(`${selectedReferral.id}-investigation-file-${index}`);
+    let uploadAttempted = false;
     try {
-      const { error: uploadError } = await supabase.storage.from("referral-investigation-results").upload(path, file, { upsert: false, contentType: file.type || undefined });
-      if (uploadError) throw uploadError;
-      const updated = current.map((item, itemIndex) => itemIndex === index ? { ...item, result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size } : item);
-      const { error } = await supabase.from("referrals").update({ investigation_records: updated }).eq("id", selectedReferral.id);
-      if (error) throw error;
-      const updatedReferral = { ...selectedReferral, investigation_records: updated };
+      try {
+        await validateInvestigationFileContent(file);
+      } catch {
+        setError("Investigation document was not uploaded. Check that it is non-empty, no larger than 10 MB, and has a supported format matching its contents.");
+        return;
+      }
+      const { data: session, error: sessionError } = await supabase.auth.getUser();
+      if (sessionError || !session.user) throw new Error("Sign in to upload this document.");
+      uploadAttempted = true;
+      path = await uploadResumableInvestigation(supabase.storage.from("referral-investigation-results"),
+        selectedReferral.id, session.user.id, index, file);
+      if (current[index].result_file_path === path) {
+        setMessage("This document is already attached to the investigation.");
+        return;
+      }
+      const data = await saveInvestigation(
+        supabase, selectedReferral.id, selectedReferral.investigation_records, index,
+        { result_file_path: path, result_file_name: file.name, result_file_type: file.type, result_file_size: file.size },
+        crypto.randomUUID()
+      );
+      const updatedReferral = { ...selectedReferral, investigation_records: data.investigation_records };
       setSelectedReferral(updatedReferral);
-      setReferrals((previous) => previous.map((item) => item.id === selectedReferral.id ? updatedReferral : item));
-      setMessage(`${updated[index].investigation} result document uploaded successfully.`);
-    } catch (err) { console.error("INVESTIGATION FILE UPLOAD ERROR:", err); setError(err.message || "Unable to upload investigation result."); }
-    finally { setActionLoading(null); }
+      setReferrals((previous) => previous.map((item) =>
+        item.id === selectedReferral.id ? updatedReferral : item
+      ));
+      setMessage("Investigation result document saved successfully.");
+    } catch (err) {
+      if (err?.message === "STALE_INVESTIGATION_ATTACHMENT") {
+        console.warn("Investigation attachment update blocked due to stale record.");
+      } else {
+        console.error("INVESTIGATION FILE UPLOAD ERROR:", err?.message || "Upload failed");
+      }
+      if (uploadAttempted && !path) {
+        setError("Upload could not be confirmed. Reopen this investigation and select the same file to retry.");
+      } else if (uploadAttempted) {
+        let latestRecords;
+        const recovery = await inspectInvestigationAttachment(async () => {
+          const response = await supabase.from("referrals").select("investigation_records")
+            .eq("id", selectedReferral.id).single();
+          latestRecords = response.data?.investigation_records;
+          return response;
+        }, path);
+        if (recovery === "referenced") {
+          const refreshRecords = row => row?.id === selectedReferral.id
+            ? { ...row, investigation_records: latestRecords } : row;
+          setSelectedReferral(refreshRecords);
+          setReferrals(rows => rows.map(refreshRecords));
+          setMessage("The referral contains the uploaded document. Its attachment list has been refreshed.");
+        } else if (recovery === "unreferenced") {
+          setError("The uploaded attachment is not currently referenced by the referral. No file was deleted. Ask an administrator to reconcile the upload before retrying.");
+        } else {
+          setError("Attachment outcome could not be verified. Do not retry until an administrator reconciles the referral and file.");
+        }
+      } else {
+        setError("Investigation document upload failed. No successful upload was confirmed.");
+      }
+    } finally {
+      investigationMutationInFlight.current = false;
+      setActionLoading(null);
+    }
   };
 
-  const handleInvestigationResultChange = async (
-    index,
-    patch
-  ) => {
-    if (!selectedReferral) return;
-
-    const currentInvestigations = getInvestigationRecords(
-      selectedReferral
-    ).map(normalizeInvestigationRecord);
-
-    const updatedInvestigations = currentInvestigations.map(
-      (item, itemIndex) =>
-        itemIndex === index
-          ? {
-              ...item,
-              ...patch,
-            }
-          : item
-    );
-
-    const updatedReferral = {
-      ...selectedReferral,
-      investigation_records: updatedInvestigations,
-    };
-
-    setSelectedReferral(updatedReferral);
-    setReferrals((previous) =>
-      previous.map((item) =>
-        item.id === selectedReferral.id
-          ? updatedReferral
-          : item
-      )
-    );
-
-    setActionLoading(
-      `${selectedReferral.id}-investigation-${index}`
-    );
-
+  const handleInvestigationResultChange = async (index, patch, expectedSnapshot) => {
+    if (!selectedReferral || !atomicInvestigationUpdatesEnabled || investigationMutationInFlight.current) return false;
+    investigationMutationInFlight.current = true;
+    setError("");
+    setMessage("");
+    setActionLoading(`${selectedReferral.id}-investigation-${index}`);
     try {
-      const { error } = await supabase
-        .from("referrals")
-        .update({
-          investigation_records: updatedInvestigations,
-        })
-        .eq("id", selectedReferral.id);
-
-      if (error) throw error;
-
-      setMessage(
-        `${updatedInvestigations[index].investigation} result updated to ${getInvestigationResultLabel(resultStatus)}.`
-      );
-    } catch (err) {
-      console.error(
-        "INVESTIGATION RESULT UPDATE ERROR:",
-        err
-      );
-      setError(
-        err.message ||
-          "Unable to update investigation result."
-      );
+      const data = await saveInvestigation(supabase, selectedReferral.id,
+        expectedSnapshot, index, patch, crypto.randomUUID());
+      const savedReferral = { ...selectedReferral, investigation_records: data.investigation_records };
+      setSelectedReferral(savedReferral);
+      setReferrals((previous) => previous.map((item) =>
+        item.id === selectedReferral.id ? savedReferral : item));
+      setMessage("Investigation result saved successfully.");
+      return true;
+    } catch (error) {
+      setError(error.message === "STALE_INVESTIGATION_RECORD"
+        ? "Another update changed this referral. Your draft is retained. Refresh and compare before saving again."
+        : "The save outcome could not be confirmed. Your draft is retained. Refresh and verify the referral before retrying.");
+      return false;
     } finally {
+      investigationMutationInFlight.current = false;
       setActionLoading(null);
     }
   };
@@ -5373,6 +5433,11 @@ function ReceivingDashboard() {
           );
         }
 
+        // UI guard complements (but does not replace) database RLS.
+        if (profile.role !== "receiving_staff") {
+          throw new Error("Receiving-clinician access is required.");
+        }
+
         if (
           !profile.facility_id
         ) {
@@ -5434,6 +5499,9 @@ function ReceivingDashboard() {
             urgency,
             status,
             created_at,
+            ack_due_at,
+            receiving_escalated_at,
+            receiving_escalation_seen_at,
             acknowledged_at,
             patient_arrived_at,
             completed_at,
@@ -5461,6 +5529,7 @@ function ReceivingDashboard() {
             referring_facility_id,
             receiving_facility_id,
 
+            receiving_facility:facilities!referrals_receiving_facility_id_fkey (id, name, lga, state),
             referring_facility:facilities!referrals_referring_facility_id_fkey (
               id,
               name,
@@ -5484,11 +5553,6 @@ function ReceivingDashboard() {
         if (referralError) {
           throw referralError;
         }
-
-        console.log(
-          "INCOMING REFERRALS:",
-          data
-        );
 
         setReferrals(
           data || []
@@ -5558,90 +5622,22 @@ function ReceivingDashboard() {
      ======================================================= */
 
   const openReferralDetails = (referral) => {
+    if (!confirmClinicalNavigation(window)) return;
+    setSelectedInpatientReferral(null);
     setSelectedReferral(referral);
-
-    setAssessmentForm({
-      assessment_findings:
-        referral.assessment_findings || "",
-
-      final_diagnosis:
-        referral.final_diagnosis || "",
-
-      diagnosis_category:
-        referral.diagnosis_category || "",
-
-      diagnosis_status:
-        referral.diagnosis_status || "",
-
-      treatment_provided:
-        referral.treatment_provided || "",
-
-      procedures_performed:
-        referral.procedures_performed || "",
-
-      clinical_feedback:
-        referral.clinical_feedback || "",
-
-      disposition:
-        referral.disposition || "",
-    });
+    setAssessmentForm(assessmentFormFor(referral));
   };
 
   /* =======================================================
      OPEN INPATIENT MANAGEMENT
      ======================================================= */
 
-  const openInpatientManagement =
-    (referral) => {
-
-      setSelectedInpatientReferral(
-        referral
-      );
-
-      setAdmissionForm({
-
-        admission_at:
-          referral.admission_at
-            ? referral.admission_at.slice(
-                0,
-                16
-              )
-            : "",
-
-        ward_unit:
-          referral.ward_unit ||
-          "",
-
-        admission_diagnosis:
-          referral.admission_diagnosis ||
-          referral.final_diagnosis ||
-          "",
-
-        clinical_progress:
-          referral.clinical_progress ||
-          "",
-
-        inpatient_treatment:
-          referral.inpatient_treatment ||
-          "",
-
-        discharge_diagnosis:
-          referral.discharge_diagnosis ||
-          "",
-
-        condition_at_discharge:
-          referral.condition_at_discharge ||
-          "",
-
-        discharge_medications:
-          referral.discharge_medications ||
-          "",
-
-        follow_up_plan:
-          referral.follow_up_plan ||
-          "",
-      });
-    };
+  const openInpatientManagement = (referral) => {
+    if (!confirmClinicalNavigation(window)) return;
+    setSelectedReferral(null);
+    setSelectedInpatientReferral(referral);
+    setAdmissionForm(inpatientFormFor(referral));
+  };
 
   /* =======================================================
      SAVE ADMISSION
@@ -5658,6 +5654,8 @@ function ReceivingDashboard() {
         return;
       }
 
+      if (clinicalSaveInFlight.current || uncertainClinicalReferrals.has(selectedInpatientReferral.id)) return;
+      clinicalSaveInFlight.current = true;
       setError("");
       setMessage("");
 
@@ -5666,6 +5664,21 @@ function ReceivingDashboard() {
       );
 
       try {
+        // Compare the form's original clinical record with the latest database
+        // state before saving. A database transaction is still needed for
+        // fully atomic concurrent-edit protection.
+        const { data: latestInpatient, error: inpatientReadError } = await supabase
+          .from("referrals")
+          .select("admission_at, ward_unit, admission_diagnosis, clinical_progress, inpatient_treatment, discharge_diagnosis, condition_at_discharge, discharge_medications, follow_up_plan, discharged_at, status")
+          .eq("id", selectedInpatientReferral.id)
+          .single();
+        if (inpatientReadError) throw inpatientReadError;
+        if (latestInpatient.status !== "admitted" ||
+            ["admission_at", "ward_unit", "admission_diagnosis", "clinical_progress", "inpatient_treatment", "discharge_diagnosis", "condition_at_discharge", "discharge_medications", "follow_up_plan", "discharged_at"].some(
+              (field) => (latestInpatient[field] ?? null) !== (selectedInpatientReferral[field] ?? null)
+            )) {
+          throw new Error("INPATIENT_RECORD_CHANGED");
+        }
 
         if (
           !admissionForm.ward_unit.trim()
@@ -5690,12 +5703,8 @@ function ReceivingDashboard() {
               ).toISOString()
             : new Date().toISOString();
 
-        const {
-          data,
-          error,
-        } = await supabase
-          .from("referrals")
-          .update({
+        const { data, recovered } = await commitClinicalUpdate(
+          supabase, selectedInpatientReferral.id, "admitted", {
 
             admission_at:
               admissionAt,
@@ -5716,21 +5725,15 @@ function ReceivingDashboard() {
 
             status:
               "admitted",
-          })
-          .eq(
-            "id",
-            selectedInpatientReferral.id
-          )
-          .select()
-          .single();
-
-        if (error) {
-          throw error;
-        }
+          }, { atomic: import.meta.env.VITE_ATOMIC_CLINICAL_SAVES_ENABLED === "true",
+            kind: "admission", expectedSnapshot: selectedInpatientReferral, operationId: crypto.randomUUID() }
+        );
 
         setMessage(
           `Admission information for ${data.referral_number} saved successfully.`
         );
+        if (recovered) setMessage("Matching clinical documentation is present in the referral after confirmation was interrupted. Review the saved record before any further update.");
+
 
         setSelectedInpatientReferral(
           null
@@ -5739,18 +5742,17 @@ function ReceivingDashboard() {
         await loadIncomingReferrals();
 
       } catch (err) {
-
-        console.error(
-          "SAVE ADMISSION ERROR:",
-          err
-        );
-
-        setError(
-          err.message ||
-          "Unable to save admission information."
-        );
+        if (err?.message === "CLINICAL_SAVE_UNCONFIRMED") {
+          setUncertainClinicalReferrals((previous) => new Set(previous).add(selectedInpatientReferral.id));
+          setError("The clinical save outcome could not be confirmed. Your form is retained. Saving is paused for this referral in this workspace. Review its current record and ask an administrator to reconcile the outcome before retrying.");
+        } else {
+          setError(["INPATIENT_RECORD_CHANGED", "CLINICAL_RECORD_CONFLICT"].includes(err?.message)
+            ? "The clinical record has changed. Your form is retained. Refresh and compare the latest documentation before saving."
+            : (err.message || "Clinical documentation could not be saved."));
+        }
 
       } finally {
+        clinicalSaveInFlight.current = false;
 
         setActionLoading(null);
 
@@ -5772,6 +5774,8 @@ function ReceivingDashboard() {
         return;
       }
 
+      if (clinicalSaveInFlight.current || uncertainClinicalReferrals.has(selectedInpatientReferral.id)) return;
+      clinicalSaveInFlight.current = true;
       setError("");
       setMessage("");
 
@@ -5780,6 +5784,21 @@ function ReceivingDashboard() {
       );
 
       try {
+        // Compare the form's original clinical record with the latest database
+        // state before saving. A database transaction is still needed for
+        // fully atomic concurrent-edit protection.
+        const { data: latestInpatient, error: inpatientReadError } = await supabase
+          .from("referrals")
+          .select("admission_at, ward_unit, admission_diagnosis, clinical_progress, inpatient_treatment, discharge_diagnosis, condition_at_discharge, discharge_medications, follow_up_plan, discharged_at, status")
+          .eq("id", selectedInpatientReferral.id)
+          .single();
+        if (inpatientReadError) throw inpatientReadError;
+        if (latestInpatient.status !== "admitted" ||
+            ["admission_at", "ward_unit", "admission_diagnosis", "clinical_progress", "inpatient_treatment", "discharge_diagnosis", "condition_at_discharge", "discharge_medications", "follow_up_plan", "discharged_at"].some(
+              (field) => (latestInpatient[field] ?? null) !== (selectedInpatientReferral[field] ?? null)
+            )) {
+          throw new Error("INPATIENT_RECORD_CHANGED");
+        }
 
         if (
           !admissionForm.discharge_diagnosis.trim()
@@ -5808,12 +5827,8 @@ function ReceivingDashboard() {
         const dischargedAt =
           new Date().toISOString();
 
-        const {
-          data,
-          error,
-        } = await supabase
-          .from("referrals")
-          .update({
+        const { data, recovered } = await commitClinicalUpdate(
+          supabase, selectedInpatientReferral.id, "admitted", {
 
             discharge_diagnosis:
               admissionForm.discharge_diagnosis,
@@ -5833,21 +5848,15 @@ function ReceivingDashboard() {
 
             status:
               "discharged",
-          })
-          .eq(
-            "id",
-            selectedInpatientReferral.id
-          )
-          .select()
-          .single();
-
-        if (error) {
-          throw error;
-        }
+          }, { atomic: import.meta.env.VITE_ATOMIC_CLINICAL_SAVES_ENABLED === "true",
+            kind: "discharge", expectedSnapshot: selectedInpatientReferral, operationId: crypto.randomUUID() }
+        );
 
         setMessage(
           `Referral ${data.referral_number} discharged successfully.`
         );
+        if (recovered) setMessage("Matching clinical documentation is present in the referral after confirmation was interrupted. Review the saved record before any further update.");
+
 
         setSelectedInpatientReferral(
           null
@@ -5856,18 +5865,17 @@ function ReceivingDashboard() {
         await loadIncomingReferrals();
 
       } catch (err) {
-
-        console.error(
-          "DISCHARGE ERROR:",
-          err
-        );
-
-        setError(
-          err.message ||
-          "Unable to discharge patient."
-        );
+        if (err?.message === "CLINICAL_SAVE_UNCONFIRMED") {
+          setUncertainClinicalReferrals((previous) => new Set(previous).add(selectedInpatientReferral.id));
+          setError("The clinical save outcome could not be confirmed. Your form is retained. Saving is paused for this referral in this workspace. Review its current record and ask an administrator to reconcile the outcome before retrying.");
+        } else {
+          setError(["INPATIENT_RECORD_CHANGED", "CLINICAL_RECORD_CONFLICT"].includes(err?.message)
+            ? "The clinical record has changed. Your form is retained. Refresh and compare the latest documentation before saving."
+            : (err.message || "Clinical documentation could not be saved."));
+        }
 
       } finally {
+        clinicalSaveInFlight.current = false;
 
         setActionLoading(null);
 
@@ -5907,6 +5915,7 @@ function ReceivingDashboard() {
             "id",
             referralId
           )
+          .eq("status", "sent")
           .select()
           .single();
 
@@ -5973,6 +5982,7 @@ function ReceivingDashboard() {
             "id",
             referralId
           )
+          .eq("status", "acknowledged")
           .select()
           .single();
 
@@ -6025,6 +6035,7 @@ const handleStartAssessment = async (referralId) => {
         status: "under_assessment",
       })
       .eq("id", referralId)
+      .eq("status", "patient_arrived")
       .select()
       .single();
 
@@ -6065,6 +6076,8 @@ const handleStartAssessment = async (referralId) => {
         return;
       }
 
+      if (clinicalSaveInFlight.current || uncertainClinicalReferrals.has(selectedReferral.id)) return;
+      clinicalSaveInFlight.current = true;
       setError("");
       setMessage("");
 
@@ -6183,26 +6196,32 @@ const handleStartAssessment = async (referralId) => {
 
         }
 
-        const {
-          data,
-          error,
-        } = await supabase
+        // Do not overwrite clinical documentation from a stale assessment form.
+        // This is a preflight check, not an atomic concurrency guarantee.
+        const { data: currentAssessment, error: assessmentReadError } = await supabase
           .from("referrals")
-          .update(updateData)
-          .eq(
-            "id",
-            selectedReferral.id
-          )
-          .select()
+          .select("status, assessment_findings, final_diagnosis, diagnosis_category, diagnosis_status, treatment_provided, procedures_performed, clinical_feedback, disposition, assessment_completed_at")
+          .eq("id", selectedReferral.id)
           .single();
-
-        if (error) {
-          throw error;
+        if (assessmentReadError) throw assessmentReadError;
+        if (currentAssessment.status !== "under_assessment" ||
+            ["assessment_findings", "final_diagnosis", "diagnosis_category", "diagnosis_status", "treatment_provided", "procedures_performed", "clinical_feedback", "disposition", "assessment_completed_at"].some(
+              (field) => (currentAssessment[field] ?? null) !== (selectedReferral[field] ?? null)
+            )) {
+          throw new Error("ASSESSMENT_CHANGED");
         }
+
+        const { data, recovered } = await commitClinicalUpdate(
+          supabase, selectedReferral.id, "under_assessment", updateData,
+          { atomic: import.meta.env.VITE_ATOMIC_CLINICAL_SAVES_ENABLED === "true",
+            kind: "assessment", expectedSnapshot: selectedReferral, operationId: crypto.randomUUID() }
+        );
 
         setMessage(
           `Clinical assessment for ${data.referral_number} saved successfully.`
         );
+        if (recovered) setMessage("Matching clinical documentation is present in the referral after confirmation was interrupted. Review the saved record before any further update.");
+
 
         /*
          * If admitted, immediately open
@@ -6210,7 +6229,7 @@ const handleStartAssessment = async (referralId) => {
          */
         if (
           assessmentForm.disposition ===
-          "admitted"
+          "admitted" && data.status === "admitted"
         ) {
 
           const updatedReferral = {
@@ -6302,18 +6321,17 @@ const handleStartAssessment = async (referralId) => {
         await loadIncomingReferrals();
 
       } catch (err) {
-
-        console.error(
-          "ASSESSMENT ERROR:",
-          err
-        );
-
-        setError(
-          err.message ||
-          "Unable to save clinical assessment."
-        );
+        if (err?.message === "CLINICAL_SAVE_UNCONFIRMED") {
+          setUncertainClinicalReferrals((previous) => new Set(previous).add(selectedReferral.id));
+          setError("The clinical save outcome could not be confirmed. Your form is retained. Saving is paused for this referral in this workspace. Review its current record and ask an administrator to reconcile the outcome before retrying.");
+        } else {
+          setError(["ASSESSMENT_CHANGED", "CLINICAL_RECORD_CONFLICT"].includes(err?.message)
+            ? "The clinical record has changed. Your form is retained. Refresh and compare the latest documentation before saving."
+            : (err.message || "Clinical documentation could not be saved."));
+        }
 
       } finally {
+        clinicalSaveInFlight.current = false;
 
         setActionLoading(
           null
@@ -6368,12 +6386,7 @@ const handleStartAssessment = async (referralId) => {
      FILTERED REFERRALS
      ======================================================= */
 
-  const filteredReferrals =
-    referrals.filter(
-      (referral) =>
-        referral.status !== "completed" &&
-        referral.status !== "discharged"
-    );
+  const filteredReferrals = filterReceivingReferrals(referrals, referralView);
 
   /* =======================================================
      USER INTERFACE
@@ -6381,6 +6394,9 @@ const handleStartAssessment = async (referralId) => {
 
   return (
     <>
+      {(uncertainClinicalReferrals.has(selectedReferral?.id) || uncertainClinicalReferrals.has(selectedInpatientReferral?.id)) && <p role="alert" className="login-error">
+        Saving is paused for this referral because a previous save could not be confirmed. Your form remains available. Review the current referral and arrange reconciliation before retrying.
+      </p>}
 
       <div className="dashboard-actions">
 
@@ -6457,7 +6473,7 @@ const handleStartAssessment = async (referralId) => {
 
         <div className="stat-card">
           <span>
-            Completed
+            Discharged / Completed
           </span>
 
           <strong>
@@ -6482,7 +6498,7 @@ const handleStartAssessment = async (referralId) => {
             </span>
 
             <h3>
-              Incoming Referrals
+              Referrals
             </h3>
 
             <p>
@@ -6493,6 +6509,14 @@ const handleStartAssessment = async (referralId) => {
 
         </div>
 
+        <label className="referral-view-filter">Show referrals
+          <select value={referralView} onChange={(event) => setReferralView(event.target.value)}>
+            <option value="active">Active referrals</option>
+            <option value="closed">Discharged / completed</option>
+            <option value="all">All referrals</option>
+          </select>
+        </label>
+
         {loading && (
           <p>
             Loading incoming referrals...
@@ -6500,10 +6524,10 @@ const handleStartAssessment = async (referralId) => {
         )}
 
         {!loading &&
-          referrals.length === 0 &&
+          filteredReferrals.length === 0 &&
           !error && (
             <p>
-              No incoming referrals found.
+              No referrals in this view.
             </p>
           )}
 
@@ -6527,6 +6551,15 @@ const handleStartAssessment = async (referralId) => {
                           referral.referral_number
                         }
                       </strong>
+                      {referral.receiving_escalated_at && <p><strong>Escalation recorded</strong> · {new Date(referral.receiving_escalated_at).toLocaleString()}</p>}
+                      {referral.receiving_escalated_at && (referral.receiving_escalation_seen_at
+                        ? <p>Seen by receiving staff · {new Date(referral.receiving_escalation_seen_at).toLocaleString()}</p>
+                        : <button type="button" onClick={() => confirmEscalationSeen(referral.id)}>Mark escalation as seen</button>)}
+                      {referral.status === "sent" && !referral.acknowledged_at &&
+                        Date.parse(referral.ack_due_at) < Date.now() && (
+                          <p><strong>Acknowledgement overdue</strong> · Due {new Date(referral.ack_due_at).toLocaleString()}</p>
+                        )}
+
 
                       <p>
                         Patient:{" "}
@@ -6682,49 +6715,7 @@ const handleStartAssessment = async (referralId) => {
                         <button
                           type="button"
                           className="primary-button"
-                          onClick={() => {
-
-                            setSelectedReferral(
-                              referral
-                            );
-
-                            setAssessmentForm({
-
-                              assessment_findings:
-                                referral.assessment_findings ||
-                                "",
-
-                              final_diagnosis:
-                                referral.final_diagnosis ||
-                                "",
-
-                              diagnosis_category:
-                                referral.diagnosis_category ||
-                                "",
-
-                              diagnosis_status:
-                                referral.diagnosis_status ||
-                                "",
-
-                              treatment_provided:
-                                referral.treatment_provided ||
-                                "",
-
-                              procedures_performed:
-                                referral.procedures_performed ||
-                                "",
-
-                              clinical_feedback:
-                                referral.clinical_feedback ||
-                                "",
-
-                              disposition:
-                                referral.disposition ||
-                                "",
-
-                            });
-
-                          }}
+                          onClick={() => openReferralDetails(referral)}
                         >
                           Continue Clinical Assessment
                         </button>
@@ -6908,7 +6899,7 @@ const handleStartAssessment = async (referralId) => {
                 className="primary-button full-width"
                 disabled={
                   actionLoading ===
-                  selectedInpatientReferral.id
+                  selectedInpatientReferral.id || uncertainClinicalReferrals.has(selectedInpatientReferral.id)
                 }
               >
                 {actionLoading ===
@@ -7007,7 +6998,7 @@ const handleStartAssessment = async (referralId) => {
                 className="primary-button full-width"
                 disabled={
                   actionLoading ===
-                  selectedInpatientReferral.id
+                  selectedInpatientReferral.id || uncertainClinicalReferrals.has(selectedInpatientReferral.id)
                 }
               >
                 {actionLoading ===
@@ -7018,7 +7009,7 @@ const handleStartAssessment = async (referralId) => {
 
               <button
                 type="button"
-                className="back-button"
+                className="back-button" data-leave-clinical-workspace
                 onClick={() =>
                   setSelectedInpatientReferral(
                     null
@@ -7111,9 +7102,13 @@ const handleStartAssessment = async (referralId) => {
               </div>
             )}
 
+            {!atomicInvestigationUpdatesEnabled && <p role="status">
+              Investigation results are currently read-only. Preserve original documents and follow the facility procedure for updates.
+            </p>}
             <ReferralSourceDetails
               referral={selectedReferral}
-              editableInvestigationResults
+              editableInvestigationResults={atomicInvestigationUpdatesEnabled && !["completed", "discharged", "cancelled"].includes(selectedReferral.status)}
+              onInvestigationFileUpload={handleInvestigationFileUpload}
               onInvestigationResultChange={
                 handleInvestigationResultChange
               }
@@ -7339,7 +7334,7 @@ const handleStartAssessment = async (referralId) => {
                     className="primary-button full-width"
                     disabled={
                       actionLoading ===
-                      selectedReferral.id
+                      selectedReferral.id || uncertainClinicalReferrals.has(selectedReferral.id)
                     }
                   >
                     {actionLoading ===
@@ -7361,17 +7356,36 @@ const handleStartAssessment = async (referralId) => {
                 </h3>
 
                 <p>
-                  The complete information from the referring PHC is shown
-                  above. The receiving-facility clinical assessment form will
-                  become available when the referral reaches
-                  <strong> Under Assessment</strong>.
+                  {["discharged", "completed"].includes(selectedReferral.status)
+                    ? "This record is available for review and printing."
+                    : "The clinical assessment form is available when the referral is Under Assessment."}
                 </p>
               </div>
             )}
 
+            {["discharged", "completed"].includes(selectedReferral.status) && (
+              <section aria-label="Saved receiving facility record">
+                <h3>Receiving Facility Record</h3>
+                {[
+                  ["Assessment Findings", "assessment_findings"], ["Final Diagnosis", "final_diagnosis"],
+                  ["Clinical Feedback", "clinical_feedback"], ["Disposition at Assessment", "disposition"],
+                  ["Ward / Unit", "ward_unit"], ["Admission Diagnosis", "admission_diagnosis"],
+                  ["Clinical Progress", "clinical_progress"], ["Inpatient Treatment", "inpatient_treatment"],
+                  ["Discharge Diagnosis", "discharge_diagnosis"], ["Condition at Discharge", "condition_at_discharge"],
+                  ["Discharge Medications", "discharge_medications"], ["Follow-up Plan", "follow_up_plan"],
+                ].map(([label, field]) => <div className="detail-row" key={field}><strong>{label}</strong><p>{selectedReferral[field] || "Not recorded"}</p></div>)}
+              </section>
+            )}
+
+            {["discharged", "completed"].includes(selectedReferral.status) && <HospitalFeedback key={selectedReferral.id} referral={selectedReferral} onComplete={completedAt => {
+              const update = row => row?.id === selectedReferral.id ? {...row, status: "completed", completed_at: completedAt} : row;
+              setSelectedReferral(update);
+              setReferrals(rows => rows.map(update));
+            }} />}
+
             <button
               type="button"
-              className="back-button"
+              className="back-button" data-leave-clinical-workspace
               onClick={() =>
                 setSelectedReferral(
                   null
@@ -7517,3 +7531,4 @@ function AdministratorRoute({ children }) {
 
 
 export default App;
+

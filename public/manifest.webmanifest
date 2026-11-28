@@ -1,0 +1,12 @@
+{
+  "id": "/",
+  "name": "REFLINK Healthcare Referrals",
+  "short_name": "REFLINK",
+  "description": "Healthcare referral coordination. Offline app shell requires prior setup; clinical submission requires a connection.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0b6e5a",
+  "icons": [{ "src": "/reflink-symbol.png", "sizes": "192x192", "type": "image/png", "purpose": "any" }]
+}

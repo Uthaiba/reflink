@@ -1,0 +1,48 @@
+.continuity-panel {
+  margin-block: 1.5rem;
+  padding: clamp(1rem, 3vw, 2rem);
+  border: 1px solid #d5e1db;
+  border-radius: 1rem;
+  background: white;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.continuity-panel fieldset {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.continuity-panel legend { margin-block-end: 1rem; font-weight: 600; }
+.continuity-panel fieldset label {
+  display: grid;
+  gap: .4rem;
+  margin-block-end: 1rem;
+  text-align: start;
+}
+.continuity-panel fieldset :is(select, input, textarea) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 46rem;
+  font: inherit;
+}
+.continuity-panel textarea { min-height: 5rem; resize: vertical; }
+.continuity-panel dl > div, .continuity-panel li {
+  padding-block: .65rem;
+  border-bottom: 1px solid #e4ece7;
+}
+.continuity-panel dt { font-weight: 650; }
+.continuity-panel dd { margin: .2rem 0 0; }
+.continuity-panel ul { padding-inline-start: 1.25rem; }
+.continuity-panel [role="status"]:empty { margin: 0; }
+.continuity-panel button[type="submit"] {
+  padding: .7rem 1rem;
+  border: 0;
+  border-radius: .5rem;
+  background: #086653;
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+.continuity-panel button:disabled { opacity: .65; }
