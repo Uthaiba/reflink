@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import { chromium } from 'playwright';
 import { build, createServer } from 'vite';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 const referral = {
   referral_number: 'RF-SYNTHETIC-PRINT', patient_identifier: 'SYNTHETIC-PRINT-001',
@@ -31,7 +34,7 @@ createRoot(document.getElementById('root')).render(location.search === '?draft' 
 </script></body></html>`;
 await build({logLevel:'warn'});
 const server = await createServer({
-  define: { 'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://synthetic.invalid'), 'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('synthetic-public-client') },
+  define: { 'import.meta.env.VITE_ENCRYPTED_DRAFTS_ENABLED': JSON.stringify('true'), 'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://synthetic.invalid'), 'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('synthetic-public-client') },
   server: { host: '127.0.0.1', port: 4181, strictPort: true },
   plugins: [{name:'synthetic-print-harness', transform(code, id) {
     if (id.endsWith('/src/App.jsx')) return code + '\nexport { NewReferralForm };';
@@ -125,6 +128,43 @@ try {
   assert.ok(offlineText.includes('SYNTHETIC-OFFLINE-PRINT'));
   assert.ok(offlineText.includes('DRAFT REFERRAL'));
   assert.match(execFileSync('pdfimages',['-list',offlinePdf],{encoding:'utf8'}), /\bimage\b/);
+  const profileDir = mkdtempSync(join(tmpdir(), 'reflink-draft-test-'));
+  const secret = randomUUID();
+  const storageKey = 'reflink-encrypted-draft-v1:synthetic';
+  const openProfile = () => chromium.launchPersistentContext(profileDir, {
+    headless:true, ...(process.env.REFLINK_CHROMIUM_PATH ? {executablePath:process.env.REFLINK_CHROMIUM_PATH} : {})
+  });
+  let profile;
+  try {
+    profile = await openProfile();
+    const first = await profile.newPage();
+    await first.goto('http://127.0.0.1:4181/__synthetic-print?draft');
+    await first.locator('[name="patient_identifier"]').fill('SYNTHETIC-RESTART');
+    await profile.setOffline(true);
+    await first.locator('#draft-passphrase').fill(secret);
+    await first.getByRole('button', {name:'Save encrypted draft'}).click();
+    await first.getByText(/Encrypted draft saved on this device/).waitFor();
+    const readEnvelope = page => page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
+    const original = await readEnvelope(first);
+    assert.ok(original.draftId);
+    assert.ok(!JSON.stringify(original).includes('SYNTHETIC-RESTART'));
+    await profile.close();
+    profile = await openProfile();
+    const second = await profile.newPage();
+    await second.goto('http://127.0.0.1:4181/__synthetic-print?draft');
+    await second.locator('#draft-passphrase').fill(secret);
+    second.once('dialog', dialog => dialog.accept());
+    await second.getByRole('button', {name:'Restore draft'}).click();
+    await second.getByText(/Draft restored\. Review/).waitFor();
+    assert.equal(await second.locator('[name="patient_identifier"]').inputValue(), 'SYNTHETIC-RESTART');
+    await second.locator('#draft-passphrase').fill(secret);
+    await second.getByRole('button', {name:'Save encrypted draft'}).click();
+    await second.getByText(/Encrypted draft saved on this device/).waitFor();
+    assert.equal((await readEnvelope(second)).draftId, original.draftId);
+  } finally {
+    await profile?.close();
+    rmSync(profileDir, {recursive:true, force:true});
+  }
   assert.deepEqual(errors,[]);
   writeFileSync('test-results/referral-print-result.json',JSON.stringify({pages,checks:'portal isolation, facilities, admission, discharge, timestamps and closure semantics passed'},null,2));
   console.log(`synthetic_referral_print: passed (${pages} pages)`);
